@@ -1,6 +1,6 @@
 # Balance Tracker
 
-Private balance tracker on Cloudflare Workers + D1. Spec: https://claude.ai/code/artifact/7a0ab28a-674b-494d-88e2-aa5f2c66d83a
+Private balance tracker on Cloudflare Workers + D1.
 
 ## Run locally
 
@@ -25,7 +25,7 @@ localhost; in production every request needs a valid Cloudflare Access JWT.
 - `apps/tracker/web` - bare-minimum UI, plain HTML/JS
 - `apps/tracker/migrations` - D1 schema
 
-## Deploy (later)
+## Deployment
 
 1. `npx wrangler d1 create balance-tracker` and put the id in `apps/tracker/wrangler.toml`.
 2. Protect the hostname with Cloudflare Access; set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `SERVICE_TOKEN_EMAIL`.
