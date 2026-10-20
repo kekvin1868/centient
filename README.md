@@ -3,7 +3,7 @@
 Centient: a private balance tracker on Cloudflare Workers + D1, with a Preact web app you can install to your phone's Home Screen.
 
 - Plans and code maps: start at [planning/README.md](planning/README.md).
-- Full spec: [planning/spec/backend-spec-v1.md](planning/spec/backend-spec-v1.md) (exported copy; the live, editable version is https://claude.ai/code/artifact/7a0ab28a-674b-494d-88e2-aa5f2c66d83a).
+- Full spec: [planning/spec/backend-spec-v1.md](planning/spec/backend-spec-v1.md).
 - Current work: [planning/features/frontend-centient.agent.md](planning/features/frontend-centient.agent.md).
 
 ## Run locally
@@ -36,7 +36,7 @@ npm run build -w apps/centient   # production build into apps/centient/dist/
 - `apps/centient/client` - Preact + Vite app: Home (log + activity), Money (accounts, Pockets, budgets), Settings; Geist font, Phosphor icons, manifest and icons
 - `planning/features/assets/brand` - logo kit (favicons, app icons, profile pictures, share image); regenerate with `python3 planning/features/assets/brand-src/build.py`
 
-## Deploy (later)
+## Deployment
 
 1. `npx wrangler d1 create centsdb` and put the id in `apps/centient/wrangler.toml` (the Worker is named `cts`).
 2. Protect the hostname with Cloudflare Access; set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `SERVICE_TOKEN_EMAIL`.
