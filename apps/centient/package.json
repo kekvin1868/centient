@@ -3,13 +3,25 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler d1 migrations apply DB --local && wrangler dev --ip 0.0.0.0",
-    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy"
+    "dev": "wrangler d1 migrations apply DB --local && vite dev",
+    "build": "vite build",
+    "deploy": "wrangler d1 migrations apply DB --remote && vite build && wrangler deploy"
   },
   "dependencies": {
     "@centient/money": "*",
     "@centient/quickadd": "*",
+    "@fontsource-variable/geist": "5.3.0",
+    "@formkit/auto-animate": "0.10.0",
+    "@phosphor-icons/react": "2.1.10",
+    "@preact/signals": "2.11.3",
     "hono": "^4.13.13",
+    "motion": "14.0.0",
+    "preact": "10.29.8",
     "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.62.5",
+    "@preact/preset-vite": "2.10.6",
+    "vite": "8.3.2"
   }
 }
