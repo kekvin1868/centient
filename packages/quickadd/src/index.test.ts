@@ -98,6 +98,17 @@ describe('parseQuickAdd', () => {
     expect(d[0].note).toBe('es teh');
   });
 
+  it('asks for the charged rupiah when a foreign price is paid from a rupiah account', () => {
+    const [d] = parseQuickAdd('lunch 20 usd bca', ctx);
+    expect(d).toMatchObject({ amount: null, currency: 'IDR', originalAmount: 2000, originalCurrency: 'USD', needs: 'CHARGED_AMOUNT', accountId: 'bca' });
+  });
+
+  it('keeps a foreign amount as is when the account holds that currency', () => {
+    const usd = { ...ctx, accounts: [...ctx.accounts, { id: 'wise', name: 'Wise', kind: 'BANK', provider: null, currency_code: 'USD' }] };
+    expect(parseQuickAdd('lunch $20.5 wise', usd)[0]).toMatchObject({ amount: 2050, currency: 'USD', originalAmount: null, needs: null, accountId: 'wise' });
+    expect(parseQuickAdd('kopi 25rb', usd)[0]).toMatchObject({ amount: 25000, currency: 'IDR', needs: null });
+  });
+
   it('never guesses M', () => {
     const [d] = parseQuickAdd('laptop 2m', ctx);
     expect(d).toMatchObject({ amount: null, candidates: [2000000, 2000000000], needsConfirm: true });

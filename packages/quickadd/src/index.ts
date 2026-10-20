@@ -1,13 +1,13 @@
 // Quick add: one typed or dictated line becomes transaction drafts. Pure rules, no AI.
 // Runs in the Worker today; the PWA can import it once it has a bundler.
-import { parseAmount, type Amount } from '@centient/money';
+import { CURRENCY_WORDS, parseAmount, type Amount } from '@centient/money';
 import {
   ABBREVIATIONS, CASH_WORDS, DAY_NAMES, DEFAULT_RANGE, FILLER, HOKKIEN_AMBIGUOUS, HOKKIEN_DIGITS,
   HOKKIEN_EXACT, HOKKIEN_UNITS, INCOME_WORDS, KEYWORDS, MERCHANT_ALIASES, PROVIDER_ALIASES,
   TRANSFER_WORDS, VERBS, type Hint,
 } from './dictionary';
 
-export type QAAccount = { id: string; name: string; kind: string; provider: string | null };
+export type QAAccount = { id: string; name: string; kind: string; provider: string | null; currency_code?: string };
 export type QACategory = { id: string; name: string; kind: 'EXPENSE' | 'INCOME' };
 export type QAAlias = { alias: string; kind: 'MERCHANT' | 'ACCOUNT' | 'CATEGORY'; value: string };
 export type QAContext = {
@@ -23,8 +23,14 @@ export type QAContext = {
 export type Draft = {
   text: string;
   type: 'EXPENSE' | 'INCOME' | 'TRANSFER';
-  /** null = the user must pick one of `candidates` (or type it). */
+  /** null = the user must pick one of `candidates` (or type it). Minor units of `currency`. */
   amount: number | null;
+  currency: string;
+  /** A price typed in another currency than the paying account's ("lunch 20 usd" paid by an IDR card). */
+  originalAmount: number | null;
+  originalCurrency: string | null;
+  /** CHARGED_AMOUNT: ask how much the account was actually charged; never convert with a guessed rate. */
+  needs: 'CHARGED_AMOUNT' | null;
   candidates: number[];
   /** True whenever the amount was inferred, not written: the UI asks to confirm it. */
   needsConfirm: boolean;
@@ -40,7 +46,7 @@ export type Draft = {
   note: string;
 };
 
-const SUFFIXES = new Set(['rb', 'ribu', 'k', 'jt', 'juta', 'm']);
+const SUFFIXES = new Set(['rb', 'ribu', 'k', 'jt', 'juta', 'm', 'usd', 'usdt', 'btc']);
 
 export function parseQuickAdd(input: string, ctx: QAContext): Draft[] {
   const text = input
@@ -76,7 +82,7 @@ function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boo
   for (let i = 0; i < words.length; i++) {
     let w = words[i];
     const next = words[i + 1];
-    if ((w === 'rp' || w === 'rp.' || w === 'idr') && next && /^\d/.test(next)) { w = w + next; i++; }
+    if (w in CURRENCY_WORDS && next && /^\d/.test(next)) { w = w + next; i++; }
 
     if ((w === 'bagi' || w === 'split') && next && /^\d+$/.test(next)) { split = Number(next); i++; continue; }
     if (w === 'tanggal' && next && /^\d{1,2}$/.test(next)) { date = dayOfMonth(ctx.today, Number(next)); i++; continue; }
@@ -144,7 +150,15 @@ function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boo
   let value: number | null = null;
   let candidates: number[] = [];
   let needsConfirm = false;
-  if (amount?.kind === 'exact') value = amount.value;
+  const accountCurrency = ctx.accounts.find(a => a.id === from)?.currency_code ?? 'IDR';
+  const currency = accountCurrency;
+  let originalAmount: number | null = null, originalCurrency: string | null = null;
+  let needs: Draft['needs'] = null;
+  if (amount?.kind === 'exact' && amount.currency && amount.currency !== accountCurrency) {
+    originalAmount = amount.value;
+    originalCurrency = amount.currency;
+    needs = 'CHARGED_AMOUNT';
+  } else if (amount?.kind === 'exact') value = amount.value;
   else if (amount?.kind === 'inferred') {
     candidates = amount.candidates;
     const fits = candidates.filter(c => c >= range[0] && c <= range[1]);
@@ -158,7 +172,7 @@ function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boo
   return {
     hasAmount: amount !== null,
     draft: {
-      text: part, type, amount: value, candidates, needsConfirm,
+      text: part, type, amount: value, currency, originalAmount, originalCurrency, needs, candidates, needsConfirm,
       accountId: from, toAccountId: type === 'TRANSFER' ? to : null, categoryId,
       merchant, rawMerchant, date, split: type === 'EXPENSE' && split && split > 1 ? split : null,
       fee, note: '',

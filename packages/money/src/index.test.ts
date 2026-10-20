@@ -24,6 +24,17 @@ describe('parseAmount', () => {
   it('never guesses M', () => expect(parseAmount('2m')).toEqual({ kind: 'ambiguous_m', value: 2 }));
 
   it('ignores words', () => expect(parseAmount('kopi')).toBeNull());
+
+  it.each([
+    ['20usd', 2000, 'USD'], ['$20', 2000, 'USD'], ['us$20.5', 2050, 'USD'], ['usd 1,500', 150000, 'USD'],
+    ['usdt50', 50_000_000, 'USDT'], ['0.001btc', 100_000, 'BTC'], ['btc 0.00012', 12_000, 'BTC'],
+  ])('%s -> %s minor units of %s', (t, v, currency) => expect(parseAmount(t)).toEqual({ kind: 'exact', value: v, currency }));
+
+  it('treats rupiah words like before and rejects mixed currencies', () => {
+    expect(parseAmount('25rb')).toEqual({ kind: 'exact', value: 25000 });
+    expect(parseAmount('idr 52.500')).toEqual({ kind: 'exact', value: 52500 });
+    expect(parseAmount('$20btc')).toBeNull();
+  });
 });
 
 describe('formatMoney', () => {
