@@ -1,0 +1,27 @@
+// Display formatting and the plain words the UI uses instead of engineering terms.
+import { DECIMALS } from '@centient/money';
+
+/** Rupiah the Indonesian way (Rp25.000); other currencies keep their decimals (USD 20.50, BTC 0.001). */
+export function formatMoney(minor: number, currency = 'IDR'): string {
+  const sign = minor < 0 ? '-' : '';
+  const d = DECIMALS[currency] ?? 0;
+  const major = Math.abs(minor) / 10 ** d;
+  if (currency === 'IDR') return `${sign}Rp${major.toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;
+  const s = major.toLocaleString('en-US', { minimumFractionDigits: currency === 'USD' ? 2 : 0, maximumFractionDigits: d });
+  return `${sign}${currency} ${s}`;
+}
+
+export const ACCOUNT_KINDS: Record<string, string> = {
+  BANK: 'Bank', EWALLET: 'E-wallet', CASH: 'Cash', CREDIT_CARD: 'Credit card', PAYLATER: 'Pay later',
+  EXCHANGE: 'Crypto exchange', IOU: 'Friends owe you',
+};
+
+export const ENTRY_TYPES: Record<string, string> = { EXPENSE: 'Spent', INCOME: 'Received', TRANSFER: 'Moved', ALLOCATE: 'Moved between Pockets' };
+
+/** "Today", "Yesterday", else "Mon 12 Oct" (dates are YYYY-MM-DD in Jakarta time). */
+export function dayLabel(day: string, today: string): string {
+  if (day === today) return 'Today';
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Date.parse(`${today}T00:00:00Z`) - d.getTime() === 864e5) return 'Yesterday';
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}

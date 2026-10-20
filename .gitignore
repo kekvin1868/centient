@@ -3,3 +3,7 @@ node_modules
 .dev.vars
 ngrok.policy.yml
 .DS_Store
+dist
+.e2e-state
+test-results
+playwright-report
