@@ -2,18 +2,19 @@
 // security, so this is the wall between workspaces.
 import type { NewTransaction } from '../domain/ledger';
 import type {
-  Account, Alias, Budget, CatalogRepository, Category, Envelope, LedgerRepository, TxFilter, TxView, Workspace,
+  Account, Alias, Budget, CatalogRepository, Category, Envelope, EntryKind, EntryView, LedgerRepository, NewEntry, TxFilter, TxView, Workspace,
 } from '../application/ports';
 
 const uid = () => crypto.randomUUID();
 
 const SEED_EXPENSE = ['Food & Drink', 'Coffee', 'Groceries', 'Transport', 'Shopping', 'Bills & Utilities', 'Housing',
-  'Health', 'Entertainment', 'Education', 'Giving', 'Kondangan', 'Family', 'Fees', 'Balance adjustment', 'Other'];
-const SEED_INCOME = ['Salary', 'Angpao & THR', 'Interest & cashback', 'Opening balance', 'Other income'];
+  'Health', 'Entertainment', 'Education', 'Giving', 'Kondangan', 'Family', 'Fees', 'Other'];
+// "Balance adjustment" holds uncategorised balance corrections (signed), so it is not a spending category.
+const SEED_INCOME = ['Salary', 'Angpao & THR', 'Interest & cashback', 'Opening balance', 'Balance adjustment', 'Other income'];
 
 /** Columns a PATCH may touch, per table. Anything else in the request is ignored. */
 const PATCHABLE: Record<string, string[]> = {
-  accounts: ['name', 'provider', 'default_envelope_id', 'due_day', 'archived_at'],
+  accounts: ['name', 'provider', 'currency_code', 'default_envelope_id', 'due_day', 'reconciled_at', 'archived_at'],
   envelopes: ['name', 'target_amount', 'target_date', 'archived_at'],
   categories: ['name', 'archived_at'],
 };
@@ -124,36 +125,111 @@ export class D1Catalog implements CatalogRepository {
 export class D1Ledger implements LedgerRepository {
   constructor(private db: D1Database) {}
 
-  async insert(ws: string, txs: NewTransaction[]) {
+  private txStatements(ws: string, groupId: string, t: NewTransaction): D1PreparedStatement[] {
+    const id = uid();
+    return [
+      this.db.prepare('INSERT INTO transactions (id, workspace_id, group_id, type, occurred_at, category_id, merchant, note, original_amount, original_currency, spread_cycles) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(id, ws, groupId, t.type, t.occurredAt, t.categoryId, t.merchant, t.note, t.originalAmount ?? null, t.originalCurrency ?? null, t.spreadCycles ?? 1),
+      ...t.entries.map(e => this.db.prepare('INSERT INTO entries (transaction_id, account_id, amount) VALUES (?, ?, ?)').bind(id, e.accountId, e.amount)),
+      ...t.allocations.map(a => this.db.prepare('INSERT INTO allocations (transaction_id, envelope_id, amount) VALUES (?, ?, ?)').bind(id, a.envelopeId, a.amount)),
+    ];
+  }
+
+  async insert(ws: string, entries: NewEntry[]) {
     const ids: string[] = [];
     const stmts: D1PreparedStatement[] = [];
-    for (const t of txs) {
-      const id = uid();
-      ids.push(id);
-      stmts.push(this.db.prepare('INSERT INTO transactions (id, workspace_id, type, occurred_at, category_id, merchant, note, original_amount, original_currency, spread_cycles) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(id, ws, t.type, t.occurredAt, t.categoryId, t.merchant, t.note, t.originalAmount ?? null, t.originalCurrency ?? null, t.spreadCycles ?? 1));
-      for (const e of t.entries) stmts.push(this.db.prepare('INSERT INTO entries (transaction_id, account_id, amount) VALUES (?, ?, ?)').bind(id, e.accountId, e.amount));
-      for (const a of t.allocations) stmts.push(this.db.prepare('INSERT INTO allocations (transaction_id, envelope_id, amount) VALUES (?, ?, ?)').bind(id, a.envelopeId, a.amount));
+    for (const g of entries) {
+      const gid = uid();
+      ids.push(gid);
+      stmts.push(this.db.prepare('INSERT INTO entry_groups (id, workspace_id, kind, command) VALUES (?, ?, ?, ?)')
+        .bind(gid, ws, g.kind, g.command === null ? null : JSON.stringify(g.command)));
+      for (const t of g.txs) stmts.push(...this.txStatements(ws, gid, t));
     }
     await this.db.batch(stmts); // one batch = one atomic write
     return ids;
   }
 
-  async softDelete(ws: string, id: string) {
-    const r = await this.db.prepare("UPDATE transactions SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL")
-      .bind(id, ws).run();
-    return r.meta.changes > 0;
+  async replace(ws: string, entryId: string, command: unknown, txs: NewTransaction[]) {
+    const inGroup = 'SELECT id FROM transactions WHERE group_id = ? AND workspace_id = ?';
+    await this.db.batch([
+      this.db.prepare(`DELETE FROM entries WHERE transaction_id IN (${inGroup})`).bind(entryId, ws),
+      this.db.prepare(`DELETE FROM allocations WHERE transaction_id IN (${inGroup})`).bind(entryId, ws),
+      this.db.prepare('DELETE FROM transactions WHERE group_id = ? AND workspace_id = ?').bind(entryId, ws),
+      ...txs.flatMap(t => this.txStatements(ws, entryId, t)),
+      this.db.prepare("UPDATE entry_groups SET command = ?, updated_at = datetime('now') WHERE id = ? AND workspace_id = ?")
+        .bind(JSON.stringify(command), entryId, ws),
+    ]);
+  }
+
+  async deleteEntry(ws: string, id: string) {
+    const [g] = await this.db.batch([
+      this.db.prepare("UPDATE entry_groups SET deleted_at = datetime('now') WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL").bind(id, ws),
+      this.db.prepare("UPDATE transactions SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE group_id = ? AND workspace_id = ? AND deleted_at IS NULL").bind(id, ws),
+    ]);
+    return g.meta.changes > 0;
+  }
+
+  async getEntry(ws: string, id: string) {
+    const row = await this.db.prepare('SELECT id, kind, command FROM entry_groups WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL')
+      .bind(id, ws).first<GroupRow>();
+    if (!row) return null;
+    return (await this.withTransactions([row]))[0] ?? null;
+  }
+
+  async listEntries(ws: string, f: TxFilter) {
+    const { where, args } = txWhere(ws, f);
+    where.push('g.deleted_at IS NULL');
+    let having = '';
+    if (f.cursor) {
+      const [at, id] = f.cursor.split('|');
+      having = 'HAVING (MIN(t.occurred_at), g.id) < (?, ?)';
+      args.push(at, id);
+    }
+    const rows = (await this.db.prepare(`SELECT g.id, g.kind, g.command
+      FROM entry_groups g JOIN transactions t ON t.group_id = g.id
+      WHERE ${where.join(' AND ')} GROUP BY g.id ${having}
+      ORDER BY MIN(t.occurred_at) DESC, g.id DESC LIMIT ?`).bind(...args, f.limit + 1).all<GroupRow>()).results;
+    const items = await this.withTransactions(rows.slice(0, f.limit));
+    const last = items.at(-1);
+    return { items, nextCursor: rows.length > f.limit && last ? `${last.occurred_at}|${last.id}` : null };
+  }
+
+  /** Loads each group's live transactions; groups with none left are dropped. */
+  private async withTransactions(groups: GroupRow[]): Promise<EntryView[]> {
+    if (!groups.length) return [];
+    const txs = (await this.db.prepare(`SELECT id, group_id, type, occurred_at, category_id, merchant, note, original_amount, original_currency
+      FROM transactions WHERE group_id IN (SELECT value FROM json_each(?)) AND deleted_at IS NULL ORDER BY occurred_at, created_at`)
+      .bind(JSON.stringify(groups.map(g => g.id))).all<Omit<TxView, 'entries' | 'allocations'> & { group_id: string }>()).results;
+    const views = await this.withLines(txs);
+    return groups.flatMap(g => {
+      const own = views.filter(t => t.group_id === g.id).map(({ group_id: _, ...t }) => t);
+      if (!own.length) return [];
+      return [{ id: g.id, kind: g.kind, command: g.command === null ? null : JSON.parse(g.command), occurred_at: own[0].occurred_at, transactions: own }];
+    });
+  }
+
+  /** Attaches entry and allocation lines; json_each keeps the bound-parameter count at one, whatever the page size. */
+  private async withLines<T extends { id: string }>(rows: T[]) {
+    const ids = JSON.stringify(rows.map(r => r.id));
+    const [entries, allocations] = await this.db.batch<{ transaction_id: string; account_id?: string; envelope_id?: string; amount: number }>([
+      this.db.prepare('SELECT transaction_id, account_id, amount FROM entries WHERE transaction_id IN (SELECT value FROM json_each(?))').bind(ids),
+      this.db.prepare('SELECT transaction_id, envelope_id, amount FROM allocations WHERE transaction_id IN (SELECT value FROM json_each(?))').bind(ids),
+    ]);
+    return rows.map(r => ({
+      ...r,
+      entries: entries.results.filter(e => e.transaction_id === r.id).map(e => ({ account_id: e.account_id!, amount: e.amount })),
+      allocations: allocations.results.filter(a => a.transaction_id === r.id).map(a => ({ envelope_id: a.envelope_id!, amount: a.amount })),
+    }));
+  }
+
+  async hasTransactions(ws: string, accountId: string) {
+    const r = await this.db.prepare(`SELECT 1 AS yes FROM entries e JOIN transactions t ON t.id = e.transaction_id
+      WHERE t.workspace_id = ? AND e.account_id = ? AND t.deleted_at IS NULL LIMIT 1`).bind(ws, accountId).first<{ yes: number }>();
+    return Boolean(r);
   }
 
   async list(ws: string, f: TxFilter) {
-    const where = ['t.workspace_id = ?', 't.deleted_at IS NULL'];
-    const args: unknown[] = [ws];
-    if (f.from) { where.push('substr(t.occurred_at, 1, 10) >= ?'); args.push(f.from); }
-    if (f.to) { where.push('substr(t.occurred_at, 1, 10) <= ?'); args.push(f.to); }
-    if (f.type) { where.push('t.type = ?'); args.push(f.type); }
-    if (f.categoryId) { where.push('t.category_id = ?'); args.push(f.categoryId); }
-    if (f.accountId) { where.push('EXISTS (SELECT 1 FROM entries e WHERE e.transaction_id = t.id AND e.account_id = ?)'); args.push(f.accountId); }
-    if (f.envelopeId) { where.push('EXISTS (SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.envelope_id = ?)'); args.push(f.envelopeId); }
+    const { where, args } = txWhere(ws, f);
     if (f.cursor) {
       const [at, id] = f.cursor.split('|');
       where.push('(t.occurred_at, t.id) < (?, ?)'); args.push(at, id);
@@ -162,17 +238,7 @@ export class D1Ledger implements LedgerRepository {
       FROM transactions t WHERE ${where.join(' AND ')} ORDER BY t.occurred_at DESC, t.id DESC LIMIT ?`).bind(...args, f.limit + 1)
       .all<Omit<TxView, 'entries' | 'allocations'>>()).results;
     const page = rows.slice(0, f.limit);
-    const ids = JSON.stringify(page.map(r => r.id));
-    // json_each keeps the bound-parameter count at one, whatever the page size.
-    const [entries, allocations] = await this.db.batch<{ transaction_id: string; account_id?: string; envelope_id?: string; amount: number }>([
-      this.db.prepare('SELECT transaction_id, account_id, amount FROM entries WHERE transaction_id IN (SELECT value FROM json_each(?))').bind(ids),
-      this.db.prepare('SELECT transaction_id, envelope_id, amount FROM allocations WHERE transaction_id IN (SELECT value FROM json_each(?))').bind(ids),
-    ]);
-    const items = page.map(r => ({
-      ...r,
-      entries: entries.results.filter(e => e.transaction_id === r.id).map(e => ({ account_id: e.account_id!, amount: e.amount })),
-      allocations: allocations.results.filter(a => a.transaction_id === r.id).map(a => ({ envelope_id: a.envelope_id!, amount: a.amount })),
-    }));
+    const items = await this.withLines(page);
     const last = page.at(-1);
     return { items, nextCursor: rows.length > f.limit && last ? `${last.occurred_at}|${last.id}` : null };
   }
@@ -213,4 +279,19 @@ export class D1Ledger implements LedgerRepository {
       .bind(ws).first<{ account_id: string }>();
     return r?.account_id ?? null;
   }
+}
+
+type GroupRow = { id: string; kind: EntryKind; command: string | null };
+
+/** Transaction filters shared by the transaction list and the entry list (alias `t`). */
+function txWhere(ws: string, f: TxFilter) {
+  const where = ['t.workspace_id = ?', 't.deleted_at IS NULL'];
+  const args: unknown[] = [ws];
+  if (f.from) { where.push('substr(t.occurred_at, 1, 10) >= ?'); args.push(f.from); }
+  if (f.to) { where.push('substr(t.occurred_at, 1, 10) <= ?'); args.push(f.to); }
+  if (f.type) { where.push('t.type = ?'); args.push(f.type); }
+  if (f.categoryId) { where.push('t.category_id = ?'); args.push(f.categoryId); }
+  if (f.accountId) { where.push('EXISTS (SELECT 1 FROM entries e WHERE e.transaction_id = t.id AND e.account_id = ?)'); args.push(f.accountId); }
+  if (f.envelopeId) { where.push('EXISTS (SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.envelope_id = ?)'); args.push(f.envelopeId); }
+  return { where, args };
 }

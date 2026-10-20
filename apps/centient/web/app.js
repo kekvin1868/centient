@@ -223,9 +223,10 @@ async function loadTx(reset) {
     if ($(sel).value) q.set(k, $(sel).value);
   }
   if (state.cursor) q.set('cursor', state.cursor);
-  const { items, nextCursor } = await api('GET', `/api/transactions?${q}`);
+  const { items, nextCursor } = await api('GET', `/api/entries?${q}`);
   state.cursor = nextCursor;
-  $('#tx-list').append(...items.map(txRow));
+  // ponytail: shows each entry's first transaction; the new client renders whole entries.
+  $('#tx-list').append(...items.map(e => txRow({ ...e.transactions[0], id: e.id })));
   $('#tx-more').hidden = !nextCursor;
   if (reset && !items.length) $('#tx-list').append(h('li', { class: 'sub', text: 'No transactions yet.' }));
 }
@@ -258,7 +259,7 @@ function txRow(t) {
       class: 'small danger', text: 'Delete',
       onclick: guard(async () => {
         if (!confirm(`Delete "${title}"?`)) return;
-        await api('DELETE', `/api/transactions/${t.id}`);
+        await api('DELETE', `/api/entries/${t.id}`);
         li.remove();
         toast('Deleted');
       }),
