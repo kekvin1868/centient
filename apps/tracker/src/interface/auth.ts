@@ -4,7 +4,8 @@ export type AuthEnv = {
   ACCESS_TEAM_DOMAIN?: string; // e.g. "yourteam.cloudflareaccess.com"
   ACCESS_AUD?: string; // the Access application's audience tag
   SERVICE_TOKEN_EMAIL?: string; // the user an Access service token (the Shortcut) acts as
-  DEV_EMAIL?: string; // .dev.vars only; honoured on localhost only
+  DEV_EMAIL?: string; // .dev.vars only; honoured on localhost, private LAN addresses and DEV_HOSTS
+  DEV_HOSTS?: string; // .dev.vars only; comma-separated extra hosts, e.g. an ngrok domain behind ngrok OAuth
 };
 
 /** Returns the signed-in email, or null. */
@@ -16,11 +17,16 @@ export async function identify(req: Request, env: AuthEnv): Promise<string | nul
     if (claims?.common_name && env.SERVICE_TOKEN_EMAIL) return env.SERVICE_TOKEN_EMAIL;
     return null;
   }
-  // Behind Access the hostname is the real domain, so this branch can never run in production.
+  // Development only: DEV_EMAIL and DEV_HOSTS live in .dev.vars, which is never deployed. The host
+  // must be this machine, a private LAN address, or a host listed in DEV_HOSTS (a tunnel to a phone).
   const host = new URL(req.url).hostname;
-  if (env.DEV_EMAIL && (host === 'localhost' || host === '127.0.0.1')) return env.DEV_EMAIL;
+  const devHosts = (env.DEV_HOSTS ?? '').split(',').map(h => h.trim()).filter(Boolean);
+  if (env.DEV_EMAIL && (isLocalHost(host) || devHosts.includes(host))) return env.DEV_EMAIL;
   return null;
 }
+
+const isLocalHost = (host: string) =>
+  host === 'localhost' || host === '127.0.0.1' || /^(10\.\d{1,3}|192\.168|172\.(1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}$/.test(host);
 
 type Claims = { email?: string; common_name?: string; aud: string | string[]; exp: number; iss: string };
 let keyCache: { at: number; keys: Map<string, CryptoKey> } | null = null;

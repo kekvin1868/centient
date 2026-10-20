@@ -1,3 +1,5 @@
 node_modules
 .wrangler
 .dev.vars
+ngrok.policy.yml
+.DS_Store

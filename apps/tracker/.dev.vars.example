@@ -1,1 +1,2 @@
 DEV_EMAIL=dev@localhost
+# Extra dev hosts, e.g. your ngrok domain (only behind ngrok OAuth): DEV_HOSTS=your-name.ngrok-free.dev

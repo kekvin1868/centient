@@ -30,3 +30,10 @@ localhost; in production every request needs a valid Cloudflare Access JWT.
 1. `npx wrangler d1 create balance-tracker` and put the id in `apps/tracker/wrangler.toml`.
 2. Protect the hostname with Cloudflare Access; set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `SERVICE_TOKEN_EMAIL`.
 3. `npm run deploy -w apps/tracker`.
+
+## Test on a phone
+
+- Same Wi-Fi: run `npm run dev`, then open `http://<your Mac's address from ipconfig getifaddr en0>:8787`.
+- From anywhere: create `apps/tracker/ngrok.policy.yml` (Google sign-in, your email only), run
+  `ngrok http 8787 --traffic-policy-file ngrok.policy.yml`, set `DEV_HOSTS=<your ngrok host>` in
+  `apps/tracker/.dev.vars`, then `npm run dev`. Never run the tunnel without the policy file.
