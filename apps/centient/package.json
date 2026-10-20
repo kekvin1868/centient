@@ -1,5 +1,5 @@
 {
-  "name": "@bt/tracker",
+  "name": "@centient/app",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,8 +7,8 @@
     "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy"
   },
   "dependencies": {
-    "@bt/money": "*",
-    "@bt/quickadd": "*",
+    "@centient/money": "*",
+    "@centient/quickadd": "*",
     "hono": "^4.13.13",
     "zod": "^4.6.7"
   }

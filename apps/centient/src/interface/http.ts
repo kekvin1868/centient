@@ -1,5 +1,5 @@
 // HTTP interface: Hono routes, Zod at the boundary, errors mapped to { code, message }.
-import { DECIMALS } from '@bt/money';
+import { DECIMALS } from '@centient/money';
 import { Hono } from 'hono';
 import { z, ZodError } from 'zod';
 import * as uc from '../application/usecases';

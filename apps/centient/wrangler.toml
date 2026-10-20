@@ -1,4 +1,4 @@
-name = "balance-tracker"
+name = "cts"
 main = "src/index.ts"
 compatibility_date = "2026-06-01"
 
@@ -7,8 +7,8 @@ directory = "./web"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "balance-tracker"
-database_id = "00000000-0000-0000-0000-000000000000" # replace with `wrangler d1 create balance-tracker` output before deploying
+database_name = "centsdb"
+database_id = "00000000-0000-0000-0000-000000000000" # replace with `wrangler d1 create centsdb` output before deploying
 migrations_dir = "migrations"
 
 # Production identity: set these once Cloudflare Access protects the hostname.

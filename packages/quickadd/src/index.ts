@@ -1,6 +1,6 @@
 // Quick add: one typed or dictated line becomes transaction drafts. Pure rules, no AI.
 // Runs in the Worker today; the PWA can import it once it has a bundler.
-import { parseAmount, type Amount } from '@bt/money';
+import { parseAmount, type Amount } from '@centient/money';
 import {
   ABBREVIATIONS, CASH_WORDS, DAY_NAMES, DEFAULT_RANGE, FILLER, HOKKIEN_AMBIGUOUS, HOKKIEN_DIGITS,
   HOKKIEN_EXACT, HOKKIEN_UNITS, INCOME_WORDS, KEYWORDS, MERCHANT_ALIASES, PROVIDER_ALIASES,

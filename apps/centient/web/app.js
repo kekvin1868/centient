@@ -1,4 +1,4 @@
-// Balance Tracker web client: plain JS, no libraries. Talks to the Worker's /api.
+// Centient web client: plain JS, no libraries. Talks to the Worker's /api.
 // ponytail: bare-minimum UI for testing; the real PWA (offline, push) comes later.
 
 const state = { me: null, accounts: [], envelopes: [], categories: [], drafts: [], cursor: null };

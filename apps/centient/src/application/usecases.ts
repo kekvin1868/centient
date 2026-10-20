@@ -1,6 +1,6 @@
 // Use cases. Each takes the workspace id from the verified session, never from the request body,
 // and checks that every referenced account, envelope and category belongs to that workspace.
-import { parseQuickAdd, type Draft } from '@bt/quickadd';
+import { parseQuickAdd, type Draft } from '@centient/quickadd';
 import { cycleStart, daysLeft, jakartaToday, nextCycleStart, toOccurredAt } from '../domain/cycle';
 import {
   allocate, assertBalanced, DomainError, expense, income, splitShares, transfer,

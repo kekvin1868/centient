@@ -1,6 +1,6 @@
-# Balance Tracker
+# Centient
 
-Private balance tracker on Cloudflare Workers + D1. Spec: https://claude.ai/code/artifact/7a0ab28a-674b-494d-88e2-aa5f2c66d83a
+Centient: a private balance tracker on Cloudflare Workers + D1. Spec: https://claude.ai/code/artifact/7a0ab28a-674b-494d-88e2-aa5f2c66d83a
 
 ## Run locally
 
@@ -11,29 +11,29 @@ npm test           # parser, ledger and D1 integration tests
 npm run typecheck
 ```
 
-Copy `apps/tracker/.dev.vars.example` to `apps/tracker/.dev.vars`; locally you are signed in as its `DEV_EMAIL`. That bypass only works on
+Copy `apps/centient/.dev.vars.example` to `apps/centient/.dev.vars`; locally you are signed in as its `DEV_EMAIL`. That bypass only works on
 localhost; in production every request needs a valid Cloudflare Access JWT.
 
 ## Layout
 
 - `packages/money` - amount parsing (25rb, 1,5jt, Rp52.500) and formatting
 - `packages/quickadd` - quick-add parser: abbreviations, Hokkien words, price-range context engine
-- `apps/tracker/src/domain` - ledger rules and budget cycles (no I/O)
-- `apps/tracker/src/application` - use cases and ports
-- `apps/tracker/src/infrastructure` - D1 repositories
-- `apps/tracker/src/interface` - Hono routes, Zod validation, Access auth
-- `apps/tracker/web` - bare-minimum UI, plain HTML/JS
-- `apps/tracker/migrations` - D1 schema
+- `apps/centient/src/domain` - ledger rules and budget cycles (no I/O)
+- `apps/centient/src/application` - use cases and ports
+- `apps/centient/src/infrastructure` - D1 repositories
+- `apps/centient/src/interface` - Hono routes, Zod validation, Access auth
+- `apps/centient/web` - bare-minimum UI, plain HTML/JS
+- `apps/centient/migrations` - D1 schema
 
 ## Deploy (later)
 
-1. `npx wrangler d1 create balance-tracker` and put the id in `apps/tracker/wrangler.toml`.
+1. `npx wrangler d1 create centsdb` and put the id in `apps/centient/wrangler.toml`.
 2. Protect the hostname with Cloudflare Access; set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `SERVICE_TOKEN_EMAIL`.
-3. `npm run deploy -w apps/tracker`.
+3. `npm run deploy -w apps/centient`.
 
 ## Test on a phone
 
 - Same Wi-Fi: run `npm run dev`, then open `http://<your Mac's address from ipconfig getifaddr en0>:8787`.
-- From anywhere: create `apps/tracker/ngrok.policy.yml` (Google sign-in, your email only), run
+- From anywhere: create `apps/centient/ngrok.policy.yml` (Google sign-in, your email only), run
   `ngrok http 8787 --traffic-policy-file ngrok.policy.yml`, set `DEV_HOSTS=<your ngrok host>` in
-  `apps/tracker/.dev.vars`, then `npm run dev`. Never run the tunnel without the policy file.
+  `apps/centient/.dev.vars`, then `npm run dev`. Never run the tunnel without the policy file.
