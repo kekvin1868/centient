@@ -1,0 +1,21 @@
+name = "cts"
+main = "src/index.ts"
+compatibility_date = "2026-06-01"
+
+# The Vite plugin builds the client and points assets at it. Unknown paths serve index.html (the SPA);
+# /api/* always reaches the Worker.
+[assets]
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "centsdb"
+database_id = "00000000-0000-0000-0000-000000000000" # replace with `wrangler d1 create centsdb` output before deploying
+migrations_dir = "migrations"
+
+# Production identity: set these once Cloudflare Access protects the hostname.
+# [vars]
+# ACCESS_TEAM_DOMAIN = "yourteam.cloudflareaccess.com"
+# ACCESS_AUD = "<application audience tag>"
+# SERVICE_TOKEN_EMAIL = "you@example.com"

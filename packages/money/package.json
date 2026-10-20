@@ -1,1 +1,1 @@
-{ "name": "@bt/money", "private": true, "type": "module", "exports": "./src/index.ts" }
+{ "name": "@centient/money", "private": true, "type": "module", "exports": "./src/index.ts" }
