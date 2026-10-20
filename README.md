@@ -2,7 +2,9 @@
 
 Centient: a private balance tracker on Cloudflare Workers + D1, with a Preact web app you can install to your phone's Home Screen.
 
-Spec: https://claude.ai/code/artifact/7a0ab28a-674b-494d-88e2-aa5f2c66d83a
+- Plans and code maps: start at [planning/README.md](planning/README.md).
+- Full spec: [planning/spec/backend-spec-v1.md](planning/spec/backend-spec-v1.md) (exported copy; the live, editable version is https://claude.ai/code/artifact/7a0ab28a-674b-494d-88e2-aa5f2c66d83a).
+- Current work: [planning/features/frontend-centient.agent.md](planning/features/frontend-centient.agent.md).
 
 ## Run locally
 
