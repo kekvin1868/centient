@@ -16,24 +16,47 @@ export function parseNumber(s: string): number | null {
 
 const SUFFIX: Record<string, number> = { rb: 1e3, ribu: 1e3, k: 1e3, jt: 1e6, juta: 1e6 };
 
+/** Currency words accepted before or after a number. Rupiah words keep the rupiah rules below. */
+export const CURRENCY_WORDS: Record<string, string> = {
+  rp: 'IDR', 'rp.': 'IDR', idr: 'IDR', $: 'USD', us$: 'USD', usd: 'USD', usdt: 'USDT', btc: 'BTC',
+};
+
 export type Amount =
-  | { kind: 'exact'; value: number }
+  // `currency` is set only for a non-rupiah amount; `value` is then in that currency's minor units.
+  | { kind: 'exact'; value: number; currency?: string }
   // A bare small number ("100") or an ambiguous Hokkien word: the caller picks a magnitude.
   | { kind: 'inferred'; candidates: number[] }
   // "M" is million in English and miliar in Indonesian, so it is never guessed.
   | { kind: 'ambiguous_m'; value: number };
 
+/** Foreign amounts are often decimals: "0.001" or "20.5" is a decimal, "1,500" still groups thousands. */
+function parseForeignNumber(s: string): number | null {
+  const m = s.match(/^(\d+)[.,](\d+)$/);
+  if (m && (m[1] === '0' || m[2].length !== 3)) return Number(`${m[1]}.${m[2]}`);
+  return parseNumber(s);
+}
+
 /**
- * Parses one amount token: optional Rp / Rp. / IDR prefix, a number, optional suffix
- * (rb, ribu, k, jt, juta, any case). Returns null when the token is not an amount.
- * With a prefix a small number is taken literally ("Rp100" is Rp100).
+ * Parses one amount token: optional currency prefix (Rp, Rp., IDR, $, US$, USD, USDT, BTC), a number,
+ * optional suffix (rb, ribu, k, jt, juta, or a currency word), any case. Returns null when the token
+ * is not an amount. With a prefix a small rupiah number is taken literally ("Rp100" is Rp100).
  */
 export function parseAmount(token: string): Amount | null {
-  const m = token.trim().toLowerCase().match(/^(rp\.?\s?|idr\s?)?(\d[\d.,]*)\s?(rb|ribu|k|jt|juta|m)?$/);
+  const m = token.trim().toLowerCase().match(/^(rp\.?|idr|us\$|\$|usdt|usd|btc)?\s?(\d[\d.,]*)\s?(rb|ribu|k|jt|juta|m|usdt|usd|btc)?$/);
   if (!m) return null;
-  const n = parseNumber(m[2]);
+  const [, prefix, digits, suffix] = m;
+  const prefixCur = prefix ? CURRENCY_WORDS[prefix] : undefined;
+  const suffixCur = suffix ? CURRENCY_WORDS[suffix] : undefined;
+  if (prefixCur && suffixCur && prefixCur !== suffixCur) return null;
+  const currency = prefixCur ?? suffixCur ?? 'IDR';
+  if (currency !== 'IDR') {
+    const n = parseForeignNumber(digits);
+    if (n === null) return null;
+    const major = n * (suffix && SUFFIX[suffix] ? SUFFIX[suffix] : 1);
+    return { kind: 'exact', value: Math.round(major * 10 ** (DECIMALS[currency] ?? 0)), currency };
+  }
+  const n = parseNumber(digits);
   if (n === null) return null;
-  const [, prefix, , suffix] = m;
   if (suffix === 'm') return { kind: 'ambiguous_m', value: n };
   if (suffix) return { kind: 'exact', value: Math.round(n * SUFFIX[suffix]) };
   if (!prefix && Number.isInteger(n) && n < 1000) return { kind: 'inferred', candidates: [n, n * 1e3, n * 1e6] };

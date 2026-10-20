@@ -1,5 +1,6 @@
 // A D1-shaped wrapper over Node's built-in SQLite (D1 is SQLite), for fast integration tests.
 // ponytail: covers only the D1 calls the repositories use (prepare/bind/first/all/run/batch).
+import { readdirSync, readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 export function testD1(migrationSql: string): D1Database {
@@ -31,4 +32,10 @@ export function testD1(migrationSql: string): D1Database {
       catch (e) { db.exec('ROLLBACK'); throw e; }
     },
   } as unknown as D1Database;
+}
+
+/** Every migration in order, as one SQL string. */
+export function migrationsSql(): string {
+  const dir = new URL('../migrations/', import.meta.url);
+  return readdirSync(dir).filter(f => f.endsWith('.sql')).sort().map(f => readFileSync(new URL(f, dir), 'utf8')).join('\n');
 }

@@ -1,16 +1,15 @@
-// Integration test: use cases and D1 repositories against SQLite with the real migration.
-import { readFileSync } from 'node:fs';
+// Integration test: use cases and D1 repositories against SQLite with the real migrations.
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as uc from '../src/application/usecases';
 import { D1Catalog, D1Ledger } from '../src/infrastructure/d1';
-import { testD1 } from './d1shim';
+import { migrationsSql, testD1 } from './d1shim';
 
 let deps: uc.Deps;
 // Saturday 17 Oct 2026, 10:00 in Jakarta.
 const NOW = Date.parse('2026-10-17T03:00:00Z');
 
 beforeAll(() => {
-  const db = testD1(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf8'));
+  const db = testD1(migrationsSql());
   deps = { catalog: new D1Catalog(db), ledger: new D1Ledger(db), now: () => NOW };
 });
 
@@ -52,10 +51,13 @@ describe('tracker', () => {
     // B cannot spend from A's account, nor read or delete A's transactions.
     await expect(uc.recordTransactions(deps, b.ws, [{ type: 'EXPENSE', accountId: a.bca, categoryId: b.cat('Coffee'), amount: 1, date: '2026-10-17' }]))
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
-    const aList = await uc.listTransactions(deps, a.ws, { limit: 50 });
-    const bList = await uc.listTransactions(deps, b.ws, { limit: 50 });
+    const aList = await uc.listEntries(deps, a.ws, { limit: 50 });
+    const bList = await uc.listEntries(deps, b.ws, { limit: 50 });
     expect(bList.items.some(x => aList.items.some(y => y.id === x.id))).toBe(false);
-    await expect(uc.deleteTransaction(deps, b.ws, aList.items[0].id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(uc.deleteEntry(deps, b.ws, aList.items[0].id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(uc.editEntry(deps, b.ws, aList.items[0].id, { type: 'EXPENSE', accountId: b.bca, categoryId: b.cat('Coffee'), amount: 1, date: '2026-10-17' }))
+      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(uc.updateBalance(deps, b.ws, a.bca, { actual: 0 })).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(uc.updateItem(deps, b.ws, 'accounts', a.bca, { name: 'stolen' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
@@ -87,8 +89,120 @@ describe('tracker', () => {
     const t = await setup('csv@test');
     const [id] = await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Coffee'), amount: 20_000, date: '2026-10-17', merchant: 'Kopi, "Tuku"' }]);
     expect(await uc.exportCsv(deps, t.ws)).toContain('"kopi, ""tuku"""');
-    await uc.deleteTransaction(deps, t.ws, id);
+    await uc.deleteEntry(deps, t.ws, id);
     const b = await uc.getBalances(deps, t.ws);
     expect(b.accounts.find(a => a.id === t.bca)!.balance).toBe(10_000_000);
+  });
+
+  it('keeps a split bill as one entry, and editing rebuilds or collapses it', async () => {
+    const t = await setup('edit@test');
+    const split = { type: 'EXPENSE' as const, accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 90_000, date: '2026-10-16', merchant: 'Pizza Hut', split: { people: 3, iouAccountId: t.friends } };
+    const [id] = await uc.recordTransactions(deps, t.ws, [split]);
+    const before = await deps.ledger.getEntry(t.ws, id);
+    expect(before?.transactions.map(x => x.type)).toEqual(['EXPENSE', 'TRANSFER']);
+
+    await uc.editEntry(deps, t.ws, id, { ...split, amount: 120_000 });
+    let b = await uc.getBalances(deps, t.ws);
+    const bal = (acc: string) => b.accounts.find(a => a.id === acc)!.balance;
+    expect(bal(t.bca)).toBe(10_000_000 - 120_000);
+    expect(bal(t.friends)).toBe(80_000);
+    expect(sum(b.accounts)).toBe(sum(b.envelopes));
+    const edited = await deps.ledger.getEntry(t.ws, id);
+    expect(edited?.occurred_at).toBe(before?.occurred_at); // same day keeps its time
+
+    const { split: _, ...alone } = split;
+    await uc.editEntry(deps, t.ws, id, { ...alone, amount: 50_000 });
+    b = await uc.getBalances(deps, t.ws);
+    expect((await deps.ledger.getEntry(t.ws, id))?.transactions).toHaveLength(1);
+    expect(bal(t.bca)).toBe(10_000_000 - 50_000);
+    expect(bal(t.friends)).toBe(0);
+
+    await expect(uc.editEntry(deps, t.ws, id, { type: 'INCOME', accountId: t.bca, categoryId: t.cat('Salary'), amount: 1, date: '2026-10-16' }))
+      .rejects.toMatchObject({ code: 'TYPE_LOCKED' });
+  });
+
+  it('keeps a transfer fee with its transfer, and deleting the entry removes both', async () => {
+    const t = await setup('fee@test');
+    const [id] = await uc.recordTransactions(deps, t.ws, [{ type: 'TRANSFER', fromAccountId: t.bca, toAccountId: t.gopay, amount: 100_000, fee: 2_500, date: '2026-10-17' }]);
+    const { items } = await uc.listEntries(deps, t.ws, { limit: 50 });
+    const entry = items.find(e => e.id === id)!;
+    expect(entry.transactions).toHaveLength(2);
+    expect(entry.command).toMatchObject({ type: 'TRANSFER', fee: 2_500 });
+    await uc.deleteEntry(deps, t.ws, id);
+    const b = await uc.getBalances(deps, t.ws);
+    expect(b.accounts.find(a => a.id === t.bca)!.balance).toBe(10_000_000);
+    expect((await uc.listEntries(deps, t.ws, { limit: 50 })).items.some(e => e.id === id)).toBe(false);
+    await expect(uc.deleteEntry(deps, t.ws, id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('pages entries by date with a cursor and filters by account', async () => {
+    const t = await setup('page@test');
+    await uc.recordTransactions(deps, t.ws, ['2026-10-10', '2026-10-11', '2026-10-12'].map(date =>
+      ({ type: 'EXPENSE' as const, accountId: t.gopay, categoryId: t.cat('Coffee'), amount: 10_000, date })));
+    const first = await uc.listEntries(deps, t.ws, { limit: 2, accountId: t.gopay });
+    expect(first.items.map(e => e.occurred_at.slice(0, 10))).toEqual(['2026-10-12', '2026-10-11']);
+    const second = await uc.listEntries(deps, t.ws, { limit: 2, accountId: t.gopay, cursor: first.nextCursor! });
+    expect(second.items.map(e => e.occurred_at.slice(0, 10))).toEqual(['2026-10-10']);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('updates a balance: categorised gaps count toward budgets, skipped ones do not', async () => {
+    const t = await setup('balance@test');
+    await uc.setBudget(deps, t.ws, { categoryId: t.cat('Food & Drink'), limit: 1_000_000 });
+    const spentFood = async () => (await uc.getBudgetStatus(deps, t.ws)).budgets[0].spent;
+    const balance = async () => (await uc.getBalances(deps, t.ws)).accounts.find(a => a.id === t.bca)!.balance;
+
+    expect(await uc.updateBalance(deps, t.ws, t.bca, { actual: 9_950_000, categoryId: t.cat('Food & Drink') })).toMatchObject({ balance: 9_950_000 });
+    expect(await balance()).toBe(9_950_000);
+    expect(await spentFood()).toBe(50_000);
+
+    await uc.updateBalance(deps, t.ws, t.bca, { actual: 9_900_000 });
+    expect(await balance()).toBe(9_900_000);
+    expect(await spentFood()).toBe(50_000);
+
+    await uc.updateBalance(deps, t.ws, t.bca, { actual: 9_920_000, categoryId: t.cat('Interest & cashback') });
+    expect(await balance()).toBe(9_920_000);
+
+    await uc.updateBalance(deps, t.ws, t.bca, { actual: 9_920_000 }); // no gap: nothing recorded
+    const corrections = (await uc.listEntries(deps, t.ws, { limit: 50 })).items.filter(e => e.kind === 'CORRECTION');
+    expect(corrections).toHaveLength(3);
+    expect(corrections.every(e => e.command === null)).toBe(true);
+    expect((await deps.catalog.listAccounts(t.ws)).find(a => a.id === t.bca)!.reconciled_at).toBe(new Date(NOW).toISOString());
+
+    await expect(uc.updateBalance(deps, t.ws, t.bca, { actual: 1, categoryId: t.cat('Salary') })).rejects.toMatchObject({ code: 'WRONG_CATEGORY_KIND' });
+    await expect(uc.editEntry(deps, t.ws, corrections[0].id, { type: 'INCOME', accountId: t.bca, categoryId: t.cat('Salary'), amount: 1, date: '2026-10-17' }))
+      .rejects.toMatchObject({ code: 'NOT_EDITABLE' });
+    const b = await uc.getBalances(deps, t.ws);
+    expect(sum(b.accounts)).toBe(sum(b.envelopes));
+  });
+
+  it('lets an account change currency only while it has no entries', async () => {
+    const t = await setup('currency@test');
+    const wise = await uc.createAccount(deps, t.ws, { name: 'Wise', kind: 'BANK' });
+    await uc.updateItem(deps, t.ws, 'accounts', wise.id, { currency_code: 'USD' });
+    expect((await deps.catalog.listAccounts(t.ws)).find(a => a.id === wise.id)).toMatchObject({ currency_code: 'USD', default_envelope_id: null });
+    await expect(uc.updateItem(deps, t.ws, 'accounts', t.bca, { currency_code: 'USD' })).rejects.toMatchObject({ code: 'CURRENCY_LOCKED' });
+  });
+});
+
+describe('migration 0002', () => {
+  it('turns existing transactions into editable entries', async () => {
+    const [init, groups] = migrationsSql().split('-- Entry groups:');
+    const seed = `
+      INSERT INTO workspaces (id, name) VALUES ('w', 'Old');
+      INSERT INTO accounts (id, workspace_id, name, kind) VALUES ('acc', 'w', 'BCA', 'BANK');
+      INSERT INTO envelopes (id, workspace_id, name) VALUES ('env', 'w', 'Monthly');
+      INSERT INTO categories (id, workspace_id, name, kind) VALUES ('food', 'w', 'Food', 'EXPENSE'), ('adj', 'w', 'Balance adjustment', 'EXPENSE');
+      INSERT INTO transactions (id, workspace_id, type, occurred_at, category_id, merchant) VALUES ('t1', 'w', 'EXPENSE', '2026-10-01T09:00:00+07:00', 'food', 'warteg');
+      INSERT INTO entries VALUES ('t1', 'acc', -20000);
+      INSERT INTO allocations VALUES ('t1', 'env', -20000);
+    `;
+    const db = testD1(`${init}\n${seed}\n-- Entry groups:${groups}`);
+    const old: uc.Deps = { catalog: new D1Catalog(db), ledger: new D1Ledger(db), now: () => NOW };
+    const [entry] = (await uc.listEntries(old, 'w', { limit: 10 })).items;
+    expect(entry).toMatchObject({ id: 't1', kind: 'USER', command: { type: 'EXPENSE', accountId: 'acc', envelopeId: 'env', amount: 20000, date: '2026-10-01' } });
+    await uc.editEntry(old, 'w', 't1', { ...(entry.command as uc.Command & { type: 'EXPENSE' }), amount: 25000 });
+    expect((await uc.getBalances(old, 'w')).accounts[0].balance).toBe(-25000);
+    expect((await old.catalog.listCategories('w')).find(c => c.id === 'adj')!.kind).toBe('INCOME');
   });
 });

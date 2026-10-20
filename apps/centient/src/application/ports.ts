@@ -23,6 +23,16 @@ export type TxView = {
   entries: { account_id: string; amount: number }[];
   allocations: { envelope_id: string; amount: number }[];
 };
+/** One thing the user logged: a group of transactions edited and deleted together. */
+export type EntryKind = 'USER' | 'OPENING' | 'CORRECTION';
+export type EntryView = {
+  id: string; kind: EntryKind; occurred_at: string;
+  /** The saved command (JSON), or null for system entries and rows from before entry groups. */
+  command: unknown | null;
+  transactions: TxView[];
+};
+export type NewEntry = { kind: EntryKind; command: unknown | null; txs: NewTransaction[] };
+
 export type TxFilter = {
   from?: string; to?: string; accountId?: string; envelopeId?: string; categoryId?: string; type?: string;
   cursor?: string; limit: number;
@@ -49,9 +59,16 @@ export interface CatalogRepository {
 }
 
 export interface LedgerRepository {
-  /** Writes all transactions and their lines in one atomic batch. */
-  insert(ws: string, txs: NewTransaction[]): Promise<string[]>;
-  softDelete(ws: string, id: string): Promise<boolean>;
+  /** Writes every entry, its transactions and their lines in one atomic batch; returns the entry ids. */
+  insert(ws: string, entries: NewEntry[]): Promise<string[]>;
+  /** Replaces an entry's transactions and saved command in one atomic batch. */
+  replace(ws: string, entryId: string, command: unknown, txs: NewTransaction[]): Promise<void>;
+  getEntry(ws: string, id: string): Promise<EntryView | null>;
+  /** Soft-deletes the entry and all its transactions; false when it is not in this workspace. */
+  deleteEntry(ws: string, id: string): Promise<boolean>;
+  /** One item per entry, newest first; a filter matches when any of its transactions matches. */
+  listEntries(ws: string, f: TxFilter): Promise<{ items: EntryView[]; nextCursor: string | null }>;
+  hasTransactions(ws: string, accountId: string): Promise<boolean>;
   list(ws: string, f: TxFilter): Promise<{ items: TxView[]; nextCursor: string | null }>;
   balances(ws: string): Promise<{ accounts: Record<string, number>; envelopes: Record<string, number> }>;
   /** IDR spent in [from, to) on EXPENSE allocations matching the category and/or envelope. */
