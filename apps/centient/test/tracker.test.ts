@@ -185,6 +185,50 @@ describe('tracker', () => {
   });
 });
 
+describe('deleting and resetting', () => {
+  it('deletes an account with every entry that touches it, keeping the ledger balanced', async () => {
+    const t = await setup('delete@test');
+    await uc.recordTransactions(deps, t.ws, [
+      { type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 90_000, date: '2026-10-17', split: { people: 3, iouAccountId: t.friends } },
+      { type: 'EXPENSE', accountId: t.gopay, categoryId: t.cat('Coffee'), amount: 20_000, date: '2026-10-17' },
+    ]);
+    await uc.deleteAccount(deps, t.ws, t.bca);
+    expect((await deps.catalog.listAccounts(t.ws)).some(a => a.id === t.bca)).toBe(false);
+    const b = await uc.getBalances(deps, t.ws);
+    expect(b.accounts.find(a => a.id === t.friends)!.balance).toBe(0); // the split's IOU half went too
+    expect(b.accounts.find(a => a.id === t.gopay)!.balance).toBe(-20_000);
+    expect(sum(b.accounts)).toBe(sum(b.envelopes));
+    expect((await uc.listEntries(deps, t.ws, { limit: 50 })).items).toHaveLength(1);
+    await expect(uc.deleteAccount(deps, t.ws, t.bca)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    // The name is free again for a new account.
+    await uc.createAccount(deps, t.ws, { name: 'BCA', kind: 'BANK' });
+  });
+
+  it('lets an account change type, but not into or out of "Friends owe you"', async () => {
+    const t = await setup('kind@test');
+    await uc.updateItem(deps, t.ws, 'accounts', t.gopay, { kind: 'CASH' });
+    expect((await deps.catalog.listAccounts(t.ws)).find(a => a.id === t.gopay)!.kind).toBe('CASH');
+    await expect(uc.updateItem(deps, t.ws, 'accounts', t.friends, { kind: 'BANK' })).rejects.toMatchObject({ code: 'KIND_LOCKED' });
+  });
+
+  it('backs up everything, then a reset starts a fresh workspace and keeps the old one flagged', async () => {
+    const t = await setup('reset@test');
+    await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Coffee'), amount: 30_000, date: '2026-10-17' }]);
+    const b = await uc.backup(deps, t.ws);
+    expect(b).toMatchObject({ format: 'centient-backup', version: 1, workspace: { id: t.ws } });
+    expect(b.accounts.map(a => a.name)).toEqual(expect.arrayContaining(['BCA', 'GoPay', 'Friends']));
+    expect(b.entries.map(e => e.kind).sort()).toEqual(['OPENING', 'USER']);
+
+    await uc.resetWorkspace(deps, t.ws);
+    const { workspaceId: fresh } = await deps.catalog.ensureWorkspace('reset@test');
+    expect(fresh).not.toBe(t.ws);
+    expect((await deps.catalog.listAccounts(fresh)).map(a => a.name)).toEqual(['Friends']);
+    expect((await uc.listEntries(deps, fresh, { limit: 50 })).items).toHaveLength(0);
+    // Soft delete: the old workspace and its data are still there.
+    expect((await uc.listEntries(deps, t.ws, { limit: 50 })).items).toHaveLength(2);
+  });
+});
+
 describe('migration 0002', () => {
   it('turns existing transactions into editable entries', async () => {
     const [init, groups] = migrationsSql().split('-- Entry groups:');

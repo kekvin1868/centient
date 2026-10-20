@@ -318,11 +318,41 @@ export async function exportCsv(deps: Deps, ws: string): Promise<string> {
 
 export const listTransactions = (deps: Deps, ws: string, f: TxFilter) => deps.ledger.list(ws, f);
 
+export async function deleteAccount(deps: Deps, ws: string, id: string): Promise<void> {
+  const now = new Date(deps.now?.() ?? Date.now()).toISOString();
+  if (!(await deps.catalog.deleteAccount(ws, id, now))) throw new DomainError('NOT_FOUND', 'Account not found');
+}
+
+/** Everything in the workspace as one JSON document: what a backup download contains. */
+export async function backup(deps: Deps, ws: string) {
+  const [workspace, accounts, envelopes, categories, budgets, aliases] = await Promise.all([
+    deps.catalog.getWorkspace(ws), deps.catalog.listAccounts(ws), deps.catalog.listEnvelopes(ws),
+    deps.catalog.listCategories(ws), deps.catalog.listBudgets(ws), deps.catalog.listAliases(ws),
+  ]);
+  const entries = [];
+  let cursor: string | undefined;
+  do {
+    const page = await listEntries(deps, ws, { limit: 200, cursor });
+    entries.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  return { format: 'centient-backup', version: 1, exported_at: new Date(deps.now?.() ?? Date.now()).toISOString(), workspace, accounts, envelopes, categories, budgets, aliases, entries };
+}
+
+/** Soft-deletes the workspace; the next request creates a fresh, seeded one. */
+export async function resetWorkspace(deps: Deps, ws: string): Promise<void> {
+  await deps.catalog.resetWorkspace(ws, new Date(deps.now?.() ?? Date.now()).toISOString());
+}
+
 /** PATCH for accounts, envelopes and categories: `archived` becomes a timestamp, and an envelope reference must be ours. */
 export async function updateItem(deps: Deps, ws: string, table: 'accounts' | 'envelopes' | 'categories', id: string, patch: Record<string, unknown>) {
   const { archived, ...rest } = patch;
   if (typeof rest.default_envelope_id === 'string') (await catalogOf(deps, ws)).envelope(rest.default_envelope_id);
   if (typeof rest.provider === 'string') rest.provider = rest.provider.trim().toUpperCase() || null;
+  if (table === 'accounts' && typeof rest.kind === 'string') {
+    const row = (await deps.catalog.listAccounts(ws)).find(a => a.id === id);
+    if (row && (row.kind === 'IOU') !== (rest.kind === 'IOU')) throw new DomainError('KIND_LOCKED', '"Friends owe you" accounts keep their type');
+  }
   if (table === 'accounts' && typeof rest.currency_code === 'string') {
     if (await deps.ledger.hasTransactions(ws, id)) throw new DomainError('CURRENCY_LOCKED', 'This account already has entries. Add a new account for the other currency.');
     // The old default Pocket is in the old currency.
