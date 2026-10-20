@@ -1,15 +1,18 @@
-// Settings: accounts, Pockets, categories, when the month starts, and export. "Hide" keeps history.
+// Settings: accounts, Pockets, categories, when the month starts, backup and reset. "Hide" keeps history;
+// deleting an account or resetting flags data as deleted rather than erasing it.
 import { useState } from 'preact/hooks';
 import type { Account, Category, Envelope } from '../../../src/application/ports';
 import { call, client } from '../api';
 import { AccountForm } from '../components/AccountForm';
 import { AmountField } from '../components/AmountField';
+import { ConfirmSheet } from '../components/ConfirmSheet';
 import { InputRow, PickerRow } from '../components/Fields';
 import { Group, Row } from '../components/List';
 import { Segmented } from '../components/Segmented';
 import { Sheet } from '../components/Sheet';
 import { showToast } from '../components/Toast';
 import { ACCOUNT_KINDS } from '../lib/format';
+import { downloadBackup } from '../lib/backup';
 import { categoryEmoji } from '../lib/labels';
 import { attempt } from '../lib/run';
 import { active, catalog, me, nameOf, refresh } from '../state';
@@ -20,6 +23,7 @@ const POCKET_KINDS: Record<Envelope['kind'], string> = { SPENDING: 'Spending', S
 export function Settings() {
   const [edit, setEdit] = useState<Edit | null>(null);
   const [add, setAdd] = useState<'account' | 'pocket' | 'category' | null>(null);
+  const [reset, setReset] = useState(false);
   const cat = catalog.value;
   const hidden = [...cat.accounts, ...cat.envelopes, ...cat.categories].filter(r => r.archived_at).length;
 
@@ -59,7 +63,13 @@ export function Settings() {
 
       <Group label="Your data">
         <Row title="Download all as spreadsheet (CSV)" chevron onClick={() => location.assign('/api/export.csv')} />
+        <Row title="Download a backup" sub="Everything, as one file you can keep" chevron onClick={() => attempt(downloadBackup)} />
       </Group>
+
+      <Group>
+        <Row title={<span class="danger-text">Reset Centient</span>} onClick={() => setReset(true)} />
+      </Group>
+      <ResetSheet open={reset} onClose={() => setReset(false)} />
 
       <EditSheet key={edit ? `${edit.table}:${edit.row.id}` : 'none'} edit={edit} onClose={() => setEdit(null)} />
       <Sheet open={add === 'account'} onClose={() => setAdd(null)} title="Add account"><AccountForm onDone={() => setAdd(null)} /></Sheet>
@@ -101,6 +111,9 @@ function EditSheet({ edit, onClose }: { edit: Edit | null; onClose: () => void }
   const [currency, setCurrency] = useState(acc?.currency_code ?? 'IDR');
   const [target, setTarget] = useState<number | null>(env?.target_amount ?? null);
   const [targetDate, setTargetDate] = useState(env?.target_date ?? '');
+  const [kind, setKind] = useState(acc?.kind ?? 'BANK');
+  const [dueDay, setDueDay] = useState<string | null>(acc?.due_day ? String(acc.due_day) : null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   if (!edit) return null;
   const cat = catalog.value;
   const patch = (json: Record<string, unknown>, done: string) => attempt(async () => {
@@ -114,18 +127,43 @@ function EditSheet({ edit, onClose }: { edit: Edit | null; onClose: () => void }
     if (edit.table === 'accounts') {
       json.default_envelope_id = defaultPocket;
       if (currency !== edit.row.currency_code) json.currency_code = currency;
+      if (kind !== edit.row.kind) json.kind = kind;
+      json.due_day = billed ? (dueDay ? Number(dueDay) : null) : null;
     }
     if (edit.table === 'envelopes' && edit.row.kind === 'GOAL') { json.target_amount = target; json.target_date = targetDate || null; }
     return patch(json, 'Saved');
   };
   const what = edit.table === 'accounts' ? 'account' : edit.table === 'envelopes' ? 'Pocket' : 'category';
+  const billed = kind === 'CREDIT_CARD' || kind === 'PAYLATER';
+  const askDelete = () => attempt(async () => {
+    const page = await call(client.api.entries.$get({ query: { limit: '200', account: edit.row.id } }));
+    const n = page.items.length;
+    setConfirmDelete(n === 0 ? `Delete ${edit.row.name}? It has no entries.`
+      : `Delete ${edit.row.name} and its ${page.nextCursor ? `${n}+` : n} entr${n === 1 ? 'y' : 'ies'}? Balances and Pockets update to match.`);
+  });
+  const remove = () => attempt(async () => {
+    setConfirmDelete(null);
+    await call(client.api.accounts[':id'].$delete({ param: { id: edit.row.id } }));
+    await refresh();
+    onClose();
+    showToast('Account deleted');
+  });
 
   return (
-    <Sheet open onClose={onClose} title={edit.row.name}>
+    <>
+    <Sheet open={!confirmDelete} onClose={onClose} title={edit.row.name}>
       <Group>
         <InputRow label="Name" value={name} onInput={setName} />
         {edit.table === 'accounts' && (
           <>
+            {edit.row.kind !== 'IOU' && (
+              <PickerRow label="Type" value={kind} onChange={v => v && setKind(v)}
+                options={Object.entries(ACCOUNT_KINDS).filter(([k]) => k !== 'IOU').map(([value, label]) => ({ value, label }))} />
+            )}
+            {billed && (
+              <PickerRow label="Bill due on day" value={dueDay} placeholder="Not set" onChange={setDueDay}
+                options={Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))} />
+            )}
             <PickerRow label="Usual Pocket" value={defaultPocket} placeholder="First spending Pocket"
               options={active(cat.envelopes).filter(e => e.currency_code === currency).map(e => ({ value: e.id, label: e.name }))} onChange={setDefaultPocket} />
             <PickerRow label="Currency" value={currency} options={Object.keys(me.value?.currencies ?? {}).map(c => ({ value: c, label: c }))} onChange={v => v && setCurrency(v)} />
@@ -142,6 +180,44 @@ function EditSheet({ edit, onClose }: { edit: Edit | null; onClose: () => void }
       <div class="sheet-actions">
         <button class="btn btn-primary btn-block" disabled={!name.trim()} onClick={save}>Save</button>
         <button class="btn btn-secondary btn-block" onClick={() => patch({ archived: true }, `Hidden. Find it under Hidden to show it again.`)}>Hide this {what}</button>
+        {edit.table === 'accounts' && <button class="btn btn-secondary btn-block danger-text" onClick={askDelete}>Delete account</button>}
+      </div>
+    </Sheet>
+    <ConfirmSheet open={Boolean(confirmDelete)} message={confirmDelete ?? ''} confirmLabel="Delete account"
+      onCancel={() => setConfirmDelete(null)} onConfirm={remove} />
+    </>
+  );
+}
+
+/** Start over. Optionally downloads a backup first; the old data stays on the server, flagged as deleted. */
+function ResetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [backup, setBackup] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    const ok = await attempt(async () => {
+      if (backup) await downloadBackup();
+      await call(client.api.workspace.reset.$post());
+    });
+    setBusy(false);
+    // A clean start: reload so every screen and cache begins from the fresh workspace.
+    if (ok) location.assign('/');
+  };
+  return (
+    <Sheet open={open} onClose={onClose} title="Reset Centient">
+      <p class="muted" style="margin:0 4px 16px">
+        This removes your accounts, entries, Pockets, categories and budgets from the app, and you start again from the first screen.
+        A copy stays on the server, marked as deleted.
+      </p>
+      <Group>
+        <label class="row field-row">
+          <span class="row-main">Download a backup first</span>
+          <input type="checkbox" class="switch" checked={backup} onChange={e => setBackup((e.target as HTMLInputElement).checked)} />
+        </label>
+      </Group>
+      <div class="sheet-actions">
+        <button class="btn btn-secondary btn-block danger-text" disabled={busy} onClick={run}>{busy ? 'Resetting…' : 'Reset Centient'}</button>
+        <button class="btn btn-secondary btn-block" onClick={onClose}>Cancel</button>
       </div>
     </Sheet>
   );
