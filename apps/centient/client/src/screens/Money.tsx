@@ -1,4 +1,5 @@
 // Money: where the money is (accounts), what it's for (Pockets), and budgets for this month.
+import { Block, BlockFooter, Button, Progressbar } from 'konsta/react';
 import { useEffect, useState } from 'preact/hooks';
 import type { Account, Envelope } from '../../../src/application/ports';
 import { call, client } from '../api';
@@ -35,7 +36,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
       cache = { bal: b as Bal, budgets: g };
     });
   }, [version.value]);
-  if (!bal || !budgets) return <main class="screen"><h1 class="title">Money</h1></main>;
+  if (!bal || !budgets) return <main class="screen"><h1 class="screen-title">Money</h1></main>;
 
   const totals = new Map<string, number>();
   for (const a of bal.accounts) totals.set(a.currency_code, (totals.get(a.currency_code) ?? 0) + a.balance);
@@ -49,12 +50,12 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
 
   return (
     <main class="screen">
-      <h1 class="title">Money</h1>
+      <h1 class="screen-title">Money</h1>
 
       <Group label="Accounts" foot={[...totals].map(([c, v]) => `Total ${formatMoney(v, c)}`).join(' · ')}>
         {bal.accounts.map(a => (
           <Row key={a.id} title={a.name} sub={ACCOUNT_KINDS[a.kind]} chevron onClick={() => setAccount(a)}
-            trail={<span class={a.balance < 0 ? 'danger-text' : ''}>{formatMoney(a.balance, a.currency_code)}</span>} />
+            trail={<span class={`num ${a.balance < 0 ? 'text-red-500' : ''}`}>{formatMoney(a.balance, a.currency_code)}</span>} />
         ))}
       </Group>
 
@@ -62,26 +63,26 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
         {bal.envelopes.map(e => (
           <Row key={e.id} title={e.name} trail={formatMoney(e.balance, e.currency_code)} chevron
             onClick={() => setMove({ from: bal.envelopes.find(x => x.id !== e.id && x.kind === 'SPENDING' && x.currency_code === e.currency_code)?.id ?? null, to: e.id })}
-            sub={<>{pocketLabel(e)}{e.kind === 'GOAL' && e.target_amount ? <div class="bar"><div style={{ width: `${Math.min(100, Math.max(0, (e.balance / e.target_amount) * 100))}%` }} /></div> : null}</>} />
+            sub={<>{pocketLabel(e)}{e.kind === 'GOAL' && e.target_amount ? <Progressbar className="mt-1.5" progress={Math.min(1, Math.max(0, e.balance / e.target_amount))} /> : null}</>} />
         ))}
       </Group>
-      <div class="section-actions"><button class="btn btn-secondary" onClick={() => setMove({ from: null, to: null })}>Move money between Pockets</button></div>
+      <Block><Button large tonal onClick={() => setMove({ from: null, to: null })}>Move money between Pockets</Button></Block>
 
       <Group label={`Budgets · ${days} day${days === 1 ? '' : 's'} left`}>
-        {!budgets.budgets.length && <p class="empty">No budgets yet. A budget shows what you can still spend each day.</p>}
+        {!budgets.budgets.length && <Row title={<span class="opacity-60">No budgets yet. A budget shows what you can still spend each day.</span>} />}
         {budgets.budgets.map(b => {
           const name = [b.categoryId && nameOf(cat.categories, b.categoryId), b.envelopeId && nameOf(cat.envelopes, b.envelopeId)].filter(Boolean).join(' in ');
           const over = b.remaining < 0;
           return (
             <Row key={b.id} onClick={() => setBudget(b)}
               title={<>{b.categoryId ? `${categoryEmoji(nameOf(cat.categories, b.categoryId))} ` : ''}{name}</>}
-              trail={over ? <span class="danger-text small">{formatMoney(-b.remaining)} over</span> : <span class="small muted">{formatMoney(b.remaining)} left</span>}
+              trail={over ? <span class="text-sm text-red-500">{formatMoney(-b.remaining)} over</span> : <span class="text-sm opacity-60">{formatMoney(b.remaining)} left</span>}
               sub={<>{formatMoney(b.spent)} of {formatMoney(b.limit)}{b.safePerDay !== null && !over ? ` · ${formatMoney(b.safePerDay)}/day` : ''}
-                <div class={`bar ${over ? 'over' : ''}`}><div style={{ width: `${Math.min(100, b.percent)}%` }} /></div></>} />
+                <Progressbar className={`mt-1.5 ${over ? 'k-color-brand-red' : ''}`} progress={Math.min(1, b.percent / 100)} /></>} />
           );
         })}
       </Group>
-      <div class="section-actions"><button class="btn btn-secondary" onClick={() => setBudget('new')}>Set a budget</button></div>
+      <Block><Button large tonal onClick={() => setBudget('new')}>Set a budget</Button></Block>
 
       {/* Sheets are keyed by what they show, so each opening starts from fresh state set at mount. */}
       <AccountSheet key={account?.id ?? 'none'} account={account} onClose={() => setAccount(null)} onShow={() => { selectedAccount.value = account!.id; setAccount(null); onShowAccount(); }} />
@@ -108,13 +109,13 @@ function AccountSheet({ account, onClose, onShow }: { account: (Account & { bala
 
   return (
     <Sheet open onClose={onClose} title={account.name}>
-      <div class="headline"><div class="muted small">Centient shows</div><div class="big num">{formatMoney(account.balance, cur)}</div>
-        {account.reconciled_at && <div class="muted small">Last checked {account.reconciled_at.slice(0, 10)}</div>}</div>
+      <div class="mx-4 my-4"><div class="text-[13px] opacity-60">Centient shows</div><div class="num text-[32px] font-bold tracking-tight">{formatMoney(account.balance, cur)}</div>
+        {account.reconciled_at && <div class="text-[13px] opacity-60">Last checked {account.reconciled_at.slice(0, 10)}</div>}</div>
       {step === 'menu' ? (
-        <div class="sheet-actions">
-          <button class="btn btn-primary btn-block" onClick={() => setStep('update')}>Update balance</button>
-          <button class="btn btn-secondary btn-block" onClick={onShow}>Show its activity</button>
-        </div>
+        <Block className="flex flex-col gap-2.5">
+          <Button large onClick={() => setStep('update')}>Update balance</Button>
+          <Button large tonal onClick={onShow}>Show its activity</Button>
+        </Block>
       ) : (
         <>
           <Group>
@@ -122,21 +123,23 @@ function AccountSheet({ account, onClose, onShow }: { account: (Account & { bala
           </Group>
           {actual !== null && diff !== 0 && (
             <>
-              <p class="hint-line" style="margin-top:-16px">{formatMoney(Math.abs(diff), cur)} {diff < 0 ? 'less' : 'more'} than Centient had.</p>
+              <BlockFooter>{formatMoney(Math.abs(diff), cur)} {diff < 0 ? 'less' : 'more'} than Centient had.</BlockFooter>
               <Group label={diff < 0 ? 'Where did it go?' : 'Where did it come from?'} foot="Optional. Picking one counts it in that category's budget.">
-                <div class="chip-actions" style="padding:12px;margin:0">
+                <li class="flex flex-wrap gap-2 p-3">
                   {cats.map(c => (
-                    <button type="button" class={`pill ${categoryId === c.id ? 'on' : ''}`} onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}>
+                    <Button small rounded inline tonal={categoryId !== c.id} onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}>
                       {categoryEmoji(c.name, c.kind)} {c.name}
-                    </button>
+                    </Button>
                   ))}
-                </div>
+                </li>
               </Group>
             </>
           )}
-          <button class="btn btn-primary btn-block" disabled={actual === null} onClick={save}>
-            {actual !== null && diff !== 0 && !categoryId ? 'Skip and update' : diff === 0 && actual !== null ? 'Mark as checked' : 'Update'}
-          </button>
+          <Block>
+            <Button large disabled={actual === null} onClick={save}>
+              {actual !== null && diff !== 0 && !categoryId ? 'Skip and update' : diff === 0 && actual !== null ? 'Mark as checked' : 'Update'}
+            </Button>
+          </Block>
         </>
       )}
     </Sheet>
@@ -166,7 +169,7 @@ function MoveSheet({ preset, pockets, onClose }: { preset: { from: string | null
         <PickerRow label="To" value={to} options={opts} onChange={setTo} />
         <AmountField value={amount} currency={pockets.find(p => p.id === from)?.currency_code ?? 'IDR'} onChange={setAmount} />
       </Group>
-      <button class="btn btn-primary btn-block" disabled={Boolean(error)} onClick={save}>{error ?? 'Move'}</button>
+      <Block><Button large disabled={Boolean(error)} onClick={save}>{error ?? 'Move'}</Button></Block>
     </Sheet>
   );
 }
@@ -204,10 +207,10 @@ function BudgetSheet({ budget, onClose }: { budget: BudgetRow | 'new' | null; on
             onChange={v => !editing && setEnvelopeId(v)} />
           <AmountField label="Limit per month" value={limit} onChange={setLimit} />
         </Group>
-        <div class="sheet-actions">
-          <button class="btn btn-primary btn-block" disabled={Boolean(error)} onClick={save}>{error ?? 'Save'}</button>
-          {editing && <button class="btn btn-secondary btn-block danger-text" onClick={() => setConfirm(true)}>Remove budget</button>}
-        </div>
+        <Block className="flex flex-col gap-2.5">
+          <Button large disabled={Boolean(error)} onClick={save}>{error ?? 'Save'}</Button>
+          {editing && <Button large tonal className="k-color-brand-red" onClick={() => setConfirm(true)}>Remove budget</Button>}
+        </Block>
       </Sheet>
       <ConfirmSheet open={confirm} message="Remove this budget? Your entries stay." confirmLabel="Remove" onCancel={() => setConfirm(false)} onConfirm={remove} />
     </>

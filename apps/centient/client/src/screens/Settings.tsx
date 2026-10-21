@@ -1,12 +1,13 @@
 // Settings: accounts, Pockets, categories, when the month starts, backup and reset. "Hide" keeps history;
 // deleting an account or resetting flags data as deleted rather than erasing it.
+import { Block, BlockFooter, Button, ListItem } from 'konsta/react';
 import { useState } from 'preact/hooks';
 import type { Account, Category, Envelope } from '../../../src/application/ports';
 import { call, client } from '../api';
 import { AccountForm } from '../components/AccountForm';
 import { AmountField } from '../components/AmountField';
 import { ConfirmSheet } from '../components/ConfirmSheet';
-import { InputRow, PickerRow } from '../components/Fields';
+import { InputRow, PickerRow, ToggleRow } from '../components/Fields';
 import { Group, Row } from '../components/List';
 import { Segmented } from '../components/Segmented';
 import { Sheet } from '../components/Sheet';
@@ -24,38 +25,40 @@ export function Settings() {
   const [edit, setEdit] = useState<Edit | null>(null);
   const [add, setAdd] = useState<'account' | 'pocket' | 'category' | null>(null);
   const [reset, setReset] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
   const cat = catalog.value;
   const hidden = [...cat.accounts, ...cat.envelopes, ...cat.categories].filter(r => r.archived_at).length;
 
   return (
     <main class="screen">
-      <h1 class="title">Settings</h1>
+      <h1 class="screen-title">Settings</h1>
 
       <Group label="Accounts">
         {active(cat.accounts).map(a => <Row key={a.id} title={a.name} sub={`${ACCOUNT_KINDS[a.kind]}${a.currency_code !== 'IDR' ? ` · ${a.currency_code}` : ''}`} chevron onClick={() => setEdit({ table: 'accounts', row: a })} />)}
-        <Row title={<span class="received">Add account</span>} onClick={() => setAdd('account')} />
+        <Row title={<span class="text-primary">Add account</span>} onClick={() => setAdd('account')} />
       </Group>
 
       <Group label="Pockets" foot="Pockets say what money is for. Every account's money sits in one.">
         {active(cat.envelopes).map(e => <Row key={e.id} title={e.name} sub={POCKET_KINDS[e.kind]} chevron onClick={() => setEdit({ table: 'envelopes', row: e })} />)}
-        <Row title={<span class="received">Add Pocket</span>} onClick={() => setAdd('pocket')} />
+        <Row title={<span class="text-primary">Add Pocket</span>} onClick={() => setAdd('pocket')} />
       </Group>
 
       <Group label="Categories">
         {active(cat.categories).filter(c => !['Balance adjustment', 'Opening balance'].includes(c.name)).map(c => (
           <Row key={c.id} title={`${categoryEmoji(c.name, c.kind)} ${c.name}`} sub={c.kind === 'EXPENSE' ? 'Spending' : 'Income'} chevron onClick={() => setEdit({ table: 'categories', row: c })} />
         ))}
-        <Row title={<span class="received">Add category</span>} onClick={() => setAdd('category')} />
+        <Row title={<span class="text-primary">Add category</span>} onClick={() => setAdd('category')} />
       </Group>
 
       {hidden > 0 && (
         <Group label="Hidden">
-          <details class="more" style="border-top:0">
-            <summary>Show {hidden} hidden item{hidden === 1 ? '' : 's'}</summary>
+          <ListItem link linkComponent="button" chevron={false} linkProps={{ type: 'button', onClick: () => setShowHidden(!showHidden), 'aria-expanded': showHidden }}
+            title={<span class="text-primary">{showHidden ? 'Hide the list' : `Show ${hidden} hidden item${hidden === 1 ? '' : 's'}`}</span>} />
+          {showHidden && (<>
             {cat.accounts.filter(a => a.archived_at).map(a => <Row key={a.id} title={a.name} sub="Account" trail={<ShowButton table="accounts" id={a.id} />} />)}
             {cat.envelopes.filter(e => e.archived_at).map(e => <Row key={e.id} title={e.name} sub="Pocket" trail={<ShowButton table="envelopes" id={e.id} />} />)}
             {cat.categories.filter(c => c.archived_at).map(c => <Row key={c.id} title={c.name} sub="Category" trail={<ShowButton table="categories" id={c.id} />} />)}
-          </details>
+          </>)}
         </Group>
       )}
 
@@ -67,7 +70,7 @@ export function Settings() {
       </Group>
 
       <Group>
-        <Row title={<span class="danger-text">Reset Centient</span>} onClick={() => setReset(true)} />
+        <Row title={<span class="text-red-500">Reset Centient</span>} onClick={() => setReset(true)} />
       </Group>
       <ResetSheet open={reset} onClose={() => setReset(false)} />
 
@@ -81,10 +84,10 @@ export function Settings() {
 
 function ShowButton({ table, id }: { table: Edit['table']; id: string }) {
   return (
-    <button class="btn btn-plain" onClick={() => attempt(async () => {
+    <Button clear inline small onClick={() => attempt(async () => {
       await call(client.api[':table{accounts|envelopes|categories}'][':id'].$patch({ param: { table, id }, json: { archived: false } }));
       await refresh();
-    })}>Show</button>
+    })}>Show</Button>
   );
 }
 
@@ -176,12 +179,12 @@ function EditSheet({ edit, onClose }: { edit: Edit | null; onClose: () => void }
           </>
         )}
       </Group>
-      {edit.table === 'accounts' && <p class="hint-line">Currency can change only before the account has entries.</p>}
-      <div class="sheet-actions">
-        <button class="btn btn-primary btn-block" disabled={!name.trim()} onClick={save}>Save</button>
-        <button class="btn btn-secondary btn-block" onClick={() => patch({ archived: true }, `Hidden. Find it under Hidden to show it again.`)}>Hide this {what}</button>
-        {edit.table === 'accounts' && <button class="btn btn-secondary btn-block danger-text" onClick={askDelete}>Delete account</button>}
-      </div>
+      {edit.table === 'accounts' && <BlockFooter>Currency can change only before the account has entries.</BlockFooter>}
+      <Block className="flex flex-col gap-2.5">
+        <Button large disabled={!name.trim()} onClick={save}>Save</Button>
+        <Button large tonal onClick={() => patch({ archived: true }, `Hidden. Find it under Hidden to show it again.`)}>Hide this {what}</Button>
+        {edit.table === 'accounts' && <Button large tonal className="k-color-brand-red" onClick={askDelete}>Delete account</Button>}
+      </Block>
     </Sheet>
     <ConfirmSheet open={Boolean(confirmDelete)} message={confirmDelete ?? ''} confirmLabel="Delete account"
       onCancel={() => setConfirmDelete(null)} onConfirm={remove} />
@@ -205,20 +208,17 @@ function ResetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   };
   return (
     <Sheet open={open} onClose={onClose} title="Reset Centient">
-      <p class="muted" style="margin:0 4px 16px">
+      <p class="mx-4 my-4 opacity-60">
         This removes your accounts, entries, Pockets, categories and budgets from the app, and you start again from the first screen.
         A copy stays on the server, marked as deleted.
       </p>
       <Group>
-        <label class="row field-row">
-          <span class="row-main">Download a backup first</span>
-          <input type="checkbox" class="switch" checked={backup} onChange={e => setBackup((e.target as HTMLInputElement).checked)} />
-        </label>
+        <ToggleRow label="Download a backup first" checked={backup} onChange={setBackup} />
       </Group>
-      <div class="sheet-actions">
-        <button class="btn btn-secondary btn-block danger-text" disabled={busy} onClick={run}>{busy ? 'Resetting…' : 'Reset Centient'}</button>
-        <button class="btn btn-secondary btn-block" onClick={onClose}>Cancel</button>
-      </div>
+      <Block className="flex flex-col gap-2.5">
+        <Button large className="k-color-brand-red" disabled={busy} onClick={run}>{busy ? 'Resetting…' : 'Reset Centient'}</Button>
+        <Button large tonal onClick={onClose}>Cancel</Button>
+      </Block>
     </Sheet>
   );
 }
@@ -237,12 +237,12 @@ function AddPocket({ open, onClose }: { open: boolean; onClose: () => void }) {
   });
   return (
     <Sheet open={open} onClose={onClose} title="Add Pocket">
-      <div style="margin-bottom:16px"><Segmented label="Kind" value={kind} onChange={setKind} options={(Object.keys(POCKET_KINDS) as Envelope['kind'][]).map(k => ({ value: k, label: POCKET_KINDS[k] }))} /></div>
+      <Segmented label="Kind" value={kind} onChange={setKind} options={(Object.keys(POCKET_KINDS) as Envelope['kind'][]).map(k => ({ value: k, label: POCKET_KINDS[k] }))} />
       <Group>
         <InputRow label="Name" value={name} placeholder={kind === 'GOAL' ? 'e.g. Japan trip' : 'e.g. Social'} onInput={setName} />
         {kind === 'GOAL' && <><AmountField label="Goal" value={target} onChange={setTarget} /><InputRow label="By" type="date" value={date} onInput={setDate} /></>}
       </Group>
-      <button class="btn btn-primary btn-block" disabled={Boolean(error)} onClick={save}>{error ?? 'Add Pocket'}</button>
+      <Block><Button large disabled={Boolean(error)} onClick={save}>{error ?? 'Add Pocket'}</Button></Block>
     </Sheet>
   );
 }
@@ -258,9 +258,9 @@ function AddCategory({ open, onClose }: { open: boolean; onClose: () => void }) 
   });
   return (
     <Sheet open={open} onClose={onClose} title="Add category">
-      <div style="margin-bottom:16px"><Segmented label="Kind" value={kind} onChange={setKind} options={[{ value: 'EXPENSE', label: 'Spending' }, { value: 'INCOME', label: 'Income' }]} /></div>
+      <Segmented label="Kind" value={kind} onChange={setKind} options={[{ value: 'EXPENSE', label: 'Spending' }, { value: 'INCOME', label: 'Income' }]} />
       <Group><InputRow label="Name" value={name} onInput={setName} /></Group>
-      <button class="btn btn-primary btn-block" disabled={!name.trim()} onClick={save}>{name.trim() ? 'Add category' : 'Enter a name'}</button>
+      <Block><Button large disabled={!name.trim()} onClick={save}>{name.trim() ? 'Add category' : 'Enter a name'}</Button></Block>
     </Sheet>
   );
 }

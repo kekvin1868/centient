@@ -1,4 +1,5 @@
 // Add an account: name, type, what's in it now. Currency stays rupiah unless you ask for another.
+import { Block, Button } from 'konsta/react';
 import { useState } from 'preact/hooks';
 import { call, client } from '../api';
 import { attempt } from '../lib/run';
@@ -37,10 +38,12 @@ export function AccountForm({ onDone, submitLabel = 'Add account' }: { onDone: (
         )}
         <AmountField label={owes ? 'How much you owe now' : 'How much is in it now'} currency={currency} value={amount} onChange={setAmount} />
       </Group>
-      {!otherCurrency && kind !== 'EXCHANGE' && (
-        <button type="button" class="btn btn-plain" style="margin:-18px 0 12px" onClick={() => setOtherCurrency(true)}>Different currency</button>
-      )}
-      <button class="btn btn-primary btn-block" disabled={!name.trim()} onClick={save}>{name.trim() ? submitLabel : 'Enter a name'}</button>
+      <Block className="flex flex-col items-start gap-3 !mt-0">
+        {!otherCurrency && kind !== 'EXCHANGE' && (
+          <Button clear inline onClick={() => setOtherCurrency(true)}>Different currency</Button>
+        )}
+        <Button large disabled={!name.trim()} onClick={save}>{name.trim() ? submitLabel : 'Enter a name'}</Button>
+      </Block>
     </>
   );
 }

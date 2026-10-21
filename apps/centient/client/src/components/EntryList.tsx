@@ -6,6 +6,7 @@ import type { Command } from '../../../src/application/usecases';
 import { dayLabel, formatMoney } from '../lib/format';
 import { entryRow } from '../lib/labels';
 import { catalog, hiddenEntries, me } from '../state';
+import { Group, Row } from './List';
 
 export type Entry = EntryView & { command: Command | null };
 
@@ -21,26 +22,20 @@ export function EntryList({ entries, onOpen, empty = 'Nothing here yet.' }: { en
   const days = [...new Set(visible.map(e => e.occurred_at.slice(0, 10)))];
   return (
     <div ref={list}>
-      {!visible.length && <p class="empty" key="empty">{empty}</p>}
+      {!visible.length && <p class="text-center opacity-60 px-4 py-7" key="empty">{empty}</p>}
       {days.map(day => (
-        <section class="group" key={day}>
-          <h2 class="group-label">{dayLabel(day, today)}</h2>
-          <div class="group-body">
+        <div key={day}>
+          <Group label={dayLabel(day, today)}>
             {visible.filter(e => e.occurred_at.startsWith(day)).map(e => {
               const r = entryRow(e, catalog.value);
               return (
-                <button type="button" class="row" key={e.id} onClick={() => onOpen(e)}>
-                  <span class="row-emoji" aria-hidden="true">{r.emoji}</span>
-                  <span class="row-main">
-                    <span class="row-title" style="display:block">{r.title}</span>
-                    {r.sub && <span class="row-sub" style="display:block">{r.sub}</span>}
-                  </span>
-                  <span class={`row-trail num ${r.tone}`}>{r.tone === 'out' ? '-' : r.tone === 'in' ? '+' : ''}{formatMoney(r.amount, r.currency)}</span>
-                </button>
+                <Row key={e.id} onClick={() => onOpen(e)} title={r.title} sub={r.sub || undefined}
+                  media={<span class="grid place-items-center size-9 rounded-[10px] bg-black/5 dark:bg-white/10 text-[19px]" aria-hidden="true">{r.emoji}</span>}
+                  trail={<span class={`num ${r.tone === 'in' ? 'text-primary' : 'text-black dark:text-white'}`}>{r.tone === 'out' ? '-' : r.tone === 'in' ? '+' : ''}{formatMoney(r.amount, r.currency)}</span>} />
               );
             })}
-          </div>
-        </section>
+          </Group>
+        </div>
       ))}
     </div>
   );

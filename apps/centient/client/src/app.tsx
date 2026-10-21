@@ -1,4 +1,5 @@
-// App shell: first-run card, then three screens behind a bottom nav. /preview shows the design kit.
+// App shell: first-run card, then three screens behind a tab bar, inside Konsta's iOS theme.
+import { App as KonstaApp } from 'konsta/react';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { BottomNav, type Screen } from './components/BottomNav';
 import { Toast } from './components/Toast';
@@ -7,7 +8,6 @@ import { attempt } from './lib/run';
 import { FirstRun } from './screens/FirstRun';
 import { Home } from './screens/Home';
 import { Money } from './screens/Money';
-import { Preview } from './screens/Preview';
 import { Settings } from './screens/Settings';
 import { everyday, loadBasics, me } from './state';
 
@@ -26,18 +26,19 @@ export function App() {
     prev.current = screen;
   }, [screen]);
 
-  if (location.pathname === '/preview') return <><Preview /><Toast /></>;
-  if (!ready || !me.value) return <Toast />;
-  if (!everyday().length) return <><FirstRun onDone={() => setScreen('home')} /><Toast /></>;
   return (
-    <>
-      <div ref={main} key={screen}>
-        {screen === 'home' && <Home onGoMoney={() => setScreen('money')} />}
-        {screen === 'money' && <Money onShowAccount={() => setScreen('home')} />}
-        {screen === 'settings' && <Settings />}
-      </div>
-      <BottomNav current={screen} onGo={setScreen} />
+    <KonstaApp theme="ios" safeAreas>
+      {!ready || !me.value ? null : !everyday().length ? <FirstRun onDone={() => setScreen('home')} /> : (
+        <>
+          <div ref={main} key={screen}>
+            {screen === 'home' && <Home onGoMoney={() => setScreen('money')} />}
+            {screen === 'money' && <Money onShowAccount={() => setScreen('home')} />}
+            {screen === 'settings' && <Settings />}
+          </div>
+          <BottomNav current={screen} onGo={setScreen} />
+        </>
+      )}
       <Toast />
-    </>
+    </KonstaApp>
   );
 }

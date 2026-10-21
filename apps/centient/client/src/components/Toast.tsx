@@ -1,7 +1,7 @@
-// One toast at a time, above the bottom nav. An action (Undo) keeps it up for its full duration.
+// One toast at a time (Konsta Toast), above the tab bar. An action (Undo) keeps it up for its full duration.
 import { signal } from '@preact/signals';
+import { Button, Toast as KToast } from 'konsta/react';
 import { useEffect, useRef } from 'preact/hooks';
-import { popIn } from '../lib/motion';
 
 type ToastState = { id: number; message: string; action?: { label: string; run: () => void }; ms: number; onExpire?: () => void };
 export const toast = signal<ToastState | null>(null);
@@ -16,10 +16,10 @@ export function showToast(message: string, opts: { action?: ToastState['action']
 
 export function Toast() {
   const t = toast.value;
-  const el = useRef<HTMLDivElement>(null);
+  const last = useRef<ToastState | null>(null); // keeps the text on screen while it slides away
+  if (t) last.current = t;
   useEffect(() => {
     if (!t) return;
-    if (el.current) popIn(el.current);
     const timer = setTimeout(() => {
       if (toast.value?.id !== t.id) return;
       toast.value = null;
@@ -27,13 +27,14 @@ export function Toast() {
     }, t.ms);
     return () => clearTimeout(timer);
   }, [t?.id]);
-  if (!t) return null;
+  const shown = last.current;
   return (
-    <div class="toast" ref={el} role="status" aria-live="polite">
-      <span class="toast-msg">{t.message}</span>
-      {t.action && (
-        <button class="btn btn-plain" onClick={() => { const a = t.action!; toast.value = null; a.run(); }}>{t.action.label}</button>
-      )}
-    </div>
+    <KToast opened={Boolean(t)} position="center" role="status" aria-live="polite"
+      className="mb-24"
+      button={shown?.action && (
+        <Button clear inline onClick={() => { const a = shown.action!; toast.value = null; a.run(); }}>{shown.action.label}</Button>
+      )}>
+      <span class="shrink">{shown?.message}</span>
+    </KToast>
   );
 }
