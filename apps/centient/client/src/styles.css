@@ -207,7 +207,9 @@ button.row:active { background: var(--surface-2); }
 .hint-line { font-size: 14px; color: var(--muted); margin: -16px 16px 24px; }
 .empty { text-align: center; color: var(--muted); padding: 28px 16px; }
 .day-head { display: flex; justify-content: space-between; }
-.switcher { display: inline-flex; align-items: center; gap: 4px; border: 0; background: var(--surface); box-shadow: var(--card-shadow); border-radius: 999px; padding: 6px 12px 6px 14px; font-weight: 600; cursor: pointer; position: relative; }
+.switcher { display: inline-flex; align-items: center; gap: 4px; border: 0; background: var(--surface); box-shadow: var(--card-shadow); border-radius: 999px; padding: 6px 12px 6px 14px; font-weight: 600; cursor: pointer; position: relative; width: 10em; justify-content: space-between; }
+.switcher > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.switcher > svg { flex: none; }
 .switcher select { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .top-bar { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 16px; }
 .top-bar .title { margin: 0 4px; }

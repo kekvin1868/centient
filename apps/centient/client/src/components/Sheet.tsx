@@ -27,16 +27,17 @@ export function Sheet({ open, onClose, title, children }: Props) {
     return () => removeEventListener('keydown', onKey);
   }, [open]);
 
-  // Drag down to close: follow the finger while the sheet is scrolled to the top.
+  // Drag down to close: follow the finger while the sheet is scrolled to the top. The pointer is
+  // captured only once it moves, since capturing on press sends the click to the sheet, not the target.
   const drag = useRef<{ y: number; t: number; dy: number } | null>(null);
   const onPointerDown = (e: PointerEvent) => {
     if (!sheet.current || sheet.current.scrollTop > 0 || (e.target as Element).closest('input, textarea, select, button:not(.sheet-grip)')) return;
     drag.current = { y: e.clientY, t: performance.now(), dy: 0 };
-    sheet.current.setPointerCapture(e.pointerId);
   };
   const onPointerMove = (e: PointerEvent) => {
     if (!drag.current || !sheet.current) return;
     drag.current.dy = Math.max(0, e.clientY - drag.current.y);
+    if (drag.current.dy > 4 && !sheet.current.hasPointerCapture(e.pointerId)) sheet.current.setPointerCapture(e.pointerId);
     sheet.current.style.transform = `translateY(${drag.current.dy}px)`;
   };
   const onPointerUp = () => {

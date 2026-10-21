@@ -12,6 +12,7 @@ const TYPES: { value: EntryType; label: string }[] = [
 ];
 
 export function EntryForm({ form, onChange, lockType }: { form: Form; onChange: (f: Form) => void; lockType?: boolean }) {
+  // The server keeps an entry's type on edit (TYPE_LOCKED), so the switch is hidden then.
   const set = (patch: Partial<Form>) => onChange({ ...form, ...patch });
   const cat = catalog.value;
   const accounts = everyday().map(a => ({ value: a.id, label: a.name }));
@@ -24,9 +25,9 @@ export function EntryForm({ form, onChange, lockType }: { form: Form; onChange: 
 
   return (
     <>
-      {form.type !== 'ALLOCATE' && (
+      {form.type !== 'ALLOCATE' && !lockType && (
         <div style="margin-bottom:16px">
-          <Segmented label="Type" value={form.type} disabled={lockType} options={TYPES}
+          <Segmented label="Type" value={form.type} options={TYPES}
             onChange={t => set({ type: t, categoryId: null, toAccountId: null, split: null })} />
         </div>
       )}

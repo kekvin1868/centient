@@ -87,7 +87,7 @@ export function Preview() {
 
       <Sheet open={sheet} onClose={() => setSheet(false)} title="Edit entry">
         <Group>
-          <div style="padding:12px 16px"><Segmented label="Type" value={type} onChange={setType} disabled
+          <div style="padding:12px 16px"><Segmented label="Type" value={type} onChange={setType}
             options={[{ value: 'EXPENSE', label: 'Spent' }, { value: 'INCOME', label: 'Received' }, { value: 'TRANSFER', label: 'Moved' }]} /></div>
           <AmountField value={amount} onChange={setAmount} />
           <Row title="Account" trail="GoPay" chevron onClick={() => {}} />

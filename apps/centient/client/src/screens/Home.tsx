@@ -43,7 +43,7 @@ function AccountSwitcher() {
   const sel = selectedAccount.value;
   return (
     <label class="switcher">
-      {sel ? nameOf(accounts, sel) : 'All accounts'} <CaretDown size={14} weight="bold" aria-hidden="true" />
+      <span>{sel ? nameOf(accounts, sel) : 'All accounts'}</span> <CaretDown size={14} weight="bold" aria-hidden="true" />
       <select aria-label="Show account" value={sel ?? ''} onChange={e => (selectedAccount.value = (e.target as HTMLSelectElement).value || null)}>
         <option value="">All accounts</option>
         {accounts.map(a => <option value={a.id}>{a.name}</option>)}
