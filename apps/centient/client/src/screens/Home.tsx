@@ -2,7 +2,7 @@
 import { parseQuickAdd } from '@centient/quickadd';
 import { CaretDown, WifiSlash } from '@phosphor-icons/react';
 import { Block, Button, List } from 'konsta/react';
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useState } from 'react';
 import { call, client, OfflineError } from '../api';
 import { AmountField } from '../components/AmountField';
 import { Banner } from '../components/Banner';
@@ -25,16 +25,16 @@ export function Home({ onGoMoney }: { onGoMoney: () => void }) {
   const [open, setOpen] = useState<Entry | null>(null);
   const [all, setAll] = useState(false);
   return (
-    <main class="screen">
-      <div class="flex items-center justify-between pr-4">
-        <h1 class="screen-title">Centient</h1>
+    <main className="screen">
+      <div className="flex items-center justify-between pr-4">
+        <h1 className="screen-title">Centient</h1>
         <AccountSwitcher />
       </div>
       <Headline onTap={onGoMoney} />
       <LogBox />
       <Recent onOpen={setOpen} onSeeAll={() => setAll(true)} />
       <AllActivity open={all} onClose={() => setAll(false)} onOpen={setOpen} />
-      <EntrySheet key={open?.id ?? 'none'} entry={open} onClose={() => setOpen(null)} />
+      <EntrySheet key={`entry:${open?.id ?? 'none'}`} entry={open} onClose={() => setOpen(null)} />
     </main>
   );
 }
@@ -44,11 +44,11 @@ function AccountSwitcher() {
   const sel = selectedAccount.value;
   return (
     // Fixed width, so switching accounts does not shift the header; long names end in "…".
-    <label class="relative flex w-[10em] items-center justify-between gap-1 rounded-full bg-white dark:bg-ios-dark-surface-1 py-1.5 pl-3.5 pr-3 font-semibold shadow-sm cursor-pointer active:opacity-70">
-      <span class="truncate">{sel ? nameOf(accounts, sel) : 'All accounts'}</span> <CaretDown class="shrink-0" size={14} weight="bold" aria-hidden="true" />
-      <select class="absolute inset-0 opacity-0 cursor-pointer" aria-label="Show account" value={sel ?? ''} onChange={e => (selectedAccount.value = (e.target as HTMLSelectElement).value || null)}>
+    <label className="relative flex w-[10em] items-center justify-between gap-1 rounded-full bg-white dark:bg-ios-dark-surface-1 py-1.5 pl-3.5 pr-3 font-semibold shadow-sm cursor-pointer active:opacity-70">
+      <span className="truncate">{sel ? nameOf(accounts, sel) : 'All accounts'}</span> <CaretDown className="shrink-0" size={14} weight="bold" aria-hidden="true" />
+      <select className="absolute inset-0 opacity-0 cursor-pointer" aria-label="Show account" value={sel ?? ''} onChange={e => (selectedAccount.value = (e.target as HTMLSelectElement).value || null)}>
         <option value="">All accounts</option>
-        {accounts.map(a => <option value={a.id}>{a.name}</option>)}
+        {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
       </select>
     </label>
   );
@@ -86,12 +86,12 @@ function Headline({ onTap }: { onTap: () => void }) {
       if (pocket) setHead({ label: `In ${pocket.name}`, big: formatMoney(pocket.balance, pocket.currency_code), sub: 'Set a budget on Money to see what\'s left per day' });
     });
   }, [version.value, selectedAccount.value]);
-  if (!head) return <div class="mx-4 mb-5 min-h-24" />;
+  if (!head) return <div className="mx-4 mb-5 min-h-24" />;
   return (
-    <button type="button" class="mx-4 mb-5 block text-left active:opacity-70" onClick={onTap}>
-      <div class="text-[13px] opacity-60">{head.label}</div>
-      <div class="num text-[32px] font-bold tracking-tight">{head.big}</div>
-      {head.sub && <div class="opacity-60">{head.sub}</div>}
+    <button type="button" className="mx-4 mb-5 block text-left active:opacity-70" onClick={onTap}>
+      <div className="text-[13px] opacity-60">{head.label}</div>
+      <div className="num text-[32px] font-bold tracking-tight">{head.big}</div>
+      {head.sub && <div className="opacity-60">{head.sub}</div>}
     </button>
   );
 }
@@ -179,14 +179,14 @@ function LogBox() {
   };
 
   return (
-    <section class="mb-7">
+    <section className="mb-7">
       {offline.value && <Banner><WifiSlash size={18} aria-hidden="true" /> No connection, your entry is still here.</Banner>}
-      <form class="mx-4 flex items-center gap-2 rounded-2xl bg-white dark:bg-ios-dark-surface-1 py-1.5 pl-4 pr-1.5 shadow-sm" onSubmit={e => { e.preventDefault(); submit(); }}>
-        <input class="min-w-0 flex-1 bg-transparent py-1 text-lg outline-none placeholder:opacity-40" value={text} placeholder="kopi 25rb gopay" aria-label="What did you spend or receive?" autoComplete="off"
-          enterKeyHint="done" onInput={e => setText((e.target as HTMLInputElement).value)} />
+      <form className="mx-4 flex items-center gap-2 rounded-2xl bg-white dark:bg-ios-dark-surface-1 py-1.5 pl-4 pr-1.5 shadow-sm" onSubmit={e => { e.preventDefault(); submit(); }}>
+        <input className="min-w-0 flex-1 bg-transparent py-1 text-lg outline-none placeholder:opacity-40" value={text} placeholder="kopi 25rb gopay" aria-label="What did you spend or receive?" autoComplete="off"
+          enterKeyHint="done" onChange={e => setText((e.target as HTMLInputElement).value)} />
         <Button inline rounded type="submit" disabled={saving || !items.length}>Add</Button>
       </form>
-      <div class="mx-4 mt-3">
+      <div className="mx-4 mt-3">
         {items.map(i => <LogChip key={i.key} item={i} today={today} onChange={update} onOpen={() => setSheet(i)} />)}
       </div>
       {!items.length && (
@@ -223,13 +223,13 @@ function LogChip({ item, today, onChange, onOpen }: { item: LogItem; today: stri
     <Chip state={v.state} emoji={categoryEmoji(category, f.type)} title={title} sub={sub}
       amount={f.amount ? formatMoney(f.amount, currency) : undefined} question={v.state === 'ask' ? v.question : undefined} onOpen={onOpen}>
       {v.state === 'ask' && v.ask === 'amount' && item.candidates.map(c => (
-        <Button small rounded inline tonal={c !== f.amount} onClick={() => set({ askAmount: false }, { amount: c })}>{formatMoney(c, currency)}</Button>
+        <Button key={c} small rounded inline tonal={c !== f.amount} onClick={() => set({ askAmount: false }, { amount: c })}>{formatMoney(c, currency)}</Button>
       ))}
       {v.state === 'ask' && v.ask === 'account' && everyday().slice(0, 4).map(a => (
-        <Button small rounded inline tonal onClick={() => set({}, { accountId: a.id })}>{a.name}</Button>
+        <Button key={a.id} small rounded inline tonal onClick={() => set({}, { accountId: a.id })}>{a.name}</Button>
       ))}
       {v.state === 'ask' && v.ask === 'charged' && (
-        <div class="flex w-full items-end gap-2">
+        <div className="flex w-full items-end gap-2">
           <List strong inset className="!m-0 flex-1"><AmountField label="Charged" value={charged} onChange={setCharged} /></List>
           <Button rounded inline disabled={!charged} onClick={() => set({ askCharged: false }, { amount: charged })}>OK</Button>
         </div>

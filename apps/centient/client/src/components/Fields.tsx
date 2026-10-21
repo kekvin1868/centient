@@ -9,11 +9,11 @@ export function PickerRow({ label, value, options, onChange, placeholder = 'Choo
   const shown = options.find(o => o.value === value)?.label ?? placeholder;
   return (
     <ListItem title={label} className="relative" strongTitle={false}
-      after={<span class="flex items-center gap-1 max-w-[60vw] truncate">{shown}<span aria-hidden="true" class="text-xs">▾</span></span>}>
-      <select class="absolute inset-0 opacity-0 cursor-pointer w-full" aria-label={label} value={value ?? ''}
+      after={<span className="flex items-center gap-1 max-w-[60vw] truncate">{shown}<span aria-hidden="true" className="text-xs">▾</span></span>}>
+      <select className="absolute inset-0 opacity-0 cursor-pointer w-full" aria-label={label} value={value ?? ''}
         onChange={e => onChange((e.target as HTMLSelectElement).value || null)}>
         <option value="">{placeholder}</option>
-        {options.map(o => <option value={o.value}>{o.label}</option>)}
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     </ListItem>
   );
@@ -24,7 +24,7 @@ export function InputRow({ label, value, onInput, placeholder, type = 'text', in
 }) {
   return (
     <ListInput label={label} type={type} inputMode={inputMode} value={value} placeholder={placeholder}
-      onInput={(e: Event) => onInput((e.target as HTMLInputElement).value)} />
+      onChange={(e: Event) => onInput((e.target as HTMLInputElement).value)} />
   );
 }
 

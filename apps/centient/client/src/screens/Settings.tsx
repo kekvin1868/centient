@@ -1,7 +1,7 @@
 // Settings: accounts, Pockets, categories, when the month starts, backup and reset. "Hide" keeps history;
 // deleting an account or resetting flags data as deleted rather than erasing it.
 import { Block, BlockFooter, Button, ListItem } from 'konsta/react';
-import { useState } from 'preact/hooks';
+import { useState } from 'react';
 import type { Account, Category, Envelope } from '../../../src/application/ports';
 import { call, client } from '../api';
 import { AccountForm } from '../components/AccountForm';
@@ -30,30 +30,30 @@ export function Settings() {
   const hidden = [...cat.accounts, ...cat.envelopes, ...cat.categories].filter(r => r.archived_at).length;
 
   return (
-    <main class="screen">
-      <h1 class="screen-title">Settings</h1>
+    <main className="screen">
+      <h1 className="screen-title">Settings</h1>
 
       <Group label="Accounts">
         {active(cat.accounts).map(a => <Row key={a.id} title={a.name} sub={`${ACCOUNT_KINDS[a.kind]}${a.currency_code !== 'IDR' ? ` · ${a.currency_code}` : ''}`} chevron onClick={() => setEdit({ table: 'accounts', row: a })} />)}
-        <Row title={<span class="text-primary">Add account</span>} onClick={() => setAdd('account')} />
+        <Row title={<span className="text-primary">Add account</span>} onClick={() => setAdd('account')} />
       </Group>
 
       <Group label="Pockets" foot="Pockets say what money is for. Every account's money sits in one.">
         {active(cat.envelopes).map(e => <Row key={e.id} title={e.name} sub={POCKET_KINDS[e.kind]} chevron onClick={() => setEdit({ table: 'envelopes', row: e })} />)}
-        <Row title={<span class="text-primary">Add Pocket</span>} onClick={() => setAdd('pocket')} />
+        <Row title={<span className="text-primary">Add Pocket</span>} onClick={() => setAdd('pocket')} />
       </Group>
 
       <Group label="Categories">
         {active(cat.categories).filter(c => !['Balance adjustment', 'Opening balance'].includes(c.name)).map(c => (
           <Row key={c.id} title={`${categoryEmoji(c.name, c.kind)} ${c.name}`} sub={c.kind === 'EXPENSE' ? 'Spending' : 'Income'} chevron onClick={() => setEdit({ table: 'categories', row: c })} />
         ))}
-        <Row title={<span class="text-primary">Add category</span>} onClick={() => setAdd('category')} />
+        <Row title={<span className="text-primary">Add category</span>} onClick={() => setAdd('category')} />
       </Group>
 
       {hidden > 0 && (
         <Group label="Hidden">
           <ListItem link linkComponent="button" chevron={false} linkProps={{ type: 'button', onClick: () => setShowHidden(!showHidden), 'aria-expanded': showHidden }}
-            title={<span class="text-primary">{showHidden ? 'Hide the list' : `Show ${hidden} hidden item${hidden === 1 ? '' : 's'}`}</span>} />
+            title={<span className="text-primary">{showHidden ? 'Hide the list' : `Show ${hidden} hidden item${hidden === 1 ? '' : 's'}`}</span>} />
           {showHidden && (<>
             {cat.accounts.filter(a => a.archived_at).map(a => <Row key={a.id} title={a.name} sub="Account" trail={<ShowButton table="accounts" id={a.id} />} />)}
             {cat.envelopes.filter(e => e.archived_at).map(e => <Row key={e.id} title={e.name} sub="Pocket" trail={<ShowButton table="envelopes" id={e.id} />} />)}
@@ -70,7 +70,7 @@ export function Settings() {
       </Group>
 
       <Group>
-        <Row title={<span class="text-red-500">Reset Centient</span>} onClick={() => setReset(true)} />
+        <Row title={<span className="text-red-500">Reset Centient</span>} onClick={() => setReset(true)} />
       </Group>
       <ResetSheet open={reset} onClose={() => setReset(false)} />
 
@@ -208,7 +208,7 @@ function ResetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   };
   return (
     <Sheet open={open} onClose={onClose} title="Reset Centient">
-      <p class="mx-4 my-4 opacity-60">
+      <p className="mx-4 my-4 opacity-60">
         This removes your accounts, entries, Pockets, categories and budgets from the app, and you start again from the first screen.
         A copy stays on the server, marked as deleted.
       </p>

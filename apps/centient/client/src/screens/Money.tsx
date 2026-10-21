@@ -1,6 +1,6 @@
 // Money: where the money is (accounts), what it's for (Pockets), and budgets for this month.
 import { Block, BlockFooter, Button, Progressbar } from 'konsta/react';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState } from 'react';
 import type { Account, Envelope } from '../../../src/application/ports';
 import { call, client } from '../api';
 import { AmountField } from '../components/AmountField';
@@ -36,7 +36,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
       cache = { bal: b as Bal, budgets: g };
     });
   }, [version.value]);
-  if (!bal || !budgets) return <main class="screen"><h1 class="screen-title">Money</h1></main>;
+  if (!bal || !budgets) return <main className="screen"><h1 className="screen-title">Money</h1></main>;
 
   const totals = new Map<string, number>();
   for (const a of bal.accounts) totals.set(a.currency_code, (totals.get(a.currency_code) ?? 0) + a.balance);
@@ -49,13 +49,13 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
   const usual = (usualId && nameOf(cat.envelopes, usualId)) || bal.envelopes.find(e => e.kind === 'SPENDING')?.name;
 
   return (
-    <main class="screen">
-      <h1 class="screen-title">Money</h1>
+    <main className="screen">
+      <h1 className="screen-title">Money</h1>
 
       <Group label="Accounts" foot={[...totals].map(([c, v]) => `Total ${formatMoney(v, c)}`).join(' · ')}>
         {bal.accounts.map(a => (
           <Row key={a.id} title={a.name} sub={ACCOUNT_KINDS[a.kind]} chevron onClick={() => setAccount(a)}
-            trail={<span class={`num ${a.balance < 0 ? 'text-red-500' : ''}`}>{formatMoney(a.balance, a.currency_code)}</span>} />
+            trail={<span className={`num ${a.balance < 0 ? 'text-red-500' : ''}`}>{formatMoney(a.balance, a.currency_code)}</span>} />
         ))}
       </Group>
 
@@ -69,14 +69,14 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
       <Block><Button large tonal onClick={() => setMove({ from: null, to: null })}>Move money between Pockets</Button></Block>
 
       <Group label={`Budgets · ${days} day${days === 1 ? '' : 's'} left`}>
-        {!budgets.budgets.length && <Row title={<span class="opacity-60">No budgets yet. A budget shows what you can still spend each day.</span>} />}
+        {!budgets.budgets.length && <Row title={<span className="opacity-60">No budgets yet. A budget shows what you can still spend each day.</span>} />}
         {budgets.budgets.map(b => {
           const name = [b.categoryId && nameOf(cat.categories, b.categoryId), b.envelopeId && nameOf(cat.envelopes, b.envelopeId)].filter(Boolean).join(' in ');
           const over = b.remaining < 0;
           return (
             <Row key={b.id} onClick={() => setBudget(b)}
               title={<>{b.categoryId ? `${categoryEmoji(nameOf(cat.categories, b.categoryId))} ` : ''}{name}</>}
-              trail={over ? <span class="text-sm text-red-500">{formatMoney(-b.remaining)} over</span> : <span class="text-sm opacity-60">{formatMoney(b.remaining)} left</span>}
+              trail={over ? <span className="text-sm text-red-500">{formatMoney(-b.remaining)} over</span> : <span className="text-sm opacity-60">{formatMoney(b.remaining)} left</span>}
               sub={<>{formatMoney(b.spent)} of {formatMoney(b.limit)}{b.safePerDay !== null && !over ? ` · ${formatMoney(b.safePerDay)}/day` : ''}
                 <Progressbar className={`mt-1.5 ${over ? 'k-color-brand-red' : ''}`} progress={Math.min(1, b.percent / 100)} /></>} />
           );
@@ -85,9 +85,9 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
       <Block><Button large tonal onClick={() => setBudget('new')}>Set a budget</Button></Block>
 
       {/* Sheets are keyed by what they show, so each opening starts from fresh state set at mount. */}
-      <AccountSheet key={account?.id ?? 'none'} account={account} onClose={() => setAccount(null)} onShow={() => { selectedAccount.value = account!.id; setAccount(null); onShowAccount(); }} />
-      <MoveSheet key={move ? `${move.from}:${move.to}` : 'none'} preset={move} pockets={bal.envelopes} onClose={() => setMove(null)} />
-      <BudgetSheet key={budget === 'new' ? 'new' : budget?.id ?? 'none'} budget={budget} onClose={() => setBudget(null)} />
+      <AccountSheet key={`account:${account?.id ?? 'none'}`} account={account} onClose={() => setAccount(null)} onShow={() => { selectedAccount.value = account!.id; setAccount(null); onShowAccount(); }} />
+      <MoveSheet key={`move:${move ? `${move.from}:${move.to}` : 'none'}`} preset={move} pockets={bal.envelopes} onClose={() => setMove(null)} />
+      <BudgetSheet key={`budget:${budget === 'new' ? 'new' : budget?.id ?? 'none'}`} budget={budget} onClose={() => setBudget(null)} />
     </main>
   );
 }
@@ -109,8 +109,8 @@ function AccountSheet({ account, onClose, onShow }: { account: (Account & { bala
 
   return (
     <Sheet open onClose={onClose} title={account.name}>
-      <div class="mx-4 my-4"><div class="text-[13px] opacity-60">Centient shows</div><div class="num text-[32px] font-bold tracking-tight">{formatMoney(account.balance, cur)}</div>
-        {account.reconciled_at && <div class="text-[13px] opacity-60">Last checked {account.reconciled_at.slice(0, 10)}</div>}</div>
+      <div className="mx-4 my-4"><div className="text-[13px] opacity-60">Centient shows</div><div className="num text-[32px] font-bold tracking-tight">{formatMoney(account.balance, cur)}</div>
+        {account.reconciled_at && <div className="text-[13px] opacity-60">Last checked {account.reconciled_at.slice(0, 10)}</div>}</div>
       {step === 'menu' ? (
         <Block className="flex flex-col gap-2.5">
           <Button large onClick={() => setStep('update')}>Update balance</Button>
@@ -125,9 +125,9 @@ function AccountSheet({ account, onClose, onShow }: { account: (Account & { bala
             <>
               <BlockFooter>{formatMoney(Math.abs(diff), cur)} {diff < 0 ? 'less' : 'more'} than Centient had.</BlockFooter>
               <Group label={diff < 0 ? 'Where did it go?' : 'Where did it come from?'} foot="Optional. Picking one counts it in that category's budget.">
-                <li class="flex flex-wrap gap-2 p-3">
+                <li className="flex flex-wrap gap-2 p-3">
                   {cats.map(c => (
-                    <Button small rounded inline tonal={categoryId !== c.id} onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}>
+                    <Button key={c.id} small rounded inline tonal={categoryId !== c.id} onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}>
                       {categoryEmoji(c.name, c.kind)} {c.name}
                     </Button>
                   ))}

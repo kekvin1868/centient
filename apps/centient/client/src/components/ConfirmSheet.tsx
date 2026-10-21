@@ -1,6 +1,6 @@
 // Our own confirm prompt (never the browser's), for destructive actions: an iOS action sheet.
 import { Actions, ActionsButton, ActionsGroup, ActionsLabel } from 'konsta/react';
-import { createPortal } from 'preact/compat';
+import { createPortal } from 'react-dom';
 
 type Props = { open: boolean; message: string; confirmLabel: string; onConfirm: () => void; onCancel: () => void };
 

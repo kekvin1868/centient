@@ -1,6 +1,6 @@
 // App shell: first-run card, then three screens behind a tab bar, inside Konsta's iOS theme.
 import { App as KonstaApp } from 'konsta/react';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'react';
 import { BottomNav, type Screen } from './components/BottomNav';
 import { Toast } from './components/Toast';
 import { screenIn } from './lib/motion';

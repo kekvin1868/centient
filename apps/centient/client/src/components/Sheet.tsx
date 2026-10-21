@@ -1,15 +1,15 @@
 // Bottom sheet on Konsta's Sheet: slides up, closes on the backdrop, Escape, Done, or dragging it down.
 // Callers mount it when there is something to show; it plays its own way in and out.
 import { Link, Sheet as KSheet } from 'konsta/react';
-import type { ComponentChildren } from 'preact';
-import { createPortal } from 'preact/compat';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useEffect, useRef, useState, type PointerEvent } from 'react';
 
-type Props = { open: boolean; onClose: () => void; title?: string; children: ComponentChildren };
+type Props = { open: boolean; onClose: () => void; title?: string; children: ReactNode };
 const OUT_MS = 400; // Konsta's sheet transition (duration-400)
 
 export function Sheet({ open, onClose, title, children }: Props) {
-  // Preact does not pass `ref` into Konsta components, so we hold the scroller and find the sheet from it.
+  // The scroller is our own element; the sheet (for the drag transform) is found from it.
   const scroller = useRef<HTMLDivElement>(null);
   const sheetEl = () => scroller.current?.closest<HTMLElement>('.k-sheet') ?? null;
   const [shown, setShown] = useState(false);
@@ -76,15 +76,15 @@ export function Sheet({ open, onClose, title, children }: Props) {
       className="w-full max-w-[640px] mx-auto touch-pan-y"
       colors={{ bgIos: 'bg-ios-light-surface dark:bg-ios-dark-surface' }}
       onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-      <div ref={scroller} class="max-h-[92dvh] overflow-auto pb-safe">
-      <button class="block mx-auto mt-2 mb-1 h-[5px] w-10 rounded-full bg-black/20 dark:bg-white/25" aria-label="Close" onClick={close} />
+      <div ref={scroller} className="max-h-[92dvh] overflow-auto pb-safe">
+      <button className="block mx-auto mt-2 mb-1 h-[5px] w-10 rounded-full bg-black/20 dark:bg-white/25" aria-label="Close" onClick={close} />
       {title && (
-        <div class="flex items-center justify-between px-4 pt-2">
-          <span class="text-xl font-bold truncate">{title}</span>
+        <div className="flex items-center justify-between px-4 pt-2">
+          <span className="text-xl font-bold truncate">{title}</span>
           <Link onClick={close}>Done</Link>
         </div>
       )}
-      <div class="pb-6">{children}</div>
+      <div className="pb-6">{children}</div>
       </div>
     </KSheet>,
     document.body,

@@ -1,6 +1,6 @@
 // Add an account: name, type, what's in it now. Currency stays rupiah unless you ask for another.
 import { Block, Button } from 'konsta/react';
-import { useState } from 'preact/hooks';
+import { useState } from 'react';
 import { call, client } from '../api';
 import { attempt } from '../lib/run';
 import { ACCOUNT_KINDS } from '../lib/format';

@@ -1,7 +1,7 @@
 // One toast at a time (Konsta Toast), above the tab bar. An action (Undo) keeps it up for its full duration.
-import { signal } from '@preact/signals';
+import { signal } from '@preact/signals-react';
 import { Button, Toast as KToast } from 'konsta/react';
-import { useEffect, useRef } from 'preact/hooks';
+import { useEffect, useRef } from 'react';
 
 type ToastState = { id: number; message: string; action?: { label: string; run: () => void }; ms: number; onExpire?: () => void };
 export const toast = signal<ToastState | null>(null);
@@ -34,7 +34,7 @@ export function Toast() {
       button={shown?.action && (
         <Button clear inline onClick={() => { const a = shown.action!; toast.value = null; a.run(); }}>{shown.action.label}</Button>
       )}>
-      <span class="shrink">{shown?.message}</span>
+      <span className="shrink">{shown?.message}</span>
     </KToast>
   );
 }

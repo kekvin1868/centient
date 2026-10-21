@@ -1,7 +1,7 @@
 // Open an entry: edit it (your own entries) or delete it. Deleting confirms first, then offers Undo for 5 s;
 // the delete request is sent only when the Undo window ends.
 import { Block, Button } from 'konsta/react';
-import { useState } from 'preact/hooks';
+import { useState } from 'react';
 import { call, client } from '../api';
 import { fromCommand, toCommand, type Form } from '../lib/form';
 import { formatMoney } from '../lib/format';

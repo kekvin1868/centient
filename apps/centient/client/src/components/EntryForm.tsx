@@ -1,6 +1,6 @@
 // The full entry form: Spent / Received / Moved, used by chips, Edit, and "+ Add manually".
 import { ListItem } from 'konsta/react';
-import { useState } from 'preact/hooks';
+import { useState } from 'react';
 import { AmountField } from './AmountField';
 import { InputRow, PickerRow, StepperRow } from './Fields';
 import { Group } from './List';
@@ -35,7 +35,7 @@ export function EntryForm({ form, onChange, lockType }: { form: Form; onChange: 
       <Group>
         <AmountField value={form.amount} currency={currency} onChange={amount => set({ amount })} />
         {form.originalAmount !== null && form.originalCurrency && (
-          <ListItem title={<span class="text-sm opacity-60">Price was {formatMoney(form.originalAmount, form.originalCurrency)}</span>} />
+          <ListItem title={<span className="text-sm opacity-60">Price was {formatMoney(form.originalAmount, form.originalCurrency)}</span>} />
         )}
       </Group>
       {(form.type === 'EXPENSE' || form.type === 'INCOME') && (
@@ -56,7 +56,7 @@ export function EntryForm({ form, onChange, lockType }: { form: Form; onChange: 
       )}
       <Group>
         <ListItem link linkComponent="button" linkProps={{ type: 'button', onClick: () => setMore(!more), 'aria-expanded': more }}
-          chevron={false} title={<span class="text-primary">{more ? 'Fewer options' : 'More options'}</span>} />
+          chevron={false} title={<span className="text-primary">{more ? 'Fewer options' : 'More options'}</span>} />
         {more && (<>
           {form.type === 'EXPENSE' && (
             <>
