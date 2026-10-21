@@ -31,7 +31,7 @@ describe('http', () => {
   it('logs, edits, updates a balance and deletes through the API', async () => {
     const { body: catalog } = await call('GET', '/api/catalog');
     const { body: { today } } = await call('GET', '/api/me');
-    const coffee = catalog.categories.find((c: { name: string }) => c.name === 'Coffee').id;
+    const coffee = catalog.categories.find((c: { name: string }) => c.name === 'Food & Drink').id;
     const { body: account } = await call('POST', '/api/accounts', { name: 'GoPay', kind: 'EWALLET', openingBalance: 100_000 });
     expect(await call('PATCH', `/api/accounts/${account.id}`, { name: 'Gopay' })).toMatchObject({ status: 200 });
 

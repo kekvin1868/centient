@@ -32,7 +32,7 @@ describe('tracker', () => {
     await uc.recordTransactions(deps, t.ws, [
       { type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 100_000, date: '2026-10-17', merchant: 'Pizza Hut', split: { people: 3, iouAccountId: t.friends } },
       { type: 'TRANSFER', fromAccountId: t.bca, toAccountId: t.gopay, amount: 500_000, fee: 2_500, date: '2026-10-17' },
-      { type: 'EXPENSE', accountId: t.gopay, categoryId: t.cat('Coffee'), amount: 25_000, date: '2026-10-16' },
+      { type: 'EXPENSE', accountId: t.gopay, categoryId: t.cat('Food & Drink'), amount: 25_000, date: '2026-10-16' },
     ]);
     const b = await uc.getBalances(deps, t.ws);
     const bal = (id: string) => b.accounts.find(a => a.id === id)!.balance;
@@ -47,15 +47,15 @@ describe('tracker', () => {
   it('keeps workspaces apart', async () => {
     const a = await setup('owner-a@test');
     const b = await setup('owner-b@test');
-    await uc.recordTransactions(deps, a.ws, [{ type: 'EXPENSE', accountId: a.bca, categoryId: a.cat('Coffee'), amount: 30_000, date: '2026-10-17' }]);
+    await uc.recordTransactions(deps, a.ws, [{ type: 'EXPENSE', accountId: a.bca, categoryId: a.cat('Food & Drink'), amount: 30_000, date: '2026-10-17' }]);
     // B cannot spend from A's account, nor read or delete A's transactions.
-    await expect(uc.recordTransactions(deps, b.ws, [{ type: 'EXPENSE', accountId: a.bca, categoryId: b.cat('Coffee'), amount: 1, date: '2026-10-17' }]))
+    await expect(uc.recordTransactions(deps, b.ws, [{ type: 'EXPENSE', accountId: a.bca, categoryId: b.cat('Food & Drink'), amount: 1, date: '2026-10-17' }]))
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
     const aList = await uc.listEntries(deps, a.ws, { limit: 50 });
     const bList = await uc.listEntries(deps, b.ws, { limit: 50 });
     expect(bList.items.some(x => aList.items.some(y => y.id === x.id))).toBe(false);
     await expect(uc.deleteEntry(deps, b.ws, aList.items[0].id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await expect(uc.editEntry(deps, b.ws, aList.items[0].id, { type: 'EXPENSE', accountId: b.bca, categoryId: b.cat('Coffee'), amount: 1, date: '2026-10-17' }))
+    await expect(uc.editEntry(deps, b.ws, aList.items[0].id, { type: 'EXPENSE', accountId: b.bca, categoryId: b.cat('Food & Drink'), amount: 1, date: '2026-10-17' }))
       .rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(uc.updateBalance(deps, b.ws, a.bca, { actual: 0 })).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(uc.updateItem(deps, b.ws, 'accounts', a.bca, { name: 'stolen' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
@@ -87,7 +87,7 @@ describe('tracker', () => {
 
   it('soft-deletes and exports', async () => {
     const t = await setup('csv@test');
-    const [id] = await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Coffee'), amount: 20_000, date: '2026-10-17', merchant: 'Kopi, "Tuku"' }]);
+    const [id] = await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 20_000, date: '2026-10-17', merchant: 'Kopi, "Tuku"' }]);
     expect(await uc.exportCsv(deps, t.ws)).toContain('"kopi, ""tuku"""');
     await uc.deleteEntry(deps, t.ws, id);
     const b = await uc.getBalances(deps, t.ws);
@@ -138,7 +138,7 @@ describe('tracker', () => {
   it('pages entries by date with a cursor and filters by account', async () => {
     const t = await setup('page@test');
     await uc.recordTransactions(deps, t.ws, ['2026-10-10', '2026-10-11', '2026-10-12'].map(date =>
-      ({ type: 'EXPENSE' as const, accountId: t.gopay, categoryId: t.cat('Coffee'), amount: 10_000, date })));
+      ({ type: 'EXPENSE' as const, accountId: t.gopay, categoryId: t.cat('Food & Drink'), amount: 10_000, date })));
     const first = await uc.listEntries(deps, t.ws, { limit: 2, accountId: t.gopay });
     expect(first.items.map(e => e.occurred_at.slice(0, 10))).toEqual(['2026-10-12', '2026-10-11']);
     const second = await uc.listEntries(deps, t.ws, { limit: 2, accountId: t.gopay, cursor: first.nextCursor! });
@@ -190,7 +190,7 @@ describe('deleting and resetting', () => {
     const t = await setup('delete@test');
     await uc.recordTransactions(deps, t.ws, [
       { type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 90_000, date: '2026-10-17', split: { people: 3, iouAccountId: t.friends } },
-      { type: 'EXPENSE', accountId: t.gopay, categoryId: t.cat('Coffee'), amount: 20_000, date: '2026-10-17' },
+      { type: 'EXPENSE', accountId: t.gopay, categoryId: t.cat('Food & Drink'), amount: 20_000, date: '2026-10-17' },
     ]);
     await uc.deleteAccount(deps, t.ws, t.bca);
     expect((await deps.catalog.listAccounts(t.ws)).some(a => a.id === t.bca)).toBe(false);
@@ -213,7 +213,7 @@ describe('deleting and resetting', () => {
 
   it('backs up everything, then a reset starts a fresh workspace and keeps the old one flagged', async () => {
     const t = await setup('reset@test');
-    await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Coffee'), amount: 30_000, date: '2026-10-17' }]);
+    await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 30_000, date: '2026-10-17' }]);
     const b = await uc.backup(deps, t.ws);
     expect(b).toMatchObject({ format: 'centient-backup', version: 1, workspace: { id: t.ws } });
     expect(b.accounts.map(a => a.name)).toEqual(expect.arrayContaining(['BCA', 'GoPay', 'Friends']));

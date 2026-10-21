@@ -12,8 +12,8 @@ const ctx: QAContext = {
     { id: 'friends', name: 'Friends', kind: 'IOU', provider: null },
   ],
   categories: [
-    cat('food', 'Food & Drink'), cat('coffee', 'Coffee'), cat('transport', 'Transport'),
-    cat('bills', 'Bills & Utilities'), cat('shopping', 'Shopping'), cat('giving', 'Giving'),
+    cat('food', 'Food & Drink'), cat('transport', 'Transport'),
+    cat('bills', 'Home & Bills'), cat('shopping', 'Shopping'), cat('giving', 'Family & Giving'),
     cat('salary', 'Salary', 'INCOME'), cat('angpao', 'Angpao & THR', 'INCOME'), cat('other-in', 'Other income', 'INCOME'),
   ],
   lastAccountId: 'bca',
@@ -23,7 +23,7 @@ describe('parseQuickAdd', () => {
   it('splits a line into several entries with accounts and categories', () => {
     const d = parseQuickAdd('kopi susu 25rb pakai gopay dan parkir 5rb cash dan bayar listrik 300rb dari BCA', ctx);
     expect(d.map(x => [x.amount, x.accountId, x.categoryId, x.merchant])).toEqual([
-      [25000, 'gopay', 'coffee', 'Kopi Susu'],
+      [25000, 'gopay', 'food', 'Kopi Susu'],
       [5000, 'cash', 'transport', 'Parkir'],
       [300000, 'bca', 'bills', 'Listrik'],
     ]);

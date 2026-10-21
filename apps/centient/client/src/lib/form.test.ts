@@ -9,7 +9,7 @@ const ctx: QAContext = {
     { id: 'gopay', name: 'GoPay', kind: 'EWALLET', provider: 'GOPAY', currency_code: 'IDR' },
     { id: 'friends', name: 'Friends', kind: 'IOU', provider: null, currency_code: 'IDR' },
   ],
-  categories: [{ id: 'coffee', name: 'Coffee', kind: 'EXPENSE' }, { id: 'food', name: 'Food & Drink', kind: 'EXPENSE' }],
+  categories: [{ id: 'food', name: 'Food & Drink', kind: 'EXPENSE' }],
   lastAccountId: 'bca',
 };
 const item = (text: string, c: QAContext = ctx) => fromDraft(parseQuickAdd(text, c)[0], '0', 'friends');
@@ -18,7 +18,7 @@ describe('chipView', () => {
   it('is ready when everything resolved', () => {
     const i = item('kopi 25rb gopay');
     expect(chipView(i)).toEqual({ state: 'ready' });
-    expect(toCommand(i.form)).toEqual({ command: expect.objectContaining({ type: 'EXPENSE', accountId: 'gopay', categoryId: 'coffee', amount: 25000 }) });
+    expect(toCommand(i.form)).toEqual({ command: expect.objectContaining({ type: 'EXPENSE', accountId: 'gopay', categoryId: 'food', amount: 25000 }) });
   });
 
   it('asks which amount for a bare number, then is ready once picked', () => {

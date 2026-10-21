@@ -52,7 +52,7 @@ export function Preview() {
         <button class="btn btn-primary" style="min-height:40px">Add</button>
       </div>
       <div class="chips">
-        <Chip state="ready" emoji="☕" title="Coffee" sub="GoPay · today" amount={formatMoney(25000)} onOpen={() => setSheet(true)} />
+        <Chip state="ready" emoji="🍜" title="Food & Drink" sub="GoPay · today" amount={formatMoney(25000)} onOpen={() => setSheet(true)} />
         <Chip state="ask" emoji="🍕" title="Pizza Hut" sub="Split with 3 · BCA" question="Which amount did you mean?" onOpen={() => setSheet(true)}>
           {[100, 100_000].map(v => <button class={`pill ${pick === v ? 'on' : ''}`} onClick={() => setPick(v)}>{formatMoney(v)}</button>)}
         </Chip>
@@ -60,7 +60,7 @@ export function Preview() {
       </div>
       <div style="height:28px" />
       <Group label="Today">
-        <Row title="Kopi Kenangan" sub="Coffee · GoPay" trail={formatMoney(-25000)} onClick={() => setSheet(true)} />
+        <Row title="Kopi Kenangan" sub="Food & Drink · GoPay" trail={formatMoney(-25000)} onClick={() => setSheet(true)} />
         <Row title="Salary" sub="Received · BCA" trail={<span class="received">+{formatMoney(9_500_000)}</span>} onClick={() => setSheet(true)} />
         <Row title="BCA → GoPay" sub="Moved · admin fee Rp2.500" trail={formatMoney(500_000)} onClick={() => setSheet(true)} />
       </Group>
@@ -91,7 +91,7 @@ export function Preview() {
             options={[{ value: 'EXPENSE', label: 'Spent' }, { value: 'INCOME', label: 'Received' }, { value: 'TRANSFER', label: 'Moved' }]} /></div>
           <AmountField value={amount} onChange={setAmount} />
           <Row title="Account" trail="GoPay" chevron onClick={() => {}} />
-          <Row title="Category" trail="Coffee" chevron onClick={() => {}} />
+          <Row title="Category" trail="Food & Drink" chevron onClick={() => {}} />
         </Group>
         <button class="btn btn-primary btn-block" onClick={() => { setSheet(false); showToast('Saved'); }}>Save</button>
       </Sheet>

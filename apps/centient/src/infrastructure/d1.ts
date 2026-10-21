@@ -7,8 +7,9 @@ import type {
 
 const uid = () => crypto.randomUUID();
 
-const SEED_EXPENSE = ['Food & Drink', 'Coffee', 'Groceries', 'Transport', 'Shopping', 'Bills & Utilities', 'Housing',
-  'Health', 'Entertainment', 'Education', 'Giving', 'Kondangan', 'Family', 'Fees', 'Other'];
+// Few and broad on purpose: each one should be obvious to pick. "Fees" is looked up by name for transfer fees.
+const SEED_EXPENSE = ['Food & Drink', 'Transport', 'Home & Bills', 'Shopping', 'Health', 'Fun', 'Education',
+  'Family & Giving', 'Fees', 'Other'];
 // "Balance adjustment" holds uncategorised balance corrections (signed), so it is not a spending category.
 const SEED_INCOME = ['Salary', 'Angpao & THR', 'Interest & cashback', 'Opening balance', 'Balance adjustment', 'Other income'];
 
