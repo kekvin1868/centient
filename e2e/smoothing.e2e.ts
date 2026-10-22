@@ -1,6 +1,6 @@
 // End to end: first run with the three starting accounts, categories (ten broad ones, deleting one), list
 // borders, account cards layout, pockets inside an account, crypto accounts, and pay later installments with
-// per-person payments and proof of payment. One workspace (dev sign-in), so tests run in order.
+// per-person payments and proof of payment, entry icons and swipe actions. One workspace (dev sign-in), so tests run in order.
 import { expect, test, type Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
@@ -17,7 +17,7 @@ const api = (path: string, init?: { method?: string; data?: unknown }) =>
 type Acc = { id: string; name: string; kind: string; default_envelope_id: string };
 const accounts = async () => (await (await api('/catalog')).json()).accounts as Acc[];
 const accountId = async (name: string) => (await accounts()).find(a => a.name === name)!.id;
-const balances = async () => (await (await api('/balances')).json()) as { accounts: { name: string; balance: number }[]; envelopes: { id: string; name: string; account_id: string; balance: number }[] };
+const balances = async () => (await (await api('/balances')).json()) as { accounts: { name: string; balance: number }[]; envelopes: { id: string; name: string; account_id: string; balance: number; color: string | null }[] };
 const balance = async (name: string) => (await balances()).accounts.find(a => a.name === name)!.balance;
 const tab = (name: string) => page.getByRole('button', { name, exact: true });
 const cards = () => page.getByRole('group', { name: 'Accounts' });
@@ -70,20 +70,25 @@ test('lists have one even hairline on the rounded card', async () => {
   await expect(list.locator('> ul')).toHaveCSS('border-top-width', '0px');
 });
 
-test('up to four accounts sit in a straight tray; five or more scroll in a row', async () => {
+test('up to five accounts are held as an arched hand; six or more scroll in a straight row', async () => {
   await tab('Money').tap();
-  await expect(cards()).toHaveAttribute('data-layout', 'tray'); // the three starting accounts
-  for (const a of [{ name: 'Kredivo', kind: 'PAYLATER', openingBalance: -1_788_000 }, { name: 'Jago', kind: 'BANK' }]) {
+  await expect(cards()).toHaveAttribute('data-layout', 'arch'); // the three starting accounts
+  // Arched: the outer cards sit lower than the middle one, and are tilted.
+  // Centers, not tops: a tilted card's box grows upward.
+  const mids = await cards().locator('[data-slot]').evaluateAll(els => els.map(e => { const r = e.getBoundingClientRect(); return (r.top + r.bottom) / 2; }));
+  expect(mids[0]).toBeGreaterThan(mids[1]);
+  await expect(cards().locator('[data-slot]').first()).not.toHaveCSS('transform', 'none');
+  for (const a of [{ name: 'Kredivo', kind: 'PAYLATER', openingBalance: -1_788_000 }, { name: 'Jago', kind: 'BANK' }, { name: 'Mandiri', kind: 'BANK' }]) {
     expect((await api('/accounts', { method: 'POST', data: a })).ok()).toBe(true);
   }
   await page.reload();
   await tab('Money').tap();
   await expect(cards()).toHaveAttribute('data-layout', 'scroll');
-  // Straight: every card's slot sits on the same line (no arch). Slots, not cards: cards float and deal in.
+  // Straight: every card's slot sits on the same line. Slots, not cards: cards float and deal in.
   const slots = cards().locator('.snap-start');
-  await expect(slots).toHaveCount(5);
-  const tops = await slots.evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().top)));
-  expect(new Set(tops).size).toBe(1);
+  await expect(slots).toHaveCount(6);
+  const row = await slots.evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().top)));
+  expect(new Set(row).size).toBe(1);
 });
 
 test('pockets live inside an account: add one, move money in, the account balance stays', async () => {
@@ -93,6 +98,7 @@ test('pockets live inside an account: add one, move money in, the account balanc
   await pockets.getByRole('button', { name: '+ Add pocket' }).tap();
   const add = page.getByRole('dialog', { name: 'New pocket in Main Account' });
   await add.getByRole('textbox', { name: 'Name' }).fill('Rent');
+  await add.getByRole('radio', { name: 'Lilac' }).tap();
   await add.getByRole('button', { name: 'Add pocket' }).tap();
   await expect(add).toBeHidden();
   await pockets.getByRole('button', { name: /^Rent,/ }).tap({ position: { x: 120, y: 30 } });
@@ -104,7 +110,7 @@ test('pockets live inside an account: add one, move money in, the account balanc
   const b = await balances();
   const main = (await accounts()).find(a => a.name === 'Main Account')!;
   const inAccount = b.envelopes.filter(e => e.account_id === main.id);
-  expect(inAccount.find(e => e.name === 'Rent')!.balance).toBe(1_500_000);
+  expect(inAccount.find(e => e.name === 'Rent')).toMatchObject({ balance: 1_500_000, color: '#c3b1ff' });
   expect(inAccount.find(e => e.name === 'Main')!.balance).toBe(3_500_000);
   expect(await balance('Main Account')).toBe(5_000_000);
   // Set aside means it's no longer free to spend.
@@ -175,4 +181,43 @@ test('a plan only you pay has no proof of payment', async () => {
   await plan.getByRole('button', { name: 'Mark your share of installment 1 paid' }).tap();
   await expect(plan.getByRole('button', { name: 'Mark your share of installment 1 unpaid' })).toBeVisible();
   await expect(plan.getByText(/Attach proof/)).toHaveCount(0);
+});
+
+test('an entry gets its own emoji, remembered for its merchant', async () => {
+  const cat = (await (await api('/catalog')).json()).categories as { id: string; name: string }[];
+  const today = (await (await api('/me')).json()).today as string;
+  await api('/transactions', { method: 'POST', data: { type: 'EXPENSE', accountId: await accountId('Dailies'), categoryId: cat[0].id, amount: 20_000, date: today, merchant: 'Arcade' } });
+  await page.reload();
+  await tab('Home').tap();
+  const row = page.locator('.entry-row', { hasText: 'Arcade' });
+  await row.getByRole('button', { name: /Change the icon/ }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Icon for Arcade' });
+  await sheet.getByRole('button', { name: '🎮' }).tap();
+  await sheet.getByRole('button', { name: 'Save' }).tap();
+  await expect(sheet).toBeHidden();
+  await expect(row.getByRole('button', { name: /Change the icon/ })).toContainText('🎮');
+  const entries = (await (await api('/entries?limit=20')).json()).items as { icon: string | null; command: { merchant?: string } }[];
+  expect(entries.find(e => e.command?.merchant?.toLowerCase() === 'arcade')!.icon).toBe('🎮');
+});
+
+test('swiping a row left unlocks edit and delete; deleting can be undone, then goes', async () => {
+  const row = page.locator('.entry-row', { hasText: 'Arcade' });
+  await row.scrollIntoViewIfNeeded();
+  const box = (await row.boundingBox())!;
+  await page.mouse.move(box.x + box.width - 20, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width - 180, box.y + box.height / 2, { steps: 10 });
+  await page.mouse.up();
+  const del = row.getByRole('button', { name: 'Delete Arcade' });
+  await expect(del).toHaveCSS('opacity', '1');
+  await del.click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(row).toHaveCount(0);
+  await page.getByRole('button', { name: 'Undo' }).click(); // changed my mind
+  await expect(page.locator('.entry-row', { hasText: 'Arcade' })).toHaveCount(1);
+  // The edit sheet only saves now.
+  await page.locator('.entry-row', { hasText: 'Arcade' }).getByRole('button', { name: /^Arcade/ }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit' });
+  await expect(edit.getByRole('button', { name: 'Save' })).toBeVisible();
+  await expect(edit.getByRole('button', { name: 'Delete' })).toHaveCount(0);
 });
