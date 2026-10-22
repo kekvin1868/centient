@@ -384,7 +384,7 @@ export async function resetWorkspace(deps: Deps, ws: string): Promise<void> {
 }
 
 /** Adds a pocket to an account (in the account's currency). Pocket names are unique within an account. */
-export async function createPocket(deps: Deps, ws: string, i: { accountId: string; name: string; kind: Envelope['kind']; targetAmount?: number | null; targetDate?: string | null }) {
+export async function createPocket(deps: Deps, ws: string, i: { accountId: string; name: string; kind: Envelope['kind']; targetAmount?: number | null; targetDate?: string | null; color?: string | null }) {
   const c = await catalogOf(deps, ws);
   const account = c.account(i.accountId).row;
   if (account.kind === 'IOU') throw new DomainError('IOU_POCKETS', 'What friends owe you has no pockets');
@@ -392,7 +392,23 @@ export async function createPocket(deps: Deps, ws: string, i: { accountId: strin
   return deps.catalog.createEnvelope(ws, {
     account_id: account.id, name: i.name.trim(), currency_code: account.currency_code, kind: i.kind,
     target_amount: i.kind === 'GOAL' ? i.targetAmount ?? null : null, target_date: i.kind === 'GOAL' ? i.targetDate ?? null : null,
+    color: i.color ?? null,
   });
+}
+
+/**
+ * Sets an entry's icon (one emoji; null = back to its category's). With `forMerchant`, the icon is also
+ * remembered for the entry's merchant, so later entries there show it too.
+ */
+export async function setEntryIcon(deps: Deps, ws: string, id: string, i: { icon: string | null; forMerchant: boolean }) {
+  const icon = i.icon?.trim() || null;
+  if (icon && (!/\p{Extended_Pictographic}/u.test(icon) || [...new Intl.Segmenter().segment(icon)].length !== 1)) {
+    throw new DomainError('NOT_AN_EMOJI', 'Pick one emoji');
+  }
+  const entry = await deps.ledger.getEntry(ws, id);
+  if (!entry) throw new DomainError('NOT_FOUND', 'Entry not found');
+  const merchant = i.forMerchant ? entry.transactions.find(t => t.merchant)?.merchant ?? null : null;
+  await deps.ledger.setIcon(ws, id, icon, merchant);
 }
 
 // Looked up by name by the app itself (transfer fees, opening balances, balance corrections).

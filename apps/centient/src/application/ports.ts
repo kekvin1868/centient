@@ -10,6 +10,8 @@ export type Account = {
 export type Envelope = {
   id: string; account_id: string; name: string; currency_code: string; kind: 'SPENDING' | 'SAVINGS' | 'GOAL';
   target_amount: number | null; target_date: string | null; archived_at: string | null;
+  /** Hex color the user picked for the pocket's card; null = the default for its place. */
+  color: string | null;
 };
 export type Category = { id: string; name: string; kind: 'EXPENSE' | 'INCOME'; archived_at: string | null };
 export type Alias = { alias: string; kind: 'MERCHANT' | 'ACCOUNT' | 'CATEGORY'; value: string };
@@ -30,6 +32,8 @@ export type EntryView = {
   id: string; kind: EntryKind; occurred_at: string;
   /** The saved command (JSON), or null for system entries and rows from before entry groups. */
   command: unknown | null;
+  /** Emoji for the entry: its own, else the one remembered for its merchant; null = the category's. */
+  icon: string | null;
   transactions: TxView[];
 };
 export type NewEntry = { kind: EntryKind; command: unknown | null; txs: NewTransaction[] };
@@ -83,6 +87,8 @@ export interface LedgerRepository {
   spent(ws: string, q: { categoryId: string | null; envelopeId: string | null; from: string; to: string }): Promise<number>;
   merchantHistory(ws: string): Promise<Record<string, { min: number; max: number; categoryId: string | null }>>;
   lastAccountId(ws: string): Promise<string | null>;
+  /** Sets (or clears, null) an entry's icon; with `merchant`, also remembers it for that merchant. */
+  setIcon(ws: string, entryId: string, icon: string | null, merchant: string | null): Promise<boolean>;
 }
 
 /** Last known rupiah price of one whole coin per currency (global, not per workspace). */

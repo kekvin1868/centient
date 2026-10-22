@@ -20,6 +20,7 @@ const id = z.string().min(1).max(64);
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
 const money = z.number().int().positive();
 const text = (max: number) => z.string().trim().max(max);
+const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a #rrggbb color');
 
 const command = z.discriminatedUnion('type', [
   z.object({
@@ -55,6 +56,7 @@ const patch = z.object({
   name: text(60).min(1).optional(), kind: z.enum(accountKinds).optional(), provider: text(30).nullable().optional(), currency_code: currency.optional(),
   default_envelope_id: id.nullable().optional(), due_day: z.number().int().min(1).max(31).nullable().optional(),
   target_amount: money.nullable().optional(), target_date: day.nullable().optional(), archived: z.boolean().optional(),
+  color: hex.nullable().optional(),
 });
 
 // Zod errors thrown here reach onError as VALIDATION; a body that is not JSON parses as {}.
@@ -129,7 +131,7 @@ const routes = app
   // A pocket inside an account.
   .post('/api/envelopes', json(z.object({
     accountId: id, name: text(60).min(1), kind: z.enum(['SPENDING', 'SAVINGS', 'GOAL']).default('SPENDING'),
-    targetAmount: money.nullish(), targetDate: day.nullish(),
+    targetAmount: money.nullish(), targetDate: day.nullish(), color: hex.nullish(),
   })), async c => c.json(await uc.createPocket(c.var.deps, c.var.ws, c.req.valid('json')), 201))
 
   .delete('/api/categories/:id', json(z.object({ moveTo: id })), async c => {
@@ -159,6 +161,11 @@ const routes = app
 
   .patch('/api/entries/:id', json(command), async c => {
     await uc.editEntry(c.var.deps, c.var.ws, c.req.param('id'), c.req.valid('json'));
+    return c.json({ ok: true });
+  })
+
+  .patch('/api/entries/:id/icon', json(z.object({ icon: z.string().max(16).nullable(), forMerchant: z.boolean().default(true) })), async c => {
+    await uc.setEntryIcon(c.var.deps, c.var.ws, c.req.param('id'), c.req.valid('json'));
     return c.json({ ok: true });
   })
 

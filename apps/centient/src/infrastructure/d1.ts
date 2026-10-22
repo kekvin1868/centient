@@ -25,7 +25,7 @@ const storedKind = (kind: string) => (kind === 'DEBIT_CARD' ? { kind: 'BANK', su
 /** Columns a PATCH may touch, per table. Anything else in the request is ignored. */
 const PATCHABLE: Record<string, string[]> = {
   accounts: ['name', 'kind', 'subtype', 'provider', 'currency_code', 'default_envelope_id', 'due_day', 'reconciled_at', 'archived_at'],
-  envelopes: ['name', 'currency_code', 'target_amount', 'target_date', 'archived_at'],
+  envelopes: ['name', 'currency_code', 'target_amount', 'target_date', 'archived_at', 'color'],
   categories: ['name', 'archived_at'],
 };
 
@@ -94,7 +94,7 @@ export class D1Catalog implements CatalogRepository {
   }
   listAccounts(ws: string) { return this.all<Account>(`SELECT id, name, ${KIND_SQL} AS kind, provider, currency_code, default_envelope_id, due_day, reconciled_at, archived_at FROM accounts WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY name`, ws); }
   // Main first in each account, then by name.
-  listEnvelopes(ws: string) { return this.all<Envelope>("SELECT e.id, e.account_id, e.name, e.currency_code, e.kind, e.target_amount, e.target_date, e.archived_at FROM envelopes e JOIN accounts a ON a.id = e.account_id AND a.deleted_at IS NULL WHERE e.workspace_id = ? ORDER BY e.account_id, e.id <> a.default_envelope_id, e.name", ws); }
+  listEnvelopes(ws: string) { return this.all<Envelope>("SELECT e.id, e.account_id, e.name, e.currency_code, e.kind, e.target_amount, e.target_date, e.archived_at, e.color FROM envelopes e JOIN accounts a ON a.id = e.account_id AND a.deleted_at IS NULL WHERE e.workspace_id = ? ORDER BY e.account_id, e.id <> a.default_envelope_id, e.name", ws); }
   listCategories(ws: string) { return this.all<Category>('SELECT id, name, kind, archived_at FROM categories WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY kind, name', ws); }
 
   async createAccount(ws: string, a: Omit<Account, 'id' | 'reconciled_at' | 'archived_at' | 'default_envelope_id'>) {
@@ -105,8 +105,8 @@ export class D1Catalog implements CatalogRepository {
 
   async createEnvelope(ws: string, e: Omit<Envelope, 'id' | 'archived_at'>) {
     const id = uid();
-    await this.db.prepare('INSERT INTO envelopes (id, workspace_id, account_id, name, currency_code, kind, target_amount, target_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, ws, e.account_id, e.name, e.currency_code, e.kind, e.target_amount, e.target_date).run();
+    await this.db.prepare('INSERT INTO envelopes (id, workspace_id, account_id, name, currency_code, kind, target_amount, target_date, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, ws, e.account_id, e.name, e.currency_code, e.kind, e.target_amount, e.target_date, e.color).run();
     return { ...e, id, archived_at: null };
   }
 
@@ -245,10 +245,10 @@ export class D1Ledger implements LedgerRepository {
   }
 
   async getEntry(ws: string, id: string) {
-    const row = await this.db.prepare('SELECT id, kind, command FROM entry_groups WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL')
+    const row = await this.db.prepare('SELECT id, kind, command, icon FROM entry_groups WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL')
       .bind(id, ws).first<GroupRow>();
     if (!row) return null;
-    return (await this.withTransactions([row]))[0] ?? null;
+    return (await this.withTransactions(ws, [row]))[0] ?? null;
   }
 
   async listEntries(ws: string, f: TxFilter) {
@@ -260,26 +260,31 @@ export class D1Ledger implements LedgerRepository {
       having = 'HAVING (MIN(t.occurred_at), g.id) < (?, ?)';
       args.push(at, id);
     }
-    const rows = (await this.db.prepare(`SELECT g.id, g.kind, g.command
+    const rows = (await this.db.prepare(`SELECT g.id, g.kind, g.command, g.icon
       FROM entry_groups g JOIN transactions t ON t.group_id = g.id
       WHERE ${where.join(' AND ')} GROUP BY g.id ${having}
       ORDER BY MIN(t.occurred_at) DESC, g.id DESC LIMIT ?`).bind(...args, f.limit + 1).all<GroupRow>()).results;
-    const items = await this.withTransactions(rows.slice(0, f.limit));
+    const items = await this.withTransactions(ws, rows.slice(0, f.limit));
     const last = items.at(-1);
     return { items, nextCursor: rows.length > f.limit && last ? `${last.occurred_at}|${last.id}` : null };
   }
 
-  /** Loads each group's live transactions; groups with none left are dropped. */
-  private async withTransactions(groups: GroupRow[]): Promise<EntryView[]> {
+  /** Loads each group's live transactions and icon (its own, else its merchant's); groups with none left are dropped. */
+  private async withTransactions(ws: string, groups: GroupRow[]): Promise<EntryView[]> {
     if (!groups.length) return [];
     const txs = (await this.db.prepare(`SELECT id, group_id, type, occurred_at, category_id, merchant, note, original_amount, original_currency
       FROM transactions WHERE group_id IN (SELECT value FROM json_each(?)) AND deleted_at IS NULL ORDER BY occurred_at, created_at`)
       .bind(JSON.stringify(groups.map(g => g.id))).all<Omit<TxView, 'entries' | 'allocations'> & { group_id: string }>()).results;
     const views = await this.withLines(txs);
+    const merchants = [...new Set(txs.map(t => t.merchant).filter((m): m is string => Boolean(m)))];
+    const icons = merchants.length ? Object.fromEntries((await this.db.prepare('SELECT merchant, icon FROM merchant_icons WHERE workspace_id = ? AND merchant IN (SELECT value FROM json_each(?))')
+      .bind(ws, JSON.stringify(merchants)).all<{ merchant: string; icon: string }>()).results.map(r => [r.merchant, r.icon])) : {};
     return groups.flatMap(g => {
       const own = views.filter(t => t.group_id === g.id).map(({ group_id: _, ...t }) => t);
       if (!own.length) return [];
-      return [{ id: g.id, kind: g.kind, command: g.command === null ? null : JSON.parse(g.command), occurred_at: own[0].occurred_at, transactions: own }];
+      const merchant = own.find(t => t.merchant)?.merchant;
+      const icon = g.icon ?? (merchant ? icons[merchant] ?? null : null);
+      return [{ id: g.id, kind: g.kind, command: g.command === null ? null : JSON.parse(g.command), icon, occurred_at: own[0].occurred_at, transactions: own }];
     });
   }
 
@@ -346,6 +351,16 @@ export class D1Ledger implements LedgerRepository {
       WHERE t.workspace_id = ? AND t.deleted_at IS NULL AND t.type = 'EXPENSE' AND t.merchant IS NOT NULL
       GROUP BY t.merchant`).bind(ws).all<{ merchant: string; min: number; max: number; categoryId: string | null }>()).results;
     return Object.fromEntries(rows.map(r => [r.merchant, { min: r.min, max: r.max, categoryId: r.categoryId }]));
+  }
+
+  async setIcon(ws: string, entryId: string, icon: string | null, merchant: string | null) {
+    const [r] = await this.db.batch([
+      this.db.prepare('UPDATE entry_groups SET icon = ? WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL').bind(icon, entryId, ws),
+      ...(merchant ? [icon
+        ? this.db.prepare('INSERT INTO merchant_icons (workspace_id, merchant, icon) VALUES (?, ?, ?) ON CONFLICT (workspace_id, merchant) DO UPDATE SET icon = excluded.icon').bind(ws, merchant, icon)
+        : this.db.prepare('DELETE FROM merchant_icons WHERE workspace_id = ? AND merchant = ?').bind(ws, merchant)] : []),
+    ]);
+    return r.meta.changes > 0;
   }
 
   async lastAccountId(ws: string) {
@@ -450,7 +465,7 @@ export class D1Installments implements InstallmentRepository {
   }
 }
 
-type GroupRow = { id: string; kind: EntryKind; command: string | null };
+type GroupRow = { id: string; kind: EntryKind; command: string | null; icon: string | null };
 
 /** Transaction filters shared by the transaction list and the entry list (alias `t`). */
 function txWhere(ws: string, f: TxFilter) {

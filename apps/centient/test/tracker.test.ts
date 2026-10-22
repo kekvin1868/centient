@@ -423,3 +423,34 @@ describe('first sign-in', () => {
     expect(await deps.catalog.listAccounts(ids[0].workspaceId)).toHaveLength(3);
   });
 });
+
+describe('personal touches', () => {
+  it('gives an entry its own emoji and remembers it for the merchant', async () => {
+    const t = await setup('icon@test');
+    const food = t.cat('Food & Drink');
+    const [first] = await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: food, amount: 35_000, date: '2026-10-17', merchant: 'Kopi' }]);
+    await uc.setEntryIcon(deps, t.ws, first, { icon: '☕', forMerchant: true });
+    const [second] = await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: food, amount: 30_000, date: '2026-10-17', merchant: 'kopi' }]);
+    const [other] = await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: food, amount: 20_000, date: '2026-10-17', merchant: 'Warteg' }]);
+    const icon = async (id: string) => (await uc.listEntries(deps, t.ws, { limit: 50 })).items.find(e => e.id === id)!.icon;
+    expect(await icon(first)).toBe('☕');
+    expect(await icon(second)).toBe('☕'); // same merchant
+    expect(await icon(other)).toBeNull(); // category emoji
+    await uc.setEntryIcon(deps, t.ws, second, { icon: '🧋', forMerchant: false });
+    expect(await icon(second)).toBe('🧋');
+    expect(await icon(first)).toBe('☕');
+    await uc.setEntryIcon(deps, t.ws, first, { icon: null, forMerchant: true });
+    expect(await icon(first)).toBeNull();
+    await expect(uc.setEntryIcon(deps, t.ws, first, { icon: 'kopi', forMerchant: false })).rejects.toMatchObject({ code: 'NOT_AN_EMOJI' });
+    await expect(uc.setEntryIcon(deps, t.ws, first, { icon: '☕☕', forMerchant: false })).rejects.toMatchObject({ code: 'NOT_AN_EMOJI' });
+  });
+
+  it('keeps a pocket color', async () => {
+    const t = await setup('color@test');
+    const p = await uc.createPocket(deps, t.ws, { accountId: t.bca, name: 'Food', kind: 'SPENDING', color: '#ff8cc6' });
+    expect(p.color).toBe('#ff8cc6');
+    await uc.updateItem(deps, t.ws, 'envelopes', p.id, { color: '#c3b1ff' });
+    expect((await deps.catalog.listEnvelopes(t.ws)).find(e => e.id === p.id)!.color).toBe('#c3b1ff');
+    await expect(uc.updateItem(deps, t.ws, 'envelopes', p.id, { color: 'red' })).rejects.toThrow();
+  });
+});
