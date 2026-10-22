@@ -1,6 +1,6 @@
 // App-wide state. Screens read these signals; any write calls refresh() so every screen reloads its data.
 import type { QAContext } from '@centient/quickadd';
-import { effect, signal } from '@preact/signals';
+import { effect, signal } from '@preact/signals-react';
 import type { Account, Category, Envelope } from '../../src/application/ports';
 import { call, client } from './api';
 import { load, save } from './lib/storage';

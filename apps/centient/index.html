@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="k-ios">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#f2f4f7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#0b0d10" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Centient">
@@ -18,6 +18,14 @@
   <meta property="og:description" content="Track your balances, spending and budgets in one place.">
   <meta property="og:image" content="/icons/og-image-1200x630.png">
   <title>Centient</title>
+  <!-- Konsta's dark: classes key off a .dark class; follow the device setting before first paint. -->
+  <script>
+    (function () {
+      var m = matchMedia('(prefers-color-scheme: dark)');
+      var set = function () { document.documentElement.classList.toggle('dark', m.matches); };
+      set(); m.addEventListener('change', set);
+    })();
+  </script>
 </head>
 <body>
   <div id="app"></div>

@@ -1,14 +1,18 @@
-// Money: where the money is (accounts), what it's for (Pockets), and budgets for this month.
-import { useEffect, useState } from 'preact/hooks';
+// Money: the total, accounts as a hand of cards (tap one for its actions), Pockets as a wallet stack, budgets.
+import { Block, BlockFooter, BlockTitle, Button, Progressbar } from 'konsta/react';
+import { useEffect, useState } from 'react';
 import type { Account, Envelope } from '../../../src/application/ports';
 import { call, client } from '../api';
+import { AccountHand } from '../components/AccountHand';
 import { AmountField } from '../components/AmountField';
+import { BigMoney } from '../components/BigMoney';
 import { ConfirmSheet } from '../components/ConfirmSheet';
 import { PickerRow } from '../components/Fields';
+import { PocketStack } from '../components/PocketStack';
 import { Group, Row } from '../components/List';
 import { Sheet } from '../components/Sheet';
 import { showToast } from '../components/Toast';
-import { ACCOUNT_KINDS, formatMoney } from '../lib/format';
+import { formatMoney } from '../lib/format';
 import { categoryEmoji } from '../lib/labels';
 import { attempt } from '../lib/run';
 import { active, catalog, me, nameOf, refresh, selectedAccount, version } from '../state';
@@ -23,6 +27,7 @@ let cache: { bal: Bal; budgets: Budgets } | null = null;
 export function Money({ onShowAccount }: { onShowAccount: () => void }) {
   const [bal, setBal] = useState<Bal | null>(cache?.bal ?? null);
   const [budgets, setBudgets] = useState<Budgets | null>(cache?.budgets ?? null);
+  const [picked, setPicked] = useState<string | null>(null);
   const [account, setAccount] = useState<(Account & { balance: number }) | null>(null);
   const [move, setMove] = useState<{ from: string | null; to: string | null } | null>(null);
   const [budget, setBudget] = useState<BudgetRow | 'new' | null>(null);
@@ -35,65 +40,86 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
       cache = { bal: b as Bal, budgets: g };
     });
   }, [version.value]);
-  if (!bal || !budgets) return <main class="screen"><h1 class="title">Money</h1></main>;
+  if (!bal || !budgets) return <main className="screen"><h1 className="screen-title">Money</h1></main>;
 
   const totals = new Map<string, number>();
   for (const a of bal.accounts) totals.set(a.currency_code, (totals.get(a.currency_code) ?? 0) + a.balance);
   const cat = catalog.value;
-  const pocketLabel = (e: Envelope & { balance: number }) => e.kind === 'GOAL' && e.target_amount
-    ? `${Math.min(100, Math.max(0, Math.round((e.balance / e.target_amount) * 100)))}% of ${formatMoney(e.target_amount, e.currency_code)}${e.target_date ? ` by ${e.target_date}` : ''}`
-    : e.kind === 'SAVINGS' ? 'Savings' : 'Spending';
   const days = budgets.cycle.daysLeft;
   const usualId = active(cat.accounts).find(a => a.kind !== 'IOU')?.default_envelope_id;
   const usual = (usualId && nameOf(cat.envelopes, usualId)) || bal.envelopes.find(e => e.kind === 'SPENDING')?.name;
 
   return (
-    <main class="screen">
-      <h1 class="title">Money</h1>
+    <main className="screen">
+      <h1 className="screen-title">Money</h1>
+      <div className="mx-4 mt-4">
+        <div className="text-[15px] font-semibold text-muted">Total balance</div>
+        <BigMoney minor={totals.get('IDR') ?? 0} max={60} className="mt-3" />
+        {[...totals].filter(([c]) => c !== 'IDR').map(([c, v]) => <div key={c} className="num mt-2 font-semibold text-muted">+ {formatMoney(v, c)}</div>)}
+      </div>
 
-      <Group label="Accounts" foot={[...totals].map(([c, v]) => `Total ${formatMoney(v, c)}`).join(' · ')}>
-        {bal.accounts.map(a => (
-          <Row key={a.id} title={a.name} sub={ACCOUNT_KINDS[a.kind]} chevron onClick={() => setAccount(a)}
-            trail={<span class={a.balance < 0 ? 'danger-text' : ''}>{formatMoney(a.balance, a.currency_code)}</span>} />
-        ))}
-      </Group>
+      <BlockTitle medium className="!pl-4 !text-[22px] !font-extrabold !leading-none !tracking-[-0.03em]">Accounts</BlockTitle>
+      <AccountHand selected={picked} onPick={setPicked}
+        cards={bal.accounts.map(a => ({ id: a.id, name: a.name, kind: a.kind, balance: a.balance, currency: a.currency_code }))} />
+      <PickedAccount account={bal.accounts.find(a => a.id === picked) ?? null}
+        onUpdate={a => setAccount(a)} onShow={a => { selectedAccount.value = a.id; onShowAccount(); }} />
 
-      <Group label="Pockets" foot={`New money lands in each account's usual Pocket${usual ? ` (${usual})` : ''}. Tap a Pocket to put money into it.`}>
-        {bal.envelopes.map(e => (
-          <Row key={e.id} title={e.name} trail={formatMoney(e.balance, e.currency_code)} chevron
-            onClick={() => setMove({ from: bal.envelopes.find(x => x.id !== e.id && x.kind === 'SPENDING' && x.currency_code === e.currency_code)?.id ?? null, to: e.id })}
-            sub={<>{pocketLabel(e)}{e.kind === 'GOAL' && e.target_amount ? <div class="bar"><div style={{ width: `${Math.min(100, Math.max(0, (e.balance / e.target_amount) * 100))}%` }} /></div> : null}</>} />
-        ))}
-      </Group>
-      <div class="section-actions"><button class="btn btn-secondary" onClick={() => setMove({ from: null, to: null })}>Move money between Pockets</button></div>
+      <BlockTitle medium className="!pl-4 !text-[22px] !font-extrabold !leading-none !tracking-[-0.03em]">Pockets</BlockTitle>
+      <PocketStack pockets={bal.envelopes}
+        onAdd={id => setMove({ from: bal.envelopes.find(x => x.id !== id && x.kind === 'SPENDING' && x.currency_code === bal.envelopes.find(e => e.id === id)?.currency_code)?.id ?? null, to: id })}
+        onMoveOut={id => setMove({ from: id, to: null })} />
+      <BlockFooter inset>New money lands in each account's usual Pocket{usual ? ` (${usual})` : ''}. Tap a Pocket to add money to it.</BlockFooter>
+      <Block><Button large rounded tonal onClick={() => setMove({ from: null, to: null })}>Move money between Pockets</Button></Block>
 
       <Group label={`Budgets · ${days} day${days === 1 ? '' : 's'} left`}>
-        {!budgets.budgets.length && <p class="empty">No budgets yet. A budget shows what you can still spend each day.</p>}
+        {!budgets.budgets.length && <Row title={<span className="text-muted">No budgets yet. A budget shows what you can still spend each day.</span>} />}
         {budgets.budgets.map(b => {
           const name = [b.categoryId && nameOf(cat.categories, b.categoryId), b.envelopeId && nameOf(cat.envelopes, b.envelopeId)].filter(Boolean).join(' in ');
           const over = b.remaining < 0;
           return (
             <Row key={b.id} onClick={() => setBudget(b)}
               title={<>{b.categoryId ? `${categoryEmoji(nameOf(cat.categories, b.categoryId))} ` : ''}{name}</>}
-              trail={over ? <span class="danger-text small">{formatMoney(-b.remaining)} over</span> : <span class="small muted">{formatMoney(b.remaining)} left</span>}
+              trail={over ? <span className="k-color-brand-red text-sm font-semibold text-primary">{formatMoney(-b.remaining)} over</span> : <span className="text-sm font-semibold text-muted">{formatMoney(b.remaining)} left</span>}
               sub={<>{formatMoney(b.spent)} of {formatMoney(b.limit)}{b.safePerDay !== null && !over ? ` · ${formatMoney(b.safePerDay)}/day` : ''}
-                <div class={`bar ${over ? 'over' : ''}`}><div style={{ width: `${Math.min(100, b.percent)}%` }} /></div></>} />
+                <Progressbar className={`mt-1.5 ${over ? 'k-color-brand-red' : ''}`} progress={Math.min(1, b.percent / 100)} /></>} />
           );
         })}
       </Group>
-      <div class="section-actions"><button class="btn btn-secondary" onClick={() => setBudget('new')}>Set a budget</button></div>
+      <Block><Button large rounded tonal onClick={() => setBudget('new')}>Set a budget</Button></Block>
 
       {/* Sheets are keyed by what they show, so each opening starts from fresh state set at mount. */}
-      <AccountSheet key={account?.id ?? 'none'} account={account} onClose={() => setAccount(null)} onShow={() => { selectedAccount.value = account!.id; setAccount(null); onShowAccount(); }} />
-      <MoveSheet key={move ? `${move.from}:${move.to}` : 'none'} preset={move} pockets={bal.envelopes} onClose={() => setMove(null)} />
-      <BudgetSheet key={budget === 'new' ? 'new' : budget?.id ?? 'none'} budget={budget} onClose={() => setBudget(null)} />
+      <AccountSheet key={`account:${account?.id ?? 'none'}`} account={account} onClose={() => setAccount(null)} />
+      <MoveSheet key={`move:${move ? `${move.from}:${move.to}` : 'none'}`} preset={move} pockets={bal.envelopes} onClose={() => setMove(null)} />
+      <BudgetSheet key={`budget:${budget === 'new' ? 'new' : budget?.id ?? 'none'}`} budget={budget} onClose={() => setBudget(null)} />
     </main>
   );
 }
 
-function AccountSheet({ account, onClose, onShow }: { account: (Account & { balance: number }) | null; onClose: () => void; onShow: () => void }) {
+/** The lifted card's details, under the hand: balance and what you can do with the account. */
+function PickedAccount({ account: a, onUpdate, onShow }: { account: (Account & { balance: number }) | null; onUpdate: (a: Account & { balance: number }) => void; onShow: (a: Account) => void }) {
+  return (
+    <div className="grid px-4" style={{ gridTemplateRows: a ? '1fr' : '0fr', transition: 'grid-template-rows 420ms cubic-bezier(.34,1.3,.64,1)' }}>
+      <div className="overflow-hidden">
+        {a ? (
+          <div className="pb-2 pt-1">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="truncate text-[22px] font-extrabold leading-none tracking-[-0.03em]">{a.name}</span>
+              {a.reconciled_at && <span className="shrink-0 text-[13px] text-muted">Checked {a.reconciled_at.slice(0, 10)}</span>}
+            </div>
+            <BigMoney minor={a.balance} currency={a.currency_code} max={40} className={`mt-2 ${a.balance < 0 ? 'text-negative' : ''}`} />
+            <div className="mt-4 flex gap-3">
+              <Button large rounded className="flex-1" onClick={() => onUpdate(a)}>Update balance</Button>
+              <Button large rounded tonal className="flex-1" onClick={() => onShow(a)}>Activity</Button>
+            </div>
+          </div>
+        ) : <p className="pb-2 text-center text-[15px] text-muted">Tap a card to update its balance or see its activity.</p>}
+      </div>
+    </div>
+  );
+}
+
+function AccountSheet({ account, onClose }: { account: (Account & { balance: number }) | null; onClose: () => void }) {
   const [actual, setActual] = useState<number | null>(null);
-  const [step, setStep] = useState<'menu' | 'update'>('menu');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   if (!account) return null;
   const cur = account.currency_code;
@@ -108,37 +134,32 @@ function AccountSheet({ account, onClose, onShow }: { account: (Account & { bala
 
   return (
     <Sheet open onClose={onClose} title={account.name}>
-      <div class="headline"><div class="muted small">Centient shows</div><div class="big num">{formatMoney(account.balance, cur)}</div>
-        {account.reconciled_at && <div class="muted small">Last checked {account.reconciled_at.slice(0, 10)}</div>}</div>
-      {step === 'menu' ? (
-        <div class="sheet-actions">
-          <button class="btn btn-primary btn-block" onClick={() => setStep('update')}>Update balance</button>
-          <button class="btn btn-secondary btn-block" onClick={onShow}>Show its activity</button>
-        </div>
-      ) : (
-        <>
+      <div className="mx-4 my-5"><div className="text-[15px] font-semibold text-muted">Centient shows</div><BigMoney minor={account.balance} currency={cur} max={48} className="my-3" />
+        {account.reconciled_at && <div className="text-[13px] text-muted">Last checked {account.reconciled_at.slice(0, 10)}</div>}</div>
+      <>
           <Group>
             <AmountField label="What does your bank app show?" currency={cur} value={actual} onChange={setActual} autoFocus />
           </Group>
           {actual !== null && diff !== 0 && (
             <>
-              <p class="hint-line" style="margin-top:-16px">{formatMoney(Math.abs(diff), cur)} {diff < 0 ? 'less' : 'more'} than Centient had.</p>
+              <BlockFooter inset>{formatMoney(Math.abs(diff), cur)} {diff < 0 ? 'less' : 'more'} than Centient had.</BlockFooter>
               <Group label={diff < 0 ? 'Where did it go?' : 'Where did it come from?'} foot="Optional. Picking one counts it in that category's budget.">
-                <div class="chip-actions" style="padding:12px;margin:0">
+                <li className="flex flex-wrap gap-2 p-3">
                   {cats.map(c => (
-                    <button type="button" class={`pill ${categoryId === c.id ? 'on' : ''}`} onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}>
+                    <Button key={c.id} small rounded inline tonal={categoryId !== c.id} onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}>
                       {categoryEmoji(c.name, c.kind)} {c.name}
-                    </button>
+                    </Button>
                   ))}
-                </div>
+                </li>
               </Group>
             </>
           )}
-          <button class="btn btn-primary btn-block" disabled={actual === null} onClick={save}>
-            {actual !== null && diff !== 0 && !categoryId ? 'Skip and update' : diff === 0 && actual !== null ? 'Mark as checked' : 'Update'}
-          </button>
-        </>
-      )}
+          <Block>
+            <Button large rounded disabled={actual === null} onClick={save}>
+              {actual !== null && diff !== 0 && !categoryId ? 'Skip and update' : diff === 0 && actual !== null ? 'Mark as checked' : 'Update'}
+            </Button>
+          </Block>
+      </>
     </Sheet>
   );
 }
@@ -166,7 +187,7 @@ function MoveSheet({ preset, pockets, onClose }: { preset: { from: string | null
         <PickerRow label="To" value={to} options={opts} onChange={setTo} />
         <AmountField value={amount} currency={pockets.find(p => p.id === from)?.currency_code ?? 'IDR'} onChange={setAmount} />
       </Group>
-      <button class="btn btn-primary btn-block" disabled={Boolean(error)} onClick={save}>{error ?? 'Move'}</button>
+      <Block><Button large rounded disabled={Boolean(error)} onClick={save}>{error ?? 'Move'}</Button></Block>
     </Sheet>
   );
 }
@@ -204,10 +225,10 @@ function BudgetSheet({ budget, onClose }: { budget: BudgetRow | 'new' | null; on
             onChange={v => !editing && setEnvelopeId(v)} />
           <AmountField label="Limit per month" value={limit} onChange={setLimit} />
         </Group>
-        <div class="sheet-actions">
-          <button class="btn btn-primary btn-block" disabled={Boolean(error)} onClick={save}>{error ?? 'Save'}</button>
-          {editing && <button class="btn btn-secondary btn-block danger-text" onClick={() => setConfirm(true)}>Remove budget</button>}
-        </div>
+        <Block className="flex flex-col gap-2.5">
+          <Button large rounded disabled={Boolean(error)} onClick={save}>{error ?? 'Save'}</Button>
+          {editing && <Button large rounded tonal className="k-color-brand-red" onClick={() => setConfirm(true)}>Remove budget</Button>}
+        </Block>
       </Sheet>
       <ConfirmSheet open={confirm} message="Remove this budget? Your entries stay." confirmLabel="Remove" onCancel={() => setConfirm(false)} onConfirm={remove} />
     </>

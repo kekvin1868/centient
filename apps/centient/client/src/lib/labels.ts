@@ -4,9 +4,8 @@ import type { Command } from '../../../src/application/usecases';
 import type { Catalog } from '../state';
 
 const CATEGORY_EMOJI: Record<string, string> = {
-  'Food & Drink': '🍜', Coffee: '☕', Groceries: '🛒', Transport: '🚗', Shopping: '🛍️', 'Bills & Utilities': '💡',
-  Housing: '🏠', Health: '💊', Entertainment: '🎬', Education: '📚', Giving: '🙏', Kondangan: '💌', Family: '👨‍👩‍👧',
-  Fees: '🧾', Other: '📦', Salary: '💼', 'Angpao & THR': '🧧', 'Interest & cashback': '💸', 'Opening balance': '🏁',
+  'Food & Drink': '🍜', Transport: '🚗', 'Home & Bills': '🏠', Shopping: '🛍️', Health: '💊', Fun: '🎬',
+  Education: '📚', 'Family & Giving': '💌', Fees: '🧾', Other: '📦', Salary: '💼', 'Angpao & THR': '🧧', 'Interest & cashback': '💸', 'Opening balance': '🏁',
   'Balance adjustment': '⚖️', 'Other income': '💰',
 };
 

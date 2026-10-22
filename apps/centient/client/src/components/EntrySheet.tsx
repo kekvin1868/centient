@@ -1,6 +1,7 @@
 // Open an entry: edit it (your own entries) or delete it. Deleting confirms first, then offers Undo for 5 s;
 // the delete request is sent only when the Undo window ends.
-import { useState } from 'preact/hooks';
+import { Block, Button } from 'konsta/react';
+import { useState } from 'react';
 import { call, client } from '../api';
 import { fromCommand, toCommand, type Form } from '../lib/form';
 import { formatMoney } from '../lib/format';
@@ -50,19 +51,19 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
         {form ? (
           <>
             <EntryForm form={form} onChange={setForm} lockType />
-            <div class="sheet-actions">
-              <button class="btn btn-primary btn-block" disabled={'error' in (result ?? {})} onClick={save}>
+            <Block className="flex flex-col gap-2.5">
+              <Button large rounded disabled={'error' in (result ?? {})} onClick={save}>
                 {result && 'error' in result ? result.error : 'Save'}
-              </button>
-              <button class="btn btn-secondary btn-block danger-text" onClick={() => setConfirm(true)}>Delete</button>
-            </div>
+              </Button>
+              <Button large rounded tonal className="k-color-brand-red" onClick={() => setConfirm(true)}>Delete</Button>
+            </Block>
           </>
         ) : (
           <>
             <Group foot={entry.kind === 'OPENING' ? 'To change it, use Update balance on the Money tab.' : 'Corrections come from Update balance on the Money tab.'}>
               <Row title={row.sub || row.title} trail={formatMoney(row.amount, row.currency)} />
             </Group>
-            <button class="btn btn-secondary btn-block danger-text" onClick={() => setConfirm(true)}>Delete</button>
+            <Block><Button large rounded tonal className="k-color-brand-red" onClick={() => setConfirm(true)}>Delete</Button></Block>
           </>
         )}
       </Sheet>

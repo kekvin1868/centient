@@ -7,14 +7,15 @@ import type {
 
 const uid = () => crypto.randomUUID();
 
-const SEED_EXPENSE = ['Food & Drink', 'Coffee', 'Groceries', 'Transport', 'Shopping', 'Bills & Utilities', 'Housing',
-  'Health', 'Entertainment', 'Education', 'Giving', 'Kondangan', 'Family', 'Fees', 'Other'];
+// Few and broad on purpose: each one should be obvious to pick. "Fees" is looked up by name for transfer fees.
+const SEED_EXPENSE = ['Food & Drink', 'Transport', 'Home & Bills', 'Shopping', 'Health', 'Fun', 'Education',
+  'Family & Giving', 'Fees', 'Other'];
 // "Balance adjustment" holds uncategorised balance corrections (signed), so it is not a spending category.
 const SEED_INCOME = ['Salary', 'Angpao & THR', 'Interest & cashback', 'Opening balance', 'Balance adjustment', 'Other income'];
 
 /** Columns a PATCH may touch, per table. Anything else in the request is ignored. */
 const PATCHABLE: Record<string, string[]> = {
-  accounts: ['name', 'provider', 'currency_code', 'default_envelope_id', 'due_day', 'reconciled_at', 'archived_at'],
+  accounts: ['name', 'kind', 'provider', 'currency_code', 'default_envelope_id', 'due_day', 'reconciled_at', 'archived_at'],
   envelopes: ['name', 'target_amount', 'target_date', 'archived_at'],
   categories: ['name', 'archived_at'],
 };
@@ -26,7 +27,8 @@ export class D1Catalog implements CatalogRepository {
     await this.db.prepare('INSERT OR IGNORE INTO users (id, email) VALUES (?, ?)').bind(uid(), email.toLowerCase()).run();
     const user = await this.db.prepare('SELECT id FROM users WHERE email = ?').bind(email.toLowerCase()).first<{ id: string }>();
     const userId = user!.id;
-    const member = await this.db.prepare('SELECT workspace_id FROM workspace_members WHERE user_id = ? LIMIT 1').bind(userId).first<{ workspace_id: string }>();
+    const member = await this.db.prepare(`SELECT m.workspace_id FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id
+      WHERE m.user_id = ? AND w.deleted_at IS NULL LIMIT 1`).bind(userId).first<{ workspace_id: string }>();
     if (member) return { userId, workspaceId: member.workspace_id };
 
     // ponytail: two first requests at the same instant could seed two workspaces; harmless for one user.
@@ -57,7 +59,7 @@ export class D1Catalog implements CatalogRepository {
   private async all<T>(sql: string, ws: string) {
     return (await this.db.prepare(sql).bind(ws).all<T>()).results;
   }
-  listAccounts(ws: string) { return this.all<Account>('SELECT id, name, kind, provider, currency_code, default_envelope_id, due_day, reconciled_at, archived_at FROM accounts WHERE workspace_id = ? ORDER BY name', ws); }
+  listAccounts(ws: string) { return this.all<Account>('SELECT id, name, kind, provider, currency_code, default_envelope_id, due_day, reconciled_at, archived_at FROM accounts WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY name', ws); }
   listEnvelopes(ws: string) { return this.all<Envelope>('SELECT id, name, currency_code, kind, target_amount, target_date, archived_at FROM envelopes WHERE workspace_id = ? ORDER BY name', ws); }
   listCategories(ws: string) { return this.all<Category>('SELECT id, name, kind, archived_at FROM categories WHERE workspace_id = ? ORDER BY kind, name', ws); }
 
@@ -84,7 +86,8 @@ export class D1Catalog implements CatalogRepository {
   async update(ws: string, table: 'accounts' | 'envelopes' | 'categories', id: string, patch: Record<string, unknown>) {
     const cols = Object.keys(patch).filter(k => PATCHABLE[table].includes(k));
     if (!cols.length) return true;
-    const r = await this.db.prepare(`UPDATE ${table} SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ? AND workspace_id = ?`)
+    const live = table === 'accounts' ? ' AND deleted_at IS NULL' : '';
+    const r = await this.db.prepare(`UPDATE ${table} SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ? AND workspace_id = ?${live}`)
       .bind(...cols.map(c => patch[c] ?? null), id, ws).run();
     return r.meta.changes > 0;
   }
@@ -114,6 +117,26 @@ export class D1Catalog implements CatalogRepository {
       .bind(id, effectiveFrom, amount));
     await this.db.batch(stmts);
     return id;
+  }
+
+  async deleteAccount(ws: string, id: string, now: string) {
+    // Whole entries go, so a split bill paid from this account disappears with its IOU half.
+    // ponytail: the name gets a suffix because accounts keep UNIQUE (workspace_id, name); a partial
+    // index needs a table rebuild, worth it only if deleted names must stay readable in the database.
+    const [, , acc] = await this.db.batch([
+      this.db.prepare(`UPDATE entry_groups SET deleted_at = ? WHERE workspace_id = ? AND deleted_at IS NULL AND id IN (
+        SELECT t.group_id FROM transactions t JOIN entries e ON e.transaction_id = t.id
+        WHERE t.workspace_id = ? AND e.account_id = ? AND t.deleted_at IS NULL)`).bind(now, ws, ws, id),
+      this.db.prepare(`UPDATE transactions SET deleted_at = ?, updated_at = ? WHERE workspace_id = ? AND deleted_at IS NULL
+        AND group_id IN (SELECT id FROM entry_groups WHERE workspace_id = ? AND deleted_at = ?)`).bind(now, now, ws, ws, now),
+      this.db.prepare(`UPDATE accounts SET deleted_at = ?, name = name || ' (deleted ' || ? || ')' WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`)
+        .bind(now, now, id, ws),
+    ]);
+    return acc.meta.changes > 0;
+  }
+
+  async resetWorkspace(ws: string, now: string) {
+    await this.db.prepare('UPDATE workspaces SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL').bind(now, ws).run();
   }
 
   async deleteBudget(ws: string, id: string) {

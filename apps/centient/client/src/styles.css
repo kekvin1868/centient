@@ -1,218 +1,194 @@
-/* Centient design tokens and base styles. Minimal, iOS-native layout in Geist, grouped inset lists,
-   one accent: Hatsune Miku teal (#39C5BB, for now). It is too pale to read as text on white (2.1:1),
-   so accent text uses --accent-text (6.1:1) in light mode. */
-:root {
-  --bg: #f2f4f7;
-  --surface: #ffffff;
-  --surface-2: #f7f8fa;
-  --text: #0b0d10;
-  --muted: #6b7280;
-  --line: rgba(15, 23, 42, 0.08);
-  --accent: #39c5bb;        /* fills: buttons, selected tab, chips */
-  --on-accent: #062b28;     /* text on --accent (7.1:1) */
-  --accent-text: #0b6e67;   /* accent used as text on light backgrounds (6.1:1) */
-  --received: var(--accent-text);
-  --danger: #dc2626;
-  --scrim: rgba(15, 23, 42, 0.35);
-  --shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
-  --card-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 6px 16px rgba(15, 23, 42, 0.05);
-  --accent-wash: color-mix(in srgb, var(--accent) 16%, var(--surface));
-  --radius: 14px;
-  --radius-sm: 10px;
-  --ease: cubic-bezier(0.32, 0.72, 0, 1);  /* iOS sheet curve */
-  --nav-h: 64px;
-  color-scheme: light dark;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b0d10;
-    --surface: #16191e;
-    --surface-2: #1d2127;
-    --text: #f3f4f6;
-    --muted: #9aa1ab;
-    --line: rgba(255, 255, 255, 0.08);
-    --accent-text: #39c5bb;  /* 8.3:1 on the dark surface */
-    --danger: #f87171;
-    --scrim: rgba(0, 0, 0, 0.55);
-    --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    --card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
-    --accent-wash: color-mix(in srgb, var(--accent) 14%, var(--surface));
-  }
+/* Tailwind + Konsta UI (iOS theme). Components come from Konsta; this file sets Centient's look on top:
+   one typeface (Geist), Hatsune Miku's palette (teal, aqua, pink, silver-gray, charcoal), and a light game
+   feel: hairline outlines, a short "lip" shadow under raised pieces, cards dealt and floating. */
+@import "tailwindcss";
+@import "konsta/react/theme.css";
+/* Our own components are styled with Tailwind classes too. */
+@source "./";
+
+@theme {
+  /* Accent as text on light surfaces: deep Miku teal, 5.3:1 on white. Fills use --miku instead. */
+  --color-brand-primary: #007268;
+  /* Destructive actions (Miku's pink, not red): add class k-color-brand-red to a Konsta component. 5.6:1 on white. */
+  --color-brand-red: #c4126f;
+  --font-ios: "Geist Variable", -apple-system, SF Pro Text, system-ui, sans-serif;
+
+  --color-ios-light-surface: #fff;
+  --color-ios-light-surface-1: #f2f5f6;
+  --color-ios-dark-surface: #000;
+  --color-ios-dark-surface-1: #141819;
+
+  /* Tailwind names for our own pieces. */
+  --color-miku: var(--miku);
+  --color-on-miku: var(--on-miku);
+  --color-pink: var(--pink);
+  --color-raised: var(--raised);
+  --color-raised-2: var(--raised-2);
+  --color-muted: var(--muted);
+  --color-ink: var(--ink);
+  --color-edge: var(--edge);
 }
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-/* Clip sideways overflow: the screen-change slide briefly moves content 24px right, and a phone would
-   otherwise widen the page and stay zoomed out. */
+/* Miku palette: teal #39c5bb (hair), aqua #86cecb, deep teal #137a7f, pink #e12885 (ties), silver #bec8d1, charcoal #373b3e. */
+:root {
+  /* Her teal, pushed bright; on P3 screens (every recent iPhone, Mac) it goes past sRGB. */
+  --miku: #1ff0dc;
+  --on-miku: #002624; /* 11:1 on --miku */
+  --pink: #e12885; /* "overspent" panel; white on it reads 4.6:1 */
+  --negative: #c4126f; /* minus amounts as text */
+  --raised: #f2f5f6;
+  --raised-2: #e4eaec;
+  --muted: #5f686c; /* 4.9:1 on --raised */
+  --ink: #0b0f10;
+  --edge: rgb(55 59 62 / 0.14); /* hairline outlines, charcoal at low strength */
+  --lip: rgb(55 59 62 / 0.10); /* the short shadow under raised pieces */
+}
+@supports (color: color(display-p3 0 0 0)) {
+  :root { --miku: color(display-p3 0.05 0.95 0.86); --pink: color(display-p3 0.9 0.12 0.53); }
+}
+.dark {
+  --k-color-primary: var(--miku); /* bright cyan reads at 12:1 on the dark cards */
+  --k-color-brand-red: #ff6fb5;
+  --negative: #ff6fb5;
+  --raised: #141819;
+  --raised-2: #222829;
+  --muted: #8e989c;
+  --ink: #fff;
+  --edge: rgb(190 200 209 / 0.14);
+  --lip: color-mix(in oklab, var(--miku) 16%, transparent);
+}
+.dark .k-color-brand-red { --k-color-primary: #ff6fb5; }
+
+/* Clip sideways overflow: a phone would otherwise widen the page and stay zoomed out. */
 html, body { overflow-x: clip; }
-html { background: var(--bg); }
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font: 17px/1.35 "Geist Variable", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  -webkit-font-smoothing: antialiased;
+  @apply bg-ios-light-surface dark:bg-ios-dark-surface text-black dark:text-white font-ios antialiased;
   overscroll-behavior-y: none;
 }
-button, input, select, textarea { font: inherit; color: inherit; }
 .num { font-variant-numeric: tabular-nums; }
-.muted { color: var(--muted); }
-.received { color: var(--received); }
-.danger-text, .btn.danger-text { color: var(--danger); }
-.small { font-size: 13px; }
-
-/* Layout */
-.screen {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: calc(env(safe-area-inset-top) + 12px) 16px calc(var(--nav-h) + env(safe-area-inset-bottom) + 24px);
-}
-.title { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 8px 4px 16px; }
-.headline { margin: 0 4px 20px; }
-.headline .big { font-size: 32px; font-weight: 700; letter-spacing: -0.02em; }
-
-/* Grouped inset list */
-.group { margin: 0 0 28px; }
-.group-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 16px 6px; }
-.group-body { background: var(--surface); border-radius: var(--radius); overflow: hidden; }
-.group-foot { font-size: 13px; color: var(--muted); margin: 6px 16px 0; }
-.row {
-  display: flex; align-items: center; gap: 12px; width: 100%;
-  min-height: 52px; padding: 10px 16px; background: none; border: 0; text-align: left;
-  position: relative;
-}
-.row + .row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; border-top: 1px solid var(--line); }
-button.row { cursor: pointer; }
-button.row:active { background: var(--surface-2); }
-.row-main { flex: 1; min-width: 0; }
-.row-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row-sub { font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row-trail { text-align: right; white-space: nowrap; }
-.chev { color: var(--muted); opacity: 0.6; }
-
-/* Buttons */
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-height: 48px; padding: 0 20px; border-radius: var(--radius-sm); border: 0;
-  font-weight: 600; cursor: pointer; transition: opacity 120ms;
-}
-.btn:active { opacity: 0.7; } /* fade, never move: a moving target can swallow the tap */
-.btn:disabled { opacity: 0.4; cursor: default; }
-.btn-primary { background: var(--accent); color: var(--on-accent); }
-.btn-secondary { background: var(--surface-2); color: var(--text); }
-.btn-plain { background: none; color: var(--accent-text); padding: 0 8px; min-height: 44px; }
-.btn-danger { background: none; color: var(--danger); }
-.btn-block { width: 100%; }
-
-/* Inputs */
-.field { display: block; padding: 10px 16px; }
-.field + .field { border-top: 1px solid var(--line); }
-.field-label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 2px; }
-.input {
-  width: 100%; border: 0; background: none; outline: none; padding: 4px 0; font-size: 17px;
-}
-.input::placeholder { color: var(--muted); opacity: 0.7; }
-.amount-input { font-size: 28px; font-weight: 600; }
-.logbox {
-  display: flex; align-items: center; gap: 8px; background: var(--surface); border-radius: 18px;
-  padding: 6px 6px 6px 16px; box-shadow: var(--card-shadow);
-}
-.logbox .input { font-size: 18px; }
-
-/* Segmented control */
-.seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--surface-2); border-radius: 9px; padding: 2px; }
-.seg-thumb { position: absolute; top: 2px; bottom: 2px; left: 2px; border-radius: 7px; background: var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.12); transition: transform 220ms var(--ease); }
-.seg button { position: relative; z-index: 1; border: 0; background: none; min-height: 34px; font-size: 14px; font-weight: 600; cursor: pointer; }
-
-/* Chips (live log preview): soft cards, category avatar, status pill. State never uses outlines. */
-.chips { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 0; }
-.chip { background: var(--surface); border-radius: 18px; box-shadow: var(--card-shadow); overflow: hidden; }
-.chip-main { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 14px; border: 0; background: none; text-align: left; cursor: pointer; }
-.chip-main:active { background: var(--surface-2); }
-.chip-avatar { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; background: var(--accent-wash); }
-.chip.incomplete .chip-avatar { background: var(--surface-2); }
-.chip-title { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chip-sub { display: block; font-size: 14px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chip-end { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.chip-amount { font-weight: 700; }
-.status { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
-.status.ready { background: var(--accent-wash); color: var(--accent-text); }
-.status.ask { background: var(--accent); color: var(--on-accent); }
-.status.incomplete { background: var(--surface-2); color: var(--muted); }
-.chip-ask { margin: 0 10px 10px; padding: 12px; border-radius: 14px; background: var(--accent-wash); }
-.chip-q { font-size: 15px; font-weight: 600; }
-.chip-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-.pill { min-height: 38px; padding: 0 16px; border-radius: 999px; border: 0; background: var(--surface); box-shadow: var(--card-shadow); font-weight: 600; cursor: pointer; transition: opacity 120ms; }
-.pill:active { opacity: 0.7; }
-.pill.on { background: var(--accent); color: var(--on-accent); }
-
-/* Sheet */
-.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: 40; }
-.sheet {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 41; max-height: 92dvh; overflow: auto;
-  max-width: 640px; margin: 0 auto; background: var(--bg); border-radius: 16px 16px 0 0; box-shadow: var(--shadow);
-  padding: 8px 16px calc(env(safe-area-inset-bottom) + 20px); touch-action: pan-y;
-}
-.sheet-grip { display: block; width: 40px; height: 5px; border-radius: 3px; background: var(--muted); opacity: 0.35; margin: 4px auto 10px; border: 0; padding: 0; }
-.sheet-head { display: flex; align-items: center; justify-content: space-between; margin: 0 0 12px; }
-.sheet-title { font-size: 20px; font-weight: 700; }
-
-/* Toast and banner */
-.toast {
-  position: fixed; left: 16px; right: 16px; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 12px); z-index: 50;
-  max-width: 480px; margin: 0 auto; display: flex; align-items: center; gap: 12px;
-  background: var(--text); color: var(--bg); border-radius: 12px; padding: 10px 10px 10px 16px; box-shadow: var(--shadow);
-}
-.toast-msg { flex: 1; }
-.toast .btn-plain { background: var(--accent); color: var(--on-accent); border-radius: 8px; min-height: 36px; padding: 0 12px; font-weight: 700; }
-.banner { background: var(--surface); border-radius: var(--radius-sm); padding: 10px 14px; margin: 0 0 12px; font-size: 15px; display: flex; gap: 8px; align-items: center; }
-
-/* Bottom navigation */
-.nav {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; height: calc(var(--nav-h) + env(safe-area-inset-bottom));
-  padding-bottom: env(safe-area-inset-bottom); display: grid; grid-template-columns: repeat(3, 1fr);
-  background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border-top: 1px solid var(--line);
-}
-.nav button { border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--muted); cursor: pointer; }
-.nav button[aria-current="page"] { color: var(--accent-text); }
-.nav svg { width: 26px; height: 26px; }
-.icon { flex: none; vertical-align: -0.15em; }
-
-/* Progress bar */
-.bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
-.bar > div { height: 100%; background: var(--accent); border-radius: 3px; }
-.bar.over > div { background: var(--danger); }
+/* In the base layer, so a component's own outline-none / ring utilities still win. */
+@layer base { :focus-visible { outline: 2px solid var(--k-color-primary); outline-offset: 2px; } }
+::selection { background: color-mix(in oklab, var(--miku) 45%, transparent); }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition-duration: 1ms !important; }
+  *, *::before, *::after { transition-duration: 1ms !important; animation: none !important; }
 }
 
-/* Form rows */
-.field-row { cursor: default; }
-.row-label { flex: none; width: 34%; color: var(--text); }
-.row-input { text-align: right; }
-.row-select {
-  appearance: none; -webkit-appearance: none; border: 0; background: none; color: var(--muted); text-align: right; text-align-last: right;
-  max-width: 62%; padding: 6px 18px 6px 0; cursor: pointer; font-size: 17px;
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: right 6px center, right 1px center; background-size: 5px 5px; background-repeat: no-repeat;
+/* Screens scroll the page; the tab bar sits over the bottom. The top clears the status bar plus the strip
+   under it that iOS fades and blurs in Home Screen apps. */
+.screen {
+  max-width: 640px; margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 28px) 0 calc(env(safe-area-inset-bottom) + 112px);
 }
-.stepper { display: inline-flex; align-items: center; gap: 14px; }
-.stepper button { width: 34px; height: 34px; border-radius: 10px; border: 0; background: var(--surface-2); font-size: 20px; cursor: pointer; }
-.stepper button:disabled { opacity: 0.35; }
-.more { border-top: 1px solid var(--line); }
-.more > summary { list-style: none; padding: 14px 16px; color: var(--accent-text); cursor: pointer; }
-.more > summary::-webkit-details-marker { display: none; }
-.sheet-actions { display: grid; gap: 10px; margin-top: 4px; }
-.hint-line { font-size: 14px; color: var(--muted); margin: -16px 16px 24px; }
-.empty { text-align: center; color: var(--muted); padding: 28px 16px; }
-.day-head { display: flex; justify-content: space-between; }
-.switcher { display: inline-flex; align-items: center; gap: 4px; border: 0; background: var(--surface); box-shadow: var(--card-shadow); border-radius: 999px; padding: 6px 12px 6px 14px; font-weight: 600; cursor: pointer; position: relative; }
-.switcher select { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.top-bar { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 16px; }
-.top-bar .title { margin: 0 4px; }
-.row-emoji { flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-2); font-size: 19px; }
-.out { color: var(--text); }
-.in { color: var(--received); }
-.section-actions { display: flex; gap: 10px; margin: -14px 0 28px; }
-.section-actions .btn { flex: 1; }
+.screen-title { margin: 8px 16px 4px; font-size: 34px; font-weight: 800; line-height: 1.05; letter-spacing: -0.04em; }
+.text-negative { color: var(--negative); }
+
+/* ---- The kit ------------------------------------------------------------------------------------------- */
+
+/* A raised piece: hairline outline and a short lip under it (no blur, no thick outline). */
+.panel { border: 1px solid var(--edge); box-shadow: 0 3px 0 var(--lip); }
+/* Halftone dots, for drenched panels. Sits under the content (add to a positioned element). */
+.halftone::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(circle, rgb(0 0 0 / 0.10) 1.1px, transparent 1.5px) 0 0 / 7px 7px;
+  mask-image: linear-gradient(115deg, transparent 40%, #000 100%);
+}
+/* A keycap: the "press [Enter]" prompt. */
+.keycap {
+  display: inline-grid; place-items: center; min-width: 44px; height: 44px; padding: 0 10px; border-radius: 12px;
+  font-weight: 700; font-size: 15px; background: var(--miku); color: var(--on-miku);
+  border: 1px solid var(--edge); box-shadow: 0 3px 0 color-mix(in oklab, var(--miku) 45%, #137a7f);
+}
+.keycap:active { box-shadow: 0 1px 0 color-mix(in oklab, var(--miku) 45%, #137a7f); }
+.keycap-quiet { background: var(--raised-2); color: var(--ink); box-shadow: 0 3px 0 var(--lip); }
+
+/* Money set big: heavy, tight, tabular; the currency smaller and lifted like Cash App's "$". */
+.money-big { font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.045em; }
+.money-big .cur { font-size: 0.5em; font-weight: 700; letter-spacing: -0.02em; vertical-align: 0.72em; margin-right: 0.08em; }
+
+/* Account types get colors from Miku's palette (loot-rarity style). Text on them is dark ink. */
+.rarity-CASH { --rarity: #e9eef1; }
+.rarity-EWALLET { --rarity: #86cecb; }
+.rarity-BANK { --rarity: #39c5bb; }
+.rarity-CREDIT_CARD { --rarity: #ff8cc6; }
+.rarity-PAYLATER { --rarity: #ffc2df; }
+.rarity-EXCHANGE { --rarity: #b6f2ec; }
+.rarity-IOU { --rarity: #bec8d1; }
+.rarity-ALL { --rarity: var(--miku); }
+
+/* Idle float for cards in hand (Balatro). */
+@keyframes bob { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-4px) rotate(0.6deg); } }
+/* Paused under a finger or pointer, so the card holds still while it is being tapped. */
+.bob { animation: bob 3.2s ease-in-out infinite; }
+.bob:hover, .bob:has(:active) { animation-play-state: paused; }
+/* Cards are dealt in from below, one after another. */
+@keyframes deal { from { transform: translateY(140%) rotate(-24deg); opacity: 0; } }
+/* A short score "pop" when a number changes. */
+@keyframes pop { 40% { transform: scale(1.06) rotate(-1deg); } }
+/* A hint that breathes. */
+@keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+/* ---- Konsta, re-skinned -------------------------------------------------------------------------- */
+
+/* No glass anywhere. */
+.k-glass { box-shadow: none !important; backdrop-filter: none !important; }
+
+/* Toast: a solid ink pill, Undo in Miku. */
+.k-toast > .k-glass { background: var(--ink); color: var(--raised); border-radius: 16px; }
+.k-toast .k-button { color: var(--miku); font-weight: 700; }
+.dark .k-toast > .k-glass { background: var(--raised-2); color: #fff; border: 1px solid var(--edge); }
+/* While a sheet is open the bottom is taken, so toasts drop in from the top instead of covering its fields. */
+body:has(.k-sheet.-translate-y-full) .k-toast { top: calc(env(safe-area-inset-top) + 12px); bottom: auto; }
+
+/* Big buttons: rounded slabs with a hairline and a lip. Press flattens the lip; the button itself never
+   moves (a target that moves under the finger can swallow the tap). */
+.k-button.h-12 { height: 56px; border-radius: 16px; font-size: 17px; font-weight: 700; border: 1px solid var(--edge); box-shadow: 0 3px 0 var(--lip); }
+.k-button.h-12:active { box-shadow: 0 1px 0 var(--lip); }
+.k-button.bg-primary:not(.k-color-brand-red) { background: var(--miku); color: var(--on-miku); box-shadow: 0 3px 0 color-mix(in oklab, var(--miku) 45%, #137a7f); }
+.k-button.bg-primary.k-color-brand-red { color: #fff; }
+/* ~= matches the whole class, so clear buttons (active:bg-primary/15) keep their transparent fill. */
+.k-button[class~="bg-primary/15"] { background: var(--raised); }
+.k-button[class~="bg-primary/15"]:not(.k-color-brand-red) { color: var(--ink); }
+/* Disabled big buttons lose the lip. */
+.k-button.h-12[class~="bg-black/10"], .dark .k-button.h-12[class~="dark:bg-white/10"] { box-shadow: none; border-color: transparent; font-weight: 600; }
+/* Anything Konsta fills with the accent and labels white (stepper) gets dark ink once the accent is bright. */
+.dark .bg-primary.text-white { color: var(--on-miku); }
+.k-button:active { opacity: 0.85; }
+
+/* Segmented: hairline track, Miku pill for the choice. */
+.k-segmented { background: var(--raised) !important; border: 1px solid var(--edge); border-radius: 16px !important; }
+.k-segmented-strong-highlight, .k-segmented > span[class*="bg-white"] { background: var(--miku) !important; box-shadow: none !important; border-radius: 12px !important; }
+.k-segmented .k-button { color: var(--muted); font-weight: 600; }
+.k-segmented .k-button[class*="text-black"] { color: var(--on-miku); }
+
+/* Progress: a slightly thicker bar. */
+.k-progressbar { height: 10px; background: var(--raised-2); border-radius: 9999px; }
+.k-progressbar > span:not(.k-color-brand-red *) { background: var(--miku); }
+
+/* Lists: raised panels too. */
+.k-list:where(:not(.k-list .k-list)) > ul { border: 1px solid var(--edge); box-shadow: 0 3px 0 var(--lip); }
+/* Section headings: heavy and tight. */
+.k-block-title { font-weight: 800; letter-spacing: -0.03em; }
+
+/* Action sheet (confirm). */
+.k-actions-group { background: var(--raised); border: 1px solid var(--edge); }
+.dark .k-actions-group { background: var(--raised-2); }
+
+/* Sheets: canvas color, hairline top. */
+.k-sheet { border-radius: 28px 28px 0 0; border-top: 1px solid var(--edge); }
+
+/* ---- Spacing ------------------------------------------------------------------------------------------ */
+
+/* One vertical rhythm: 24px between sections, 8px from a section's label or footnote to its list.
+   Unlayered, so it beats Konsta's my-8 / -mb-6 / -mt-6. */
+.k-list:where(:not(.k-list .k-list)), .k-block { margin-block: 24px; }
+.k-block-title { margin-top: 28px; margin-bottom: 8px; }
+.k-block-title + .k-list, .k-block-title + .k-block { margin-top: 0; }
+.k-list:has(+ .k-block-footer) { margin-bottom: 0; }
+.k-block-footer { margin-top: 10px; margin-bottom: 24px; color: var(--muted); }
+/* A button block right under a list belongs to it: 16px, not a full section gap. */
+.k-list + .k-block, .k-block-footer + .k-block { margin-top: -8px; }
+
+/* Tappable rows render a <button> (keyboard access) as Konsta's row content; make it fill the row like
+   Konsta's own <a>. Passing a className through linkProps would replace Konsta's row classes. */
+.k-list li > button { width: 100%; text-align: start; }

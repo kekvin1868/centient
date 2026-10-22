@@ -1,10 +1,6 @@
-# Centient
+<h1 align="center"><img src="apps/centient/client/public/icons/og-image-1200x630.png" alt="Centient" width="480"></h1>
 
-Centient: a private balance tracker on Cloudflare Workers + D1, with a Preact web app you can install to your phone's Home Screen.
-
-- Plans and code maps: start at [planning/README.md](planning/README.md).
-- Full spec: [planning/spec/backend-spec-v1.md](planning/spec/backend-spec-v1.md).
-- Current work: [planning/features/frontend-centient.agent.md](planning/features/frontend-centient.agent.md).
+Centient: a private balance tracker on Cloudflare Workers + D1, with a React web app you can install to your phone's Home Screen.
 
 ## Run locally
 
@@ -18,7 +14,7 @@ npm run typecheck                # Worker and app
 npm run build -w apps/centient   # production build into apps/centient/dist/
 ```
 
-- `npm run dev` runs everything in one process: Cloudflare's Vite plugin runs the Worker in workerd next to the Preact app, so `/api/*` and the UI share one origin.
+- `npm run dev` runs everything in one process: Cloudflare's Vite plugin runs the Worker in workerd next to the React app, so `/api/*` and the UI share one origin.
 - To try the production build locally: `cd apps/centient && npx vite preview`.
 - Locally you are signed in as `DEV_EMAIL` from `.dev.vars`. That bypass only works on localhost, private LAN addresses and `DEV_HOSTS`; in production every request needs a valid Cloudflare Access JWT.
 - Fresh local data: delete `apps/centient/.wrangler/` and run `npm run dev` again.
@@ -33,8 +29,7 @@ npm run build -w apps/centient   # production build into apps/centient/dist/
 - `apps/centient/src/infrastructure` - D1 repositories
 - `apps/centient/src/interface` - Hono routes (typed for the client), Zod validation, Access auth
 - `apps/centient/migrations` - D1 schema (0001 init, 0002 entry groups)
-- `apps/centient/client` - Preact + Vite app: Home (log + activity), Money (accounts, Pockets, budgets), Settings; Geist font, Phosphor icons, manifest and icons
-- `planning/features/assets/brand` - logo kit (favicons, app icons, profile pictures, share image); regenerate with `python3 planning/features/assets/brand-src/build.py`
+- `apps/centient/client` - React + Konsta UI + Vite app: Home (log + activity), Money (accounts, Pockets, budgets), Settings; Geist font, Phosphor icons, manifest and icons
 
 ## Deployment
 
@@ -45,7 +40,7 @@ npm run build -w apps/centient   # production build into apps/centient/dist/
 ## Test on a phone
 
 - Same Wi-Fi: run `npm run dev`, then open `http://<your Mac's address from ipconfig getifaddr en0>:8787`. Use Share > Add to Home Screen to install it.
-- From anywhere: see "Build status and local setup" in the spec for the ngrok steps. Short version:
+- From anywhere, with ngrok:
   create `apps/centient/ngrok.policy.yml` (Google sign-in, your email only), run
   `ngrok http 8787 --traffic-policy-file ngrok.policy.yml`, set `DEV_HOSTS=<your ngrok host>` in
   `apps/centient/.dev.vars`, then `npm run dev`. Never run the tunnel without the policy file.

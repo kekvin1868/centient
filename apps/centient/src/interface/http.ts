@@ -50,7 +50,7 @@ const toFilter = (q: z.infer<typeof txQuery>) => ({
 });
 
 const patch = z.object({
-  name: text(60).min(1).optional(), provider: text(30).nullable().optional(), currency_code: currency.optional(),
+  name: text(60).min(1).optional(), kind: z.enum(accountKinds).optional(), provider: text(30).nullable().optional(), currency_code: currency.optional(),
   default_envelope_id: id.nullable().optional(), due_day: z.number().int().min(1).max(31).nullable().optional(),
   target_amount: money.nullable().optional(), target_date: day.nullable().optional(), archived: z.boolean().optional(),
 });
@@ -108,6 +108,18 @@ const routes = app
 
   .post('/api/accounts/:id/balance', json(z.object({ actual: z.number().int(), categoryId: id.nullish() })), async c =>
     c.json(await uc.updateBalance(c.var.deps, c.var.ws, c.req.param('id'), c.req.valid('json'))))
+
+  .delete('/api/accounts/:id', async c => {
+    await uc.deleteAccount(c.var.deps, c.var.ws, c.req.param('id'));
+    return c.json({ ok: true });
+  })
+
+  .get('/api/backup', async c => c.json(await uc.backup(c.var.deps, c.var.ws)))
+
+  .post('/api/workspace/reset', async c => {
+    await uc.resetWorkspace(c.var.deps, c.var.ws);
+    return c.json({ ok: true });
+  })
 
   .post('/api/envelopes', json(z.object({
     name: text(60).min(1), kind: z.enum(['SPENDING', 'SAVINGS', 'GOAL']).default('SPENDING'), currency: currency.default('IDR'),

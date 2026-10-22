@@ -56,6 +56,10 @@ export interface CatalogRepository {
   listBudgets(ws: string): Promise<Budget[]>;
   setBudget(ws: string, target: { categoryId: string | null; envelopeId: string | null }, amount: number, effectiveFrom: string): Promise<string>;
   deleteBudget(ws: string, id: string): Promise<boolean>;
+  /** Soft-deletes the account and every entry that touches it; false when it is not in this workspace. */
+  deleteAccount(ws: string, id: string, now: string): Promise<boolean>;
+  /** Soft-deletes the whole workspace; the user's next request gets a fresh one. */
+  resetWorkspace(ws: string, now: string): Promise<void>;
 }
 
 export interface LedgerRepository {

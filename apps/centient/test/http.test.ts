@@ -31,7 +31,7 @@ describe('http', () => {
   it('logs, edits, updates a balance and deletes through the API', async () => {
     const { body: catalog } = await call('GET', '/api/catalog');
     const { body: { today } } = await call('GET', '/api/me');
-    const coffee = catalog.categories.find((c: { name: string }) => c.name === 'Coffee').id;
+    const coffee = catalog.categories.find((c: { name: string }) => c.name === 'Food & Drink').id;
     const { body: account } = await call('POST', '/api/accounts', { name: 'GoPay', kind: 'EWALLET', openingBalance: 100_000 });
     expect(await call('PATCH', `/api/accounts/${account.id}`, { name: 'Gopay' })).toMatchObject({ status: 200 });
 
@@ -52,4 +52,18 @@ describe('http', () => {
     const { body: balances } = await call('GET', '/api/balances');
     expect(balances.accounts.find((a: { id: string }) => a.id === account.id).balance).toBe(90_000);
   });
+
+  it('deletes an account, downloads a backup and resets', async () => {
+    const { body: acc } = await call('POST', '/api/accounts', { name: 'Jago', kind: 'BANK', openingBalance: 5_000 });
+    expect(await call('PATCH', `/api/accounts/${acc.id}`, { kind: 'EWALLET', due_day: 5 })).toMatchObject({ status: 200 });
+    expect(await call('DELETE', `/api/accounts/${acc.id}`)).toMatchObject({ status: 200 });
+    expect(await call('DELETE', `/api/accounts/${acc.id}`)).toMatchObject({ status: 404 });
+    const { status, body } = await call('GET', '/api/backup');
+    expect(status).toBe(200);
+    expect(body).toMatchObject({ format: 'centient-backup', version: 1 });
+    const before = (await call('GET', '/api/me')).body.workspace.id;
+    expect(await call('POST', '/api/workspace/reset')).toMatchObject({ status: 200 });
+    expect((await call('GET', '/api/me')).body.workspace.id).not.toBe(before);
+  });
 });
+

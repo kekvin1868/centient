@@ -1,4 +1,6 @@
 // The full entry form: Spent / Received / Moved, used by chips, Edit, and "+ Add manually".
+import { ListItem } from 'konsta/react';
+import { useState } from 'react';
 import { AmountField } from './AmountField';
 import { InputRow, PickerRow, StepperRow } from './Fields';
 import { Group } from './List';
@@ -12,7 +14,9 @@ const TYPES: { value: EntryType; label: string }[] = [
 ];
 
 export function EntryForm({ form, onChange, lockType }: { form: Form; onChange: (f: Form) => void; lockType?: boolean }) {
+  // The server keeps an entry's type on edit (TYPE_LOCKED), so the switch is hidden then.
   const set = (patch: Partial<Form>) => onChange({ ...form, ...patch });
+  const [more, setMore] = useState(Boolean(form.note || form.envelopeId || (form.split && form.split > 1)));
   const cat = catalog.value;
   const accounts = everyday().map(a => ({ value: a.id, label: a.name }));
   const allAccounts = active(cat.accounts).map(a => ({ value: a.id, label: a.name }));
@@ -24,16 +28,14 @@ export function EntryForm({ form, onChange, lockType }: { form: Form; onChange: 
 
   return (
     <>
-      {form.type !== 'ALLOCATE' && (
-        <div style="margin-bottom:16px">
-          <Segmented label="Type" value={form.type} disabled={lockType} options={TYPES}
-            onChange={t => set({ type: t, categoryId: null, toAccountId: null, split: null })} />
-        </div>
+      {form.type !== 'ALLOCATE' && !lockType && (
+        <Segmented label="Type" value={form.type} options={TYPES}
+          onChange={t => set({ type: t, categoryId: null, toAccountId: null, split: null })} />
       )}
       <Group>
         <AmountField value={form.amount} currency={currency} onChange={amount => set({ amount })} />
         {form.originalAmount !== null && form.originalCurrency && (
-          <p class="small muted" style="margin:-4px 16px 10px">Price was {formatMoney(form.originalAmount, form.originalCurrency)}</p>
+          <ListItem title={<span className="text-sm text-muted">Price was {formatMoney(form.originalAmount, form.originalCurrency)}</span>} />
         )}
       </Group>
       {(form.type === 'EXPENSE' || form.type === 'INCOME') && (
@@ -53,8 +55,9 @@ export function EntryForm({ form, onChange, lockType }: { form: Form; onChange: 
         </Group>
       )}
       <Group>
-        <details class="more" open={Boolean(form.note || form.envelopeId || (form.split && form.split > 1))} style="border-top:0">
-          <summary>More options</summary>
+        <ListItem link linkComponent="button" linkProps={{ type: 'button', onClick: () => setMore(!more), 'aria-expanded': more }}
+          chevron={false} title={<span className="text-primary">{more ? 'Fewer options' : 'More options'}</span>} />
+        {more && (<>
           {form.type === 'EXPENSE' && (
             <>
               <StepperRow label="Split with (people, incl. you)" value={form.split ?? 1} min={1} max={50}
@@ -68,7 +71,7 @@ export function EntryForm({ form, onChange, lockType }: { form: Form; onChange: 
             <PickerRow label="Pocket" value={form.envelopeId} options={pockets} placeholder="Account's usual" onChange={envelopeId => set({ envelopeId })} />
           )}
           <InputRow label="Note" value={form.note} placeholder="Optional" onInput={note => set({ note })} />
-        </details>
+        </>)}
       </Group>
     </>
   );
