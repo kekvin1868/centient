@@ -1,5 +1,6 @@
-// Pockets as a wallet of stacked cards (Cash App / Apple Wallet): each card shows its top strip, the last one
-// shows in full. Tap a card to slide the ones below it away and reveal it with its actions; tap again to close.
+// One account's pockets as a wallet of stacked cards (Cash App / Apple Wallet): each card shows its top strip,
+// the last one shows in full. Tap a card to slide the ones below it away and reveal it with its actions; tap
+// again to close. Main (where the account's money lands) only moves money out to other pockets.
 import { ArrowsLeftRight, Plus } from '@phosphor-icons/react';
 import { useState, type ReactNode } from 'react';
 import type { Envelope } from '../../../src/application/ports';
@@ -15,7 +16,7 @@ const SKIN: Record<Pocket['kind'], { bg: string; label: string }> = {
 };
 const spring = 'cubic-bezier(.34,1.3,.64,1)';
 
-export function PocketStack({ pockets, onAdd, onMoveOut }: { pockets: Pocket[]; onAdd: (id: string) => void; onMoveOut: (id: string) => void }) {
+export function PocketStack({ pockets, mainId, onAdd, onMoveOut }: { pockets: Pocket[]; mainId: string | null; onAdd: (id: string) => void; onMoveOut: (id: string) => void }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
     <div className="mx-4" role="list" aria-label="Pockets">
@@ -28,13 +29,17 @@ export function PocketStack({ pockets, onAdd, onMoveOut }: { pockets: Pocket[]; 
             zIndex: i, marginTop: i === 0 ? 0 : open === pockets[i - 1]?.id ? 14 : -(H - PEEK),
             transition: `margin-top 520ms ${spring}`,
           }}>
-            <PocketCard pocket={p} open={isOpen} covered={covered} onToggle={() => { buzz(); setOpen(isOpen ? null : p.id); }} />
+            <PocketCard pocket={p} main={p.id === mainId} open={isOpen} covered={covered} onToggle={() => { buzz(); setOpen(isOpen ? null : p.id); }} />
             {/* Actions under the open card; grid rows 0fr -> 1fr animates the height without measuring. */}
             <div className="grid" style={{ gridTemplateRows: isOpen ? '1fr' : '0fr', transition: `grid-template-rows 420ms ${spring}` }}>
               <div className="overflow-hidden">
                 <div className="flex gap-3 pt-4 pb-1" inert={!isOpen}>
-                  <Action icon={<Plus size={20} weight="bold" />} onClick={() => onAdd(p.id)}>Add money</Action>
-                  <Action icon={<ArrowsLeftRight size={20} weight="bold" />} onClick={() => onMoveOut(p.id)}>Move out</Action>
+                  {p.id === mainId
+                    ? <Action icon={<ArrowsLeftRight size={20} weight="bold" />} onClick={() => onMoveOut(p.id)}>Move to a pocket</Action>
+                    : <>
+                        <Action icon={<Plus size={20} weight="bold" />} onClick={() => onAdd(p.id)}>Add from Main</Action>
+                        <Action icon={<ArrowsLeftRight size={20} weight="bold" />} onClick={() => onMoveOut(p.id)}>Back to Main</Action>
+                      </>}
                 </div>
               </div>
             </div>
@@ -54,8 +59,8 @@ function Action({ icon, children, onClick }: { icon: ReactNode; children: ReactN
   );
 }
 
-function PocketCard({ pocket: p, open, covered, onToggle }: { pocket: Pocket; open: boolean; covered: boolean; onToggle: () => void }) {
-  const skin = SKIN[p.kind];
+function PocketCard({ pocket: p, main, open, covered, onToggle }: { pocket: Pocket; main: boolean; open: boolean; covered: boolean; onToggle: () => void }) {
+  const skin = main ? { ...SKIN.SPENDING, label: 'Main · new money lands here' } : SKIN[p.kind];
   const goal = p.kind === 'GOAL' && p.target_amount ? Math.min(1, Math.max(0, p.balance / p.target_amount)) : null;
   return (
     <button type="button" aria-expanded={open} onClick={onToggle}

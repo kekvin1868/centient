@@ -5,7 +5,7 @@ import type { Account, Category, Envelope } from '../../src/application/ports';
 import { call, client } from './api';
 import { load, save } from './lib/storage';
 
-export type Me = { workspace: { id: string; name: string; cycle_start_day: number }; today: string; cycle: { from: string; to: string }; currencies: Record<string, number> };
+export type Me = { workspace: { id: string; name: string; cycle_start_day: number; onboarded_at: string | null }; today: string; cycle: { from: string; to: string }; currencies: Record<string, number> };
 export type Catalog = { accounts: Account[]; envelopes: Envelope[]; categories: Category[] };
 
 export const me = signal<Me | null>(null);

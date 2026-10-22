@@ -15,12 +15,13 @@ import { EntryForm } from '../components/EntryForm';
 import { EntryList, type Entry } from '../components/EntryList';
 import { EntrySheet } from '../components/EntrySheet';
 import { InputRow, PickerRow } from '../components/Fields';
+import { dueSoon, usePlans } from '../components/Installments';
 import { Logo } from '../components/Logo';
 import { Group } from '../components/List';
 import { Segmented } from '../components/Segmented';
 import { Sheet } from '../components/Sheet';
 import { showToast } from '../components/Toast';
-import { ACCOUNT_KINDS, formatMoney } from '../lib/format';
+import { ACCOUNT_KINDS, dayLabel, formatMoney } from '../lib/format';
 import { blankForm, chipView, fromDraft, toCommand, type Form, type LogItem } from '../lib/form';
 import { categoryEmoji, titleCase } from '../lib/labels';
 import { buzz, reducedMotion } from '../lib/motion';
@@ -38,6 +39,7 @@ export function Home({ onGoMoney }: { onGoMoney: () => void }) {
         <AccountChip onOpen={() => setPicking(true)} />
       </div>
       <Headline onGoMoney={onGoMoney} />
+      <DueSoon onGo={onGoMoney} />
       <LogBox />
       <Recent onOpen={setOpen} onSeeAll={() => setAll(true)} />
       <AccountPicker open={picking} onClose={() => setPicking(false)} />
@@ -82,8 +84,34 @@ function AccountPicker({ open, onClose }: { open: boolean; onClose: () => void }
         <AccountHand selected={selectedAccount.value} onPick={pick} label="Show account"
           cards={[{ id: null, name: 'All accounts', kind: 'ALL' }, ...everyday().map(a => ({ id: a.id, name: a.name, kind: a.kind, balance: bal[a.id], currency: a.currency_code }))]} />
       </div>
-      <p className="px-4 text-center text-[15px] text-muted">Home shows the account you pick. The joker shows them all.</p>
     </Sheet>
+  );
+}
+
+/** Installments due within 3 days (or overdue), one line each; tap to open Money. */
+function DueSoon({ onGo }: { onGo: () => void }) {
+  const plans = usePlans();
+  const today = me.value?.today ?? '';
+  const due = plans ? dueSoon(plans, today) : [];
+  if (!due.length) return null;
+  const accounts = catalog.value.accounts;
+  return (
+    <section className="mx-4 -mt-2 mb-5 flex flex-col gap-2" aria-label="Installments due soon">
+      {due.slice(0, 3).map(p => {
+        const acc = accounts.find(a => a.id === p.accountId);
+        const overdue = p.next!.due < today;
+        return (
+          <button key={p.id} type="button" onClick={onGo}
+            className={`panel flex items-center gap-3 rounded-2xl px-3.5 py-3 text-left active:opacity-80 ${overdue ? 'bg-pink text-white' : 'bg-white dark:bg-raised'}`}>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[15px] font-bold">{acc?.name} · {p.name}</span>
+              <span className={`block text-[13px] ${overdue ? '' : 'text-muted'}`}>{overdue ? 'Overdue since' : 'Due'} {dayLabel(p.next!.due, today)} · installment {p.next!.no} of {p.installments}</span>
+            </span>
+            <span className="num shrink-0 text-[16px] font-extrabold">{formatMoney(p.next!.left, acc?.currency_code)}</span>
+          </button>
+        );
+      })}
+    </section>
   );
 }
 
@@ -92,7 +120,7 @@ type Head = { label: string; minor: number; currency: string; note: string; tag?
 const headCache = new Map<string, Head>();
 const recentCache = new Map<string, { items: Entry[]; cursor: string | null }>();
 
-/** The HUD: answers "how much can I still spend?". Cyan when fine, hurt-red when a Pocket is overspent. */
+/** The HUD: answers "how much can I still spend?". Teal when fine, pink when it's below zero. */
 function Headline({ onGoMoney }: { onGoMoney: () => void }) {
   const key = selectedAccount.value ?? 'all';
   const [head, setHead0] = useState<Head | null>(headCache.get(key) ?? null);
@@ -117,16 +145,16 @@ function Headline({ onGoMoney }: { onGoMoney: () => void }) {
           tag: `${d} day${d === 1 ? '' : 's'} left`, hurt: left <= 0, cta: 'Budgets',
         });
       }
-      const usual = everyday()[0]?.default_envelope_id;
-      const pocket = bal.envelopes.find(e => e.id === usual) ?? bal.envelopes.find(e => e.kind === 'SPENDING' && e.currency_code === 'IDR');
-      if (pocket) {
-        const over = pocket.balance < 0;
-        setHead({
-          label: over ? 'Overspent' : `In your ${pocket.name} Pocket`, minor: pocket.balance, currency: pocket.currency_code,
-          note: over ? `Your ${pocket.name} Pocket is below zero.` : 'Set a budget to see what you can spend each day.',
-          hurt: over, cta: 'Set a budget',
-        });
-      }
+      // No budget yet: what's free to spend is the money in the Main pockets of everyday accounts (rupiah).
+      // Money moved into other pockets is set aside, so it doesn't count.
+      const mains = new Set(everyday().filter(x => !['CREDIT_CARD', 'PAYLATER', 'EXCHANGE'].includes(x.kind) && x.currency_code === 'IDR').map(x => x.default_envelope_id));
+      const free = bal.envelopes.filter(e => mains.has(e.id)).reduce((t, e) => t + e.balance, 0);
+      const over = free < 0;
+      setHead({
+        label: over ? 'Overspent' : 'Free to spend', minor: free, currency: 'IDR',
+        note: over ? 'Your accounts\' Main pockets are below zero.' : 'Money in your accounts\' Main pockets. A budget shows a daily amount.',
+        hurt: over, cta: 'Set a budget',
+      });
     });
   }, [version.value, selectedAccount.value]);
 

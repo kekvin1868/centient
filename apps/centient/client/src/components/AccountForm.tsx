@@ -9,7 +9,7 @@ import { AmountField } from './AmountField';
 import { InputRow, PickerRow } from './Fields';
 import { Group } from './List';
 
-const KINDS = ['BANK', 'EWALLET', 'CASH', 'CREDIT_CARD', 'PAYLATER', 'EXCHANGE'] as const;
+const KINDS = ['BANK', 'DEBIT_CARD', 'EWALLET', 'CASH', 'CREDIT_CARD', 'PAYLATER', 'EXCHANGE'] as const;
 type Kind = (typeof KINDS)[number];
 
 export function AccountForm({ onDone, submitLabel = 'Add account' }: { onDone: () => void; submitLabel?: string }) {

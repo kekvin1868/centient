@@ -16,10 +16,12 @@ import { ACCOUNT_KINDS } from '../lib/format';
 import { downloadBackup } from '../lib/backup';
 import { categoryEmoji } from '../lib/labels';
 import { attempt } from '../lib/run';
-import { active, catalog, me, nameOf, refresh } from '../state';
+import { active, catalog, everyday, me, nameOf, refresh } from '../state';
 
 type Edit = { table: 'accounts'; row: Account } | { table: 'envelopes'; row: Envelope } | { table: 'categories'; row: Category };
 const POCKET_KINDS: Record<Envelope['kind'], string> = { SPENDING: 'Spending', SAVINGS: 'Savings', GOAL: 'Goal' };
+// Looked up by name by the app (fees, opening balances, corrections); they can't be deleted.
+const BUILT_IN = ['Fees', 'Opening balance', 'Balance adjustment'];
 
 export function Settings() {
   const [edit, setEdit] = useState<Edit | null>(null);
@@ -38,9 +40,11 @@ export function Settings() {
         <Row title={<span className="text-primary">Add account</span>} onClick={() => setAdd('account')} />
       </Group>
 
-      <Group label="Pockets" foot="Pockets say what money is for. Every account's money sits in one.">
-        {active(cat.envelopes).map(e => <Row key={e.id} title={e.name} sub={POCKET_KINDS[e.kind]} chevron onClick={() => setEdit({ table: 'envelopes', row: e })} />)}
-        <Row title={<span className="text-primary">Add Pocket</span>} onClick={() => setAdd('pocket')} />
+      <Group label="Pockets" foot="Pockets live inside an account and set some of its money aside. Each account has a Main pocket where new money lands; move money between pockets on the Money tab.">
+        {active(cat.envelopes).filter(e => !cat.accounts.some(a => a.default_envelope_id === e.id)).map(e => (
+          <Row key={e.id} title={e.name} sub={`${nameOf(cat.accounts, e.account_id)} · ${POCKET_KINDS[e.kind]}`} chevron onClick={() => setEdit({ table: 'envelopes', row: e })} />
+        ))}
+        <Row title={<span className="text-primary">Add pocket</span>} onClick={() => setAdd('pocket')} />
       </Group>
 
       <Group label="Categories">
@@ -117,6 +121,7 @@ function EditSheet({ edit, onClose }: { edit: Edit | null; onClose: () => void }
   const [kind, setKind] = useState(acc?.kind ?? 'BANK');
   const [dueDay, setDueDay] = useState<string | null>(acc?.due_day ? String(acc.due_day) : null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
   if (!edit) return null;
   const cat = catalog.value;
   const patch = (json: Record<string, unknown>, done: string) => attempt(async () => {
@@ -154,7 +159,7 @@ function EditSheet({ edit, onClose }: { edit: Edit | null; onClose: () => void }
 
   return (
     <>
-    <Sheet open={!confirmDelete} onClose={onClose} title={edit.row.name}>
+    <Sheet open={!confirmDelete && !deleting} onClose={onClose} title={edit.row.name}>
       <Group>
         <InputRow label="Name" value={name} onInput={setName} />
         {edit.table === 'accounts' && (
@@ -167,8 +172,10 @@ function EditSheet({ edit, onClose }: { edit: Edit | null; onClose: () => void }
               <PickerRow label="Bill due on day" value={dueDay} placeholder="Not set" onChange={setDueDay}
                 options={Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))} />
             )}
-            <PickerRow label="Usual Pocket" value={defaultPocket} placeholder="First spending Pocket"
-              options={active(cat.envelopes).filter(e => e.currency_code === currency).map(e => ({ value: e.id, label: e.name }))} onChange={setDefaultPocket} />
+            {edit.row.kind !== 'IOU' && (
+              <PickerRow label="New money goes to" value={defaultPocket} placeholder="Main"
+                options={active(cat.envelopes).filter(e => e.account_id === edit.row.id).map(e => ({ value: e.id, label: e.name }))} onChange={v => v && setDefaultPocket(v)} />
+            )}
             <PickerRow label="Currency" value={currency} options={Object.keys(me.value?.currencies ?? {}).map(c => ({ value: c, label: c }))} onChange={v => v && setCurrency(v)} />
           </>
         )}
@@ -184,10 +191,14 @@ function EditSheet({ edit, onClose }: { edit: Edit | null; onClose: () => void }
         <Button large rounded disabled={!name.trim()} onClick={save}>Save</Button>
         <Button large rounded tonal onClick={() => patch({ archived: true }, `Hidden. Find it under Hidden to show it again.`)}>Hide this {what}</Button>
         {edit.table === 'accounts' && <Button large rounded tonal className="k-color-brand-red" onClick={askDelete}>Delete account</Button>}
+        {edit.table === 'categories' && !BUILT_IN.includes(edit.row.name) && (
+          <Button large rounded tonal className="k-color-brand-red" onClick={() => setDeleting(true)}>Delete category</Button>
+        )}
       </Block>
     </Sheet>
     <ConfirmSheet open={Boolean(confirmDelete)} message={confirmDelete ?? ''} confirmLabel="Delete account"
       onCancel={() => setConfirmDelete(null)} onConfirm={remove} />
+    {deleting && edit.table === 'categories' && <DeleteCategorySheet category={edit.row} onClose={() => setDeleting(false)} onDeleted={onClose} />}
     </>
   );
 }
@@ -224,25 +235,50 @@ function ResetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
 }
 
 function AddPocket({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const holders = everyday();
+  const [accountId, setAccountId] = useState<string | null>(holders[0]?.id ?? null);
   const [name, setName] = useState('');
-  const [kind, setKind] = useState<Envelope['kind']>('SPENDING');
+  const [kind, setKind] = useState<Envelope['kind']>('SAVINGS');
   const [target, setTarget] = useState<number | null>(null);
   const [date, setDate] = useState('');
-  const error = !name.trim() ? 'Enter a name' : kind === 'GOAL' && !target ? 'Enter the goal amount' : null;
+  const currency = holders.find(a => a.id === accountId)?.currency_code ?? 'IDR';
+  const error = !accountId ? 'Pick an account' : !name.trim() ? 'Enter a name' : kind === 'GOAL' && !target ? 'Enter the goal amount' : null;
   const save = () => attempt(async () => {
-    await call(client.api.envelopes.$post({ json: { name: name.trim(), kind, currency: 'IDR', targetAmount: kind === 'GOAL' ? target : null, targetDate: kind === 'GOAL' && date ? date : null } }));
+    await call(client.api.envelopes.$post({ json: { accountId: accountId!, name: name.trim(), kind, targetAmount: kind === 'GOAL' ? target : null, targetDate: kind === 'GOAL' && date ? date : null } }));
     await refresh();
     setName(''); setTarget(null); setDate('');
     onClose();
   });
   return (
-    <Sheet open={open} onClose={onClose} title="Add Pocket">
+    <Sheet open={open} onClose={onClose} title="Add pocket">
       <Segmented label="Kind" value={kind} onChange={setKind} options={(Object.keys(POCKET_KINDS) as Envelope['kind'][]).map(k => ({ value: k, label: POCKET_KINDS[k] }))} />
-      <Group>
-        <InputRow label="Name" value={name} placeholder={kind === 'GOAL' ? 'e.g. Japan trip' : 'e.g. Social'} onInput={setName} />
-        {kind === 'GOAL' && <><AmountField label="Goal" value={target} onChange={setTarget} /><InputRow label="By" type="date" value={date} onInput={setDate} /></>}
+      <Group foot="It starts empty; move money into it from the account's Main pocket.">
+        <PickerRow label="Inside" value={accountId} options={holders.map(a => ({ value: a.id, label: a.name }))} onChange={setAccountId} />
+        <InputRow label="Name" value={name} placeholder={kind === 'GOAL' ? 'e.g. Japan trip' : 'e.g. Rent'} onInput={setName} />
+        {kind === 'GOAL' && <><AmountField label="Goal" value={target} currency={currency} onChange={setTarget} /><InputRow label="By" type="date" value={date} onInput={setDate} /></>}
       </Group>
-      <Block><Button large rounded disabled={Boolean(error)} onClick={save}>{error ?? 'Add Pocket'}</Button></Block>
+      <Block><Button large rounded disabled={Boolean(error)} onClick={save}>{error ?? 'Add pocket'}</Button></Block>
+    </Sheet>
+  );
+}
+
+/** Delete a category: its entries, budget and quick-add words move to another category of the same kind. */
+function DeleteCategorySheet({ category, onClose, onDeleted }: { category: Category; onClose: () => void; onDeleted: () => void }) {
+  const others = active(catalog.value.categories).filter(c => c.kind === category.kind && c.id !== category.id && !['Balance adjustment', 'Opening balance'].includes(c.name));
+  const fallback = others.find(c => c.name === (category.kind === 'EXPENSE' ? 'Other' : 'Other income')) ?? others[0];
+  const [moveTo, setMoveTo] = useState<string | null>(fallback?.id ?? null);
+  const remove = () => attempt(async () => {
+    await call(client.api.categories[':id'].$delete({ param: { id: category.id }, json: { moveTo: moveTo! } }));
+    showToast(`Deleted ${category.name}`);
+    onDeleted();
+    await refresh();
+  });
+  return (
+    <Sheet open onClose={onClose} title={`Delete ${category.name}`}>
+      <Group foot={`Everything in ${category.name} (entries, its budget, quick-add words) moves there. ${category.name} is gone from your lists; a reset brings the starting categories back.`}>
+        <PickerRow label="Move its entries to" value={moveTo} options={others.map(c => ({ value: c.id, label: c.name }))} onChange={setMoveTo} />
+      </Group>
+      <Block><Button large rounded className="k-color-brand-red" disabled={!moveTo} onClick={remove}>Delete category</Button></Block>
     </Sheet>
   );
 }

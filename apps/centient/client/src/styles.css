@@ -108,6 +108,7 @@ body {
 
 /* Account types get colors from Miku's palette (loot-rarity style). Text on them is dark ink. */
 .rarity-CASH { --rarity: #e9eef1; }
+.rarity-DEBIT_CARD { --rarity: #7fd8cf; }
 .rarity-EWALLET { --rarity: #86cecb; }
 .rarity-BANK { --rarity: #39c5bb; }
 .rarity-CREDIT_CARD { --rarity: #ff8cc6; }
@@ -165,8 +166,9 @@ body:has(.k-sheet.-translate-y-full) .k-toast { top: calc(env(safe-area-inset-to
 .k-progressbar { height: 10px; background: var(--raised-2); border-radius: 9999px; }
 .k-progressbar > span:not(.k-color-brand-red *) { background: var(--miku); }
 
-/* Lists: raised panels too. */
-.k-list:where(:not(.k-list .k-list)) > ul { border: 1px solid var(--edge); box-shadow: 0 3px 0 var(--lip); }
+/* Lists: one even hairline. It goes on the list itself, which owns the rounded corners and clips its
+   children; on the inner <ul> (square corners) the clip cut the line at every corner. */
+.k-list:where(:not(.k-list .k-list))[class*="rounded"] { border: 1px solid var(--edge); }
 /* Section headings: heavy and tight. */
 .k-block-title { font-weight: 800; letter-spacing: -0.03em; }
 

@@ -9,7 +9,7 @@ import { FirstRun } from './screens/FirstRun';
 import { Home } from './screens/Home';
 import { Money } from './screens/Money';
 import { Settings } from './screens/Settings';
-import { everyday, loadBasics, me } from './state';
+import { loadBasics, me } from './state';
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -28,7 +28,7 @@ export function App() {
 
   return (
     <KonstaApp theme="ios" safeAreas>
-      {!ready || !me.value ? null : !everyday().length ? <FirstRun onDone={() => setScreen('home')} /> : (
+      {!ready || !me.value ? null : !me.value.workspace.onboarded_at ? <FirstRun onDone={() => setScreen('home')} /> : (
         <>
           <div ref={main} key={screen}>
             {screen === 'home' && <Home onGoMoney={() => setScreen('money')} />}
