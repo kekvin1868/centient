@@ -65,11 +65,11 @@ export function toCommand(f: Form): { command: Command } | { error: string } {
       if (!f.categoryId) return { error: 'Pick a category' };
       const common = { ...base, accountId: f.accountId, categoryId: f.categoryId, envelopeId: f.envelopeId ?? undefined, merchant: opt(f.merchant) };
       if (f.type === 'INCOME') return { command: { type: 'INCOME', ...common } };
-      if (f.split && f.split > 1 && !f.iouAccountId) return { error: 'Pick who owes you' };
       return {
         command: {
           type: 'EXPENSE', ...common,
-          split: f.split && f.split > 1 ? { people: f.split, iouAccountId: f.iouAccountId! } : undefined,
+          // No IOU account yet: the server creates "Friends" on the first split.
+          split: f.split && f.split > 1 ? { people: f.split, iouAccountId: f.iouAccountId ?? undefined } : undefined,
           originalAmount: f.originalAmount ?? undefined, originalCurrency: f.originalCurrency ?? undefined,
         },
       };
@@ -80,8 +80,8 @@ export function toCommand(f: Form): { command: Command } | { error: string } {
       if (f.accountId === f.toAccountId) return { error: 'Pick two different accounts' };
       return { command: { type: 'TRANSFER', ...base, fromAccountId: f.accountId, toAccountId: f.toAccountId, fee: f.fee || undefined } };
     case 'ALLOCATE':
-      if (!f.fromEnvelopeId || !f.toEnvelopeId) return { error: 'Pick both Pockets' };
-      if (f.fromEnvelopeId === f.toEnvelopeId) return { error: 'Pick two different Pockets' };
+      if (!f.fromEnvelopeId || !f.toEnvelopeId) return { error: 'Pick both pockets' };
+      if (f.fromEnvelopeId === f.toEnvelopeId) return { error: 'Pick two different pockets' };
       return { command: { type: 'ALLOCATE', ...base, fromEnvelopeId: f.fromEnvelopeId, toEnvelopeId: f.toEnvelopeId } };
   }
 }

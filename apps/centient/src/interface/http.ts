@@ -5,13 +5,15 @@ import { Hono } from 'hono';
 import { HTTPException } from 'hono/http-exception';
 import { validator } from 'hono/validator';
 import { z, ZodError } from 'zod';
+import * as inst from '../application/installments';
 import * as uc from '../application/usecases';
 import { cycleStart, jakartaToday, nextCycleStart } from '../domain/cycle';
 import { DomainError } from '../domain/ledger';
-import { D1Catalog, D1Ledger } from '../infrastructure/d1';
+import { D1Catalog, D1Installments, D1Ledger, D1Prices } from '../infrastructure/d1';
+import { R2Files } from '../infrastructure/r2';
 import { identify, type AuthEnv } from './auth';
 
-export type Env = AuthEnv & { DB: D1Database };
+export type Env = AuthEnv & { DB: D1Database; FILES: R2Bucket };
 type Vars = { ws: string; deps: uc.Deps };
 
 const id = z.string().min(1).max(64);
@@ -23,7 +25,7 @@ const command = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('EXPENSE'), accountId: id, envelopeId: id.optional(), categoryId: id, amount: money, date: day,
     merchant: text(120).optional(), note: text(500).optional(),
-    split: z.object({ people: z.number().int().min(2).max(50), iouAccountId: id }).optional(),
+    split: z.object({ people: z.number().int().min(2).max(50), iouAccountId: id.optional() }).optional(),
     originalAmount: money.optional(), originalCurrency: z.string().max(8).optional(),
   }),
   z.object({
@@ -37,7 +39,7 @@ const command = z.discriminatedUnion('type', [
   z.object({ type: z.literal('ALLOCATE'), fromEnvelopeId: id, toEnvelopeId: id, amount: money, date: day, note: text(500).optional() }),
 ]);
 
-const accountKinds = ['BANK', 'EWALLET', 'CASH', 'CREDIT_CARD', 'PAYLATER', 'EXCHANGE', 'IOU'] as const;
+const accountKinds = ['BANK', 'DEBIT_CARD', 'EWALLET', 'CASH', 'CREDIT_CARD', 'PAYLATER', 'EXCHANGE', 'IOU'] as const;
 const currency = z.enum(Object.keys(DECIMALS) as [string, ...string[]]);
 
 const txQuery = z.object({
@@ -64,7 +66,10 @@ export const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 app.use('/api/*', async (c, next) => {
   const email = await identify(c.req.raw, c.env);
   if (!email) return c.json({ code: 'UNAUTHORIZED', message: 'Sign in through Cloudflare Access' }, 401);
-  const deps: uc.Deps = { catalog: new D1Catalog(c.env.DB), ledger: new D1Ledger(c.env.DB) };
+  const deps: uc.Deps = {
+    catalog: new D1Catalog(c.env.DB), ledger: new D1Ledger(c.env.DB), prices: new D1Prices(c.env.DB),
+    installments: new D1Installments(c.env.DB), files: c.env.FILES ? new R2Files(c.env.FILES) : undefined,
+  };
   c.set('deps', deps);
   c.set('ws', (await deps.catalog.ensureWorkspace(email)).workspaceId);
   await next();
@@ -89,8 +94,9 @@ const routes = app
     return c.json({ workspace: w, today, cycle: { from, to: nextCycleStart(from, w.cycle_start_day) }, currencies: DECIMALS });
   })
 
-  .patch('/api/workspace', json(z.object({ name: text(80).min(1).optional(), cycle_start_day: z.number().int().min(1).max(31).optional() })), async c => {
-    await c.var.deps.catalog.updateWorkspace(c.var.ws, c.req.valid('json'));
+  .patch('/api/workspace', json(z.object({ name: text(80).min(1).optional(), cycle_start_day: z.number().int().min(1).max(31).optional(), onboarded: z.literal(true).optional() })), async c => {
+    const { onboarded, ...rest } = c.req.valid('json');
+    await c.var.deps.catalog.updateWorkspace(c.var.ws, { ...rest, onboarded_at: onboarded ? new Date().toISOString() : undefined });
     return c.json({ ok: true });
   })
 
@@ -102,8 +108,7 @@ const routes = app
 
   .post('/api/accounts', json(z.object({
     name: text(60).min(1), kind: z.enum(accountKinds), provider: text(30).nullish(), currency: currency.optional(),
-    dueDay: z.number().int().min(1).max(31).nullish(), defaultEnvelopeId: id.nullish(),
-    openingBalance: z.number().int().optional(), openingEnvelopeId: id.optional(),
+    dueDay: z.number().int().min(1).max(31).nullish(), openingBalance: z.number().int().optional(),
   })), async c => c.json(await uc.createAccount(c.var.deps, c.var.ws, c.req.valid('json')), 201))
 
   .post('/api/accounts/:id/balance', json(z.object({ actual: z.number().int(), categoryId: id.nullish() })), async c =>
@@ -121,15 +126,15 @@ const routes = app
     return c.json({ ok: true });
   })
 
+  // A pocket inside an account.
   .post('/api/envelopes', json(z.object({
-    name: text(60).min(1), kind: z.enum(['SPENDING', 'SAVINGS', 'GOAL']).default('SPENDING'), currency: currency.default('IDR'),
+    accountId: id, name: text(60).min(1), kind: z.enum(['SPENDING', 'SAVINGS', 'GOAL']).default('SPENDING'),
     targetAmount: money.nullish(), targetDate: day.nullish(),
-  })), async c => {
-    const i = c.req.valid('json');
-    if ((i.kind === 'GOAL') !== Boolean(i.targetAmount)) throw new DomainError('GOAL_TARGET', 'A goal needs a target amount; other kinds must not have one');
-    return c.json(await c.var.deps.catalog.createEnvelope(c.var.ws, {
-      name: i.name, kind: i.kind, currency_code: i.currency, target_amount: i.targetAmount ?? null, target_date: i.kind === 'GOAL' ? i.targetDate ?? null : null,
-    }), 201);
+  })), async c => c.json(await uc.createPocket(c.var.deps, c.var.ws, c.req.valid('json')), 201))
+
+  .delete('/api/categories/:id', json(z.object({ moveTo: id })), async c => {
+    await uc.deleteCategory(c.var.deps, c.var.ws, c.req.param('id'), c.req.valid('json').moveTo);
+    return c.json({ ok: true });
   })
 
   .post('/api/categories', json(z.object({ name: text(60).min(1), kind: z.enum(['EXPENSE', 'INCOME']) })), async c =>
@@ -163,6 +168,7 @@ const routes = app
   })
 
   .get('/api/balances', async c => c.json(await uc.getBalances(c.var.deps, c.var.ws)))
+  .get('/api/prices', async c => c.json(await uc.getPrices(c.var.deps, c.var.ws)))
 
   .get('/api/budgets', query(z.object({ day: day.optional() })), async c =>
     c.json(await uc.getBudgetStatus(c.var.deps, c.var.ws, c.req.valid('query').day)))
@@ -183,6 +189,50 @@ const routes = app
   .post('/api/quickadd/save', json(z.object({
     items: z.array(z.object({ command, rawMerchant: text(120).optional(), suggestedMerchant: text(120).optional() })).min(1).max(50),
   })), async c => c.json({ ids: await uc.quickSave(c.var.deps, c.var.ws, c.req.valid('json').items) }, 201))
+
+  .get('/api/installments', query(z.object({ account: id.optional() })), async c =>
+    c.json({ plans: await inst.listPlans(c.var.deps, c.var.ws, c.req.valid('query').account) }))
+
+  .post('/api/installments', json(z.object({
+    accountId: id, name: text(80).min(1), amountPerInstallment: money, installments: z.number().int().min(1).max(60), firstDue: day,
+    paidCount: z.number().int().min(0).max(59), myShare: z.number().int().min(0),
+    others: z.array(z.object({ name: text(60).min(1), iouAccountId: id.optional(), share: money })).max(9),
+    alreadyInBalance: z.boolean(), categoryId: id.optional(),
+  })), async c => c.json(await inst.createPlan(c.var.deps, c.var.ws, c.req.valid('json')), 201))
+
+  .delete('/api/installments/:id', async c => {
+    await inst.deletePlan(c.var.deps, c.var.ws, c.req.param('id'));
+    return c.json({ ok: true });
+  })
+
+  .post('/api/installments/:id/payments', json(z.object({
+    no: z.number().int().min(1), seq: z.number().int().min(0), fromAccountId: id.optional(), date: day.optional(),
+  })), async c => {
+    const { no, seq, ...rest } = c.req.valid('json');
+    return c.json(await inst.markPaid(c.var.deps, c.var.ws, c.req.param('id'), no, seq, rest));
+  })
+
+  .delete('/api/installments/:id/payments/:no/:seq', async c =>
+    c.json(await inst.unmarkPaid(c.var.deps, c.var.ws, c.req.param('id'), Number(c.req.param('no')), Number(c.req.param('seq')))))
+
+  // multipart/form-data with one `file` field.
+  .post('/api/installments/:id/payments/:no/:seq/proof', validator('form', v => z.object({ file: z.instanceof(File) }).parse(v)), async c => {
+    const { file } = c.req.valid('form');
+    return c.json(await inst.attachProof(c.var.deps, c.var.ws, c.req.param('id'), Number(c.req.param('no')), Number(c.req.param('seq')),
+      { name: file.name, type: file.type, bytes: await file.arrayBuffer() }));
+  })
+
+  .delete('/api/installments/:id/payments/:no/:seq/proof', async c =>
+    c.json(await inst.removeProof(c.var.deps, c.var.ws, c.req.param('id'), Number(c.req.param('no')), Number(c.req.param('seq')))))
+
+  // Private files, served only to their workspace; never cached by shared caches.
+  .get('/api/files/:id', async c => {
+    const f = await inst.getFile(c.var.deps, c.var.ws, c.req.param('id'));
+    return c.body(f.body as ReadableStream, 200, {
+      'Content-Type': f.contentType, 'Cache-Control': 'private, max-age=3600', 'X-Content-Type-Options': 'nosniff',
+      'Content-Disposition': `inline; filename="${f.filename.replace(/["\\\r\n]/g, '_')}"`,
+    });
+  })
 
   .get('/api/export.csv', async c => {
     const csv = await uc.exportCsv(c.var.deps, c.var.ws);

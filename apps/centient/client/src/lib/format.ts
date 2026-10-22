@@ -12,11 +12,11 @@ export function formatMoney(minor: number, currency = 'IDR'): string {
 }
 
 export const ACCOUNT_KINDS: Record<string, string> = {
-  BANK: 'Bank', EWALLET: 'E-wallet', CASH: 'Cash', CREDIT_CARD: 'Credit card', PAYLATER: 'Pay later',
+  BANK: 'Bank', DEBIT_CARD: 'Debit card', EWALLET: 'E-wallet', CASH: 'Cash', CREDIT_CARD: 'Credit card', PAYLATER: 'Pay later',
   EXCHANGE: 'Crypto exchange', IOU: 'Friends owe you',
 };
 
-export const ENTRY_TYPES: Record<string, string> = { EXPENSE: 'Spent', INCOME: 'Received', TRANSFER: 'Moved', ALLOCATE: 'Moved between Pockets' };
+export const ENTRY_TYPES: Record<string, string> = { EXPENSE: 'Spent', INCOME: 'Received', TRANSFER: 'Moved', ALLOCATE: 'Moved between pockets' };
 
 /** "Today", "Yesterday", else "Mon 12 Oct" (dates are YYYY-MM-DD in Jakarta time). */
 export function dayLabel(day: string, today: string): string {
@@ -24,4 +24,16 @@ export function dayLabel(day: string, today: string): string {
   const d = new Date(`${day}T00:00:00Z`);
   if (Date.parse(`${today}T00:00:00Z`) - d.getTime() === 864e5) return 'Yesterday';
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
+
+/** Short rupiah for tight spots (Rp150rb, Rp1,8jt, Rp2,5M); other currencies keep formatMoney. */
+export function shortMoney(minor: number, currency = 'IDR'): string {
+  if (currency !== 'IDR') return formatMoney(minor, currency);
+  const sign = minor < 0 ? '-' : '';
+  const v = Math.abs(minor);
+  const fmt = (n: number, unit: string) => `${sign}Rp${n.toLocaleString('id-ID', { maximumFractionDigits: n < 100 ? 1 : 0 })}${unit}`;
+  if (v >= 1e9) return fmt(v / 1e9, 'M');
+  if (v >= 1e6) return fmt(v / 1e6, 'jt');
+  if (v >= 1e3) return fmt(v / 1e3, 'rb');
+  return formatMoney(minor, currency);
 }

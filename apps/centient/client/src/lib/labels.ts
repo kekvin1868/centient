@@ -56,7 +56,7 @@ export function entryRow(e: EntryView & { command: Command | null }, cat: Catalo
     case 'ALLOCATE':
       return {
         emoji: '🫙', title: `${name(cat.envelopes, c.fromEnvelopeId)} → ${name(cat.envelopes, c.toEnvelopeId)}`,
-        sub: 'Moved between Pockets', amount: c.amount, currency: cat.envelopes.find(x => x.id === c.fromEnvelopeId)?.currency_code ?? 'IDR', tone: 'neutral',
+        sub: 'Moved between pockets', amount: c.amount, currency: cat.envelopes.find(x => x.id === c.fromEnvelopeId)?.currency_code ?? 'IDR', tone: 'neutral',
       };
   }
 }

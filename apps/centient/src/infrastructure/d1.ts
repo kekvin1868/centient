@@ -2,7 +2,8 @@
 // security, so this is the wall between workspaces.
 import type { NewTransaction } from '../domain/ledger';
 import type {
-  Account, Alias, Budget, CatalogRepository, Category, Envelope, EntryKind, EntryView, LedgerRepository, NewEntry, TxFilter, TxView, Workspace,
+  Account, Alias, Attachment, Budget, CatalogRepository, Category, Envelope, EntryKind, EntryView, InstallmentRepository, LedgerRepository, NewEntry,
+  PartyRow, PaymentRow, PlanRow, Price, PriceRepository, TxFilter, TxView, Workspace,
 } from '../application/ports';
 
 const uid = () => crypto.randomUUID();
@@ -13,10 +14,18 @@ const SEED_EXPENSE = ['Food & Drink', 'Transport', 'Home & Bills', 'Shopping', '
 // "Balance adjustment" holds uncategorised balance corrections (signed), so it is not a spending category.
 const SEED_INCOME = ['Salary', 'Angpao & THR', 'Interest & cashback', 'Opening balance', 'Balance adjustment', 'Other income'];
 
+// A new workspace's accounts: how most people in Indonesia hold money day to day. Each gets a Main pocket.
+const SEED_ACCOUNTS: [string, string][] = [['Main Account', 'BANK'], ['Dailies', 'EWALLET'], ['Miscs', 'DEBIT_CARD']];
+
+// "Debit card" is stored as kind BANK + subtype DEBIT_CARD (migration 0007: the accounts table's kind CHECK
+// cannot change without a rebuild that D1's always-on foreign keys block). Only this file knows that.
+const KIND_SQL = "CASE WHEN subtype = 'DEBIT_CARD' THEN 'DEBIT_CARD' ELSE kind END";
+const storedKind = (kind: string) => (kind === 'DEBIT_CARD' ? { kind: 'BANK', subtype: 'DEBIT_CARD' } : { kind, subtype: null });
+
 /** Columns a PATCH may touch, per table. Anything else in the request is ignored. */
 const PATCHABLE: Record<string, string[]> = {
-  accounts: ['name', 'kind', 'provider', 'currency_code', 'default_envelope_id', 'due_day', 'reconciled_at', 'archived_at'],
-  envelopes: ['name', 'target_amount', 'target_date', 'archived_at'],
+  accounts: ['name', 'kind', 'subtype', 'provider', 'currency_code', 'default_envelope_id', 'due_day', 'reconciled_at', 'archived_at'],
+  envelopes: ['name', 'currency_code', 'target_amount', 'target_date', 'archived_at'],
   categories: ['name', 'archived_at'],
 };
 
@@ -27,53 +36,77 @@ export class D1Catalog implements CatalogRepository {
     await this.db.prepare('INSERT OR IGNORE INTO users (id, email) VALUES (?, ?)').bind(uid(), email.toLowerCase()).run();
     const user = await this.db.prepare('SELECT id FROM users WHERE email = ?').bind(email.toLowerCase()).first<{ id: string }>();
     const userId = user!.id;
-    const member = await this.db.prepare(`SELECT m.workspace_id FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id
-      WHERE m.user_id = ? AND w.deleted_at IS NULL LIMIT 1`).bind(userId).first<{ workspace_id: string }>();
+    // Oldest live workspace first (rowid order), so a user who has duplicates always lands in the same one.
+    const live = () => this.db.prepare(`SELECT m.workspace_id FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id
+      WHERE m.user_id = ? AND w.deleted_at IS NULL ORDER BY w.rowid LIMIT 1`).bind(userId).first<{ workspace_id: string }>();
+    const member = await live();
     if (member) return { userId, workspaceId: member.workspace_id };
 
-    // ponytail: two first requests at the same instant could seed two workspaces; harmless for one user.
-    const ws = uid();
-    const monthly = uid();
+    // The app's first screen sends several requests at once; each would seed its own workspace. The id is
+    // derived from the user and how many workspaces they have had (a reset adds one), so simultaneous first
+    // requests pick the same id: one seeding commits, the others fail on its unique rows and read it back.
+    const { n } = (await this.db.prepare('SELECT COUNT(*) AS n FROM workspace_members WHERE user_id = ?').bind(userId).first<{ n: number }>())!;
+    const ws = `${userId}:${n + 1}`;
     const s = (sql: string, ...v: unknown[]) => this.db.prepare(sql).bind(...v);
-    await this.db.batch([
-      s('INSERT INTO workspaces (id, name) VALUES (?, ?)', ws, 'My money'),
-      s("INSERT INTO workspace_members (workspace_id, user_id, role) VALUES (?, ?, 'OWNER')", ws, userId),
-      s("INSERT INTO envelopes (id, workspace_id, name, kind) VALUES (?, ?, 'Monthly', 'SPENDING')", monthly, ws),
-      s("INSERT INTO envelopes (id, workspace_id, name, kind) VALUES (?, ?, 'Savings', 'SAVINGS')", uid(), ws),
-      s("INSERT INTO accounts (id, workspace_id, name, kind) VALUES (?, ?, 'Friends', 'IOU')", uid(), ws),
-      ...SEED_EXPENSE.map(n => s("INSERT INTO categories (id, workspace_id, name, kind) VALUES (?, ?, ?, 'EXPENSE')", uid(), ws, n)),
-      ...SEED_INCOME.map(n => s("INSERT INTO categories (id, workspace_id, name, kind) VALUES (?, ?, ?, 'INCOME')", uid(), ws, n)),
-    ]);
+    try {
+      await this.seed(ws, userId, s);
+    } catch (e) {
+      const won = await live();
+      if (won) return { userId, workspaceId: won.workspace_id };
+      throw e;
+    }
     return { userId, workspaceId: ws };
   }
 
-  async getWorkspace(ws: string) {
-    return (await this.db.prepare('SELECT id, name, cycle_start_day FROM workspaces WHERE id = ?').bind(ws).first<Workspace>())!;
+  private async seed(ws: string, userId: string, s: (sql: string, ...v: unknown[]) => D1PreparedStatement) {
+    await this.db.batch([
+      s('INSERT INTO workspaces (id, name) VALUES (?, ?)', ws, 'My money'),
+      s("INSERT INTO workspace_members (workspace_id, user_id, role) VALUES (?, ?, 'OWNER')", ws, userId),
+      ...SEED_ACCOUNTS.flatMap(([name, kind]) => this.accountStatements(ws, uid(), { name, kind, provider: null, currency_code: 'IDR', due_day: null })),
+      ...SEED_EXPENSE.map(n => s("INSERT INTO categories (id, workspace_id, name, kind) VALUES (?, ?, ?, 'EXPENSE')", uid(), ws, n)),
+      ...SEED_INCOME.map(n => s("INSERT INTO categories (id, workspace_id, name, kind) VALUES (?, ?, ?, 'INCOME')", uid(), ws, n)),
+    ]);
   }
 
-  async updateWorkspace(ws: string, patch: { name?: string; cycle_start_day?: number }) {
-    await this.db.prepare('UPDATE workspaces SET name = COALESCE(?, name), cycle_start_day = COALESCE(?, cycle_start_day) WHERE id = ?')
-      .bind(patch.name ?? null, patch.cycle_start_day ?? null, ws).run();
+  async getWorkspace(ws: string) {
+    return (await this.db.prepare('SELECT id, name, cycle_start_day, onboarded_at FROM workspaces WHERE id = ?').bind(ws).first<Workspace>())!;
+  }
+
+  async updateWorkspace(ws: string, patch: { name?: string; cycle_start_day?: number; onboarded_at?: string }) {
+    await this.db.prepare('UPDATE workspaces SET name = COALESCE(?, name), cycle_start_day = COALESCE(?, cycle_start_day), onboarded_at = COALESCE(onboarded_at, ?) WHERE id = ?')
+      .bind(patch.name ?? null, patch.cycle_start_day ?? null, patch.onboarded_at ?? null, ws).run();
+  }
+
+  /** An account and its Main pocket (its default): account first, pocket, then the default link. */
+  private accountStatements(ws: string, id: string, a: { name: string; kind: string; provider: string | null; currency_code: string; due_day: number | null }) {
+    const k = storedKind(a.kind);
+    const main = `${id}:main`;
+    return [
+      this.db.prepare('INSERT INTO accounts (id, workspace_id, name, kind, subtype, provider, currency_code, due_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(id, ws, a.name, k.kind, k.subtype, a.provider, a.currency_code, a.due_day),
+      this.db.prepare("INSERT INTO envelopes (id, workspace_id, account_id, name, currency_code, kind) VALUES (?, ?, ?, 'Main', ?, 'SPENDING')").bind(main, ws, id, a.currency_code),
+      this.db.prepare('UPDATE accounts SET default_envelope_id = ? WHERE id = ?').bind(main, id),
+    ];
   }
 
   private async all<T>(sql: string, ws: string) {
     return (await this.db.prepare(sql).bind(ws).all<T>()).results;
   }
-  listAccounts(ws: string) { return this.all<Account>('SELECT id, name, kind, provider, currency_code, default_envelope_id, due_day, reconciled_at, archived_at FROM accounts WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY name', ws); }
-  listEnvelopes(ws: string) { return this.all<Envelope>('SELECT id, name, currency_code, kind, target_amount, target_date, archived_at FROM envelopes WHERE workspace_id = ? ORDER BY name', ws); }
-  listCategories(ws: string) { return this.all<Category>('SELECT id, name, kind, archived_at FROM categories WHERE workspace_id = ? ORDER BY kind, name', ws); }
+  listAccounts(ws: string) { return this.all<Account>(`SELECT id, name, ${KIND_SQL} AS kind, provider, currency_code, default_envelope_id, due_day, reconciled_at, archived_at FROM accounts WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY name`, ws); }
+  // Main first in each account, then by name.
+  listEnvelopes(ws: string) { return this.all<Envelope>("SELECT e.id, e.account_id, e.name, e.currency_code, e.kind, e.target_amount, e.target_date, e.archived_at FROM envelopes e JOIN accounts a ON a.id = e.account_id AND a.deleted_at IS NULL WHERE e.workspace_id = ? ORDER BY e.account_id, e.id <> a.default_envelope_id, e.name", ws); }
+  listCategories(ws: string) { return this.all<Category>('SELECT id, name, kind, archived_at FROM categories WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY kind, name', ws); }
 
-  async createAccount(ws: string, a: Omit<Account, 'id' | 'reconciled_at' | 'archived_at'>) {
+  async createAccount(ws: string, a: Omit<Account, 'id' | 'reconciled_at' | 'archived_at' | 'default_envelope_id'>) {
     const id = uid();
-    await this.db.prepare('INSERT INTO accounts (id, workspace_id, name, kind, provider, currency_code, default_envelope_id, due_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, ws, a.name, a.kind, a.provider, a.currency_code, a.default_envelope_id, a.due_day).run();
-    return { ...a, id, reconciled_at: null, archived_at: null };
+    await this.db.batch(this.accountStatements(ws, id, a));
+    return { ...a, id, default_envelope_id: `${id}:main`, reconciled_at: null, archived_at: null };
   }
 
   async createEnvelope(ws: string, e: Omit<Envelope, 'id' | 'archived_at'>) {
     const id = uid();
-    await this.db.prepare('INSERT INTO envelopes (id, workspace_id, name, currency_code, kind, target_amount, target_date) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, ws, e.name, e.currency_code, e.kind, e.target_amount, e.target_date).run();
+    await this.db.prepare('INSERT INTO envelopes (id, workspace_id, account_id, name, currency_code, kind, target_amount, target_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, ws, e.account_id, e.name, e.currency_code, e.kind, e.target_amount, e.target_date).run();
     return { ...e, id, archived_at: null };
   }
 
@@ -84,6 +117,7 @@ export class D1Catalog implements CatalogRepository {
   }
 
   async update(ws: string, table: 'accounts' | 'envelopes' | 'categories', id: string, patch: Record<string, unknown>) {
+    if (table === 'accounts' && typeof patch.kind === 'string') patch = { ...patch, ...storedKind(patch.kind) };
     const cols = Object.keys(patch).filter(k => PATCHABLE[table].includes(k));
     if (!cols.length) return true;
     const live = table === 'accounts' ? ' AND deleted_at IS NULL' : '';
@@ -133,6 +167,24 @@ export class D1Catalog implements CatalogRepository {
         .bind(now, now, id, ws),
     ]);
     return acc.meta.changes > 0;
+  }
+
+  async deleteCategory(ws: string, id: string, moveTo: string, now: string) {
+    // Everything that points at the category moves first (as in migration 0004), then it is flagged and
+    // renamed to free its UNIQUE name, so a new category can take it.
+    const moved = (col: string) => `${col} = CASE WHEN ${col} = ? THEN ? ELSE ${col} END`;
+    const [, , , , , , , cat] = await this.db.batch([
+      this.db.prepare(`UPDATE transactions SET ${moved('category_id')} WHERE workspace_id = ? AND category_id = ?`).bind(id, moveTo, ws, id),
+      this.db.prepare("UPDATE entry_groups SET command = json_set(command, '$.categoryId', ?) WHERE workspace_id = ? AND command IS NOT NULL AND json_extract(command, '$.categoryId') = ?").bind(moveTo, ws, id),
+      this.db.prepare("UPDATE aliases SET value = ? WHERE workspace_id = ? AND kind = 'CATEGORY' AND value = ?").bind(moveTo, ws, id),
+      this.db.prepare('UPDATE recurring SET category_id = ? WHERE workspace_id = ? AND category_id = ?').bind(moveTo, ws, id),
+      this.db.prepare('UPDATE inbox_items SET category_id = ? WHERE workspace_id = ? AND category_id = ?').bind(moveTo, ws, id),
+      // A budget on the deleted category goes if the target already has one, else follows it.
+      this.db.prepare(`UPDATE budgets SET deleted_at = ? WHERE workspace_id = ? AND category_id = ? AND deleted_at IS NULL AND EXISTS (SELECT 1 FROM budgets t WHERE t.workspace_id = budgets.workspace_id AND t.category_id = ? AND IFNULL(t.envelope_id, '') = IFNULL(budgets.envelope_id, '') AND t.deleted_at IS NULL)`).bind(now, ws, id, moveTo),
+      this.db.prepare('UPDATE budgets SET category_id = ? WHERE workspace_id = ? AND category_id = ? AND deleted_at IS NULL').bind(moveTo, ws, id),
+      this.db.prepare("UPDATE categories SET deleted_at = ?, name = name || ' (deleted ' || ? || ')' WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL").bind(now, now, id, ws),
+    ]);
+    return cat.meta.changes > 0;
   }
 
   async resetWorkspace(ws: string, now: string) {
@@ -301,6 +353,100 @@ export class D1Ledger implements LedgerRepository {
       WHERE t.workspace_id = ? AND t.deleted_at IS NULL AND t.type = 'EXPENSE' ORDER BY t.created_at DESC, t.occurred_at DESC LIMIT 1`)
       .bind(ws).first<{ account_id: string }>();
     return r?.account_id ?? null;
+  }
+}
+
+export class D1Prices implements PriceRepository {
+  constructor(private db: D1Database) {}
+
+  async get(codes: string[]) {
+    if (!codes.length) return [];
+    return (await this.db.prepare('SELECT currency_code, idr_per_unit, fetched_at FROM prices WHERE currency_code IN (SELECT value FROM json_each(?))')
+      .bind(JSON.stringify(codes)).all<Price>()).results;
+  }
+
+  async save(prices: Price[]) {
+    if (!prices.length) return;
+    await this.db.batch(prices.map(p => this.db.prepare(`INSERT INTO prices (currency_code, idr_per_unit, fetched_at) VALUES (?, ?, ?)
+      ON CONFLICT (currency_code) DO UPDATE SET idr_per_unit = excluded.idr_per_unit, fetched_at = excluded.fetched_at`).bind(p.currency_code, p.idr_per_unit, p.fetched_at)));
+  }
+}
+
+export class D1Installments implements InstallmentRepository {
+  constructor(private db: D1Database) {}
+
+  async createPlan(ws: string, p: Omit<PlanRow, 'created_at'>, parties: PartyRow[], prepaid: Omit<PaymentRow, 'proof'>[]) {
+    await this.db.batch([
+      this.db.prepare('INSERT INTO installment_plans (id, workspace_id, account_id, name, amount_per_installment, installments, first_due) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .bind(p.id, ws, p.account_id, p.name, p.amount_per_installment, p.installments, p.first_due),
+      ...parties.map(x => this.db.prepare('INSERT INTO installment_parties (plan_id, seq, name, iou_account_id, share) VALUES (?, ?, ?, ?, ?)')
+        .bind(p.id, x.seq, x.name, x.iou_account_id, x.share)),
+      ...prepaid.map(x => this.db.prepare('INSERT INTO installment_payments (plan_id, installment_no, party_seq, paid_at, entry_id) VALUES (?, ?, ?, ?, ?)')
+        .bind(p.id, x.installment_no, x.party_seq, x.paid_at, x.entry_id)),
+    ]);
+  }
+
+  async listPlans(ws: string, accountId?: string) {
+    const live = 'workspace_id = ? AND deleted_at IS NULL AND (? IS NULL OR account_id = ?)';
+    const ids = `SELECT id FROM installment_plans WHERE ${live}`;
+    const a = [ws, accountId ?? null, accountId ?? null];
+    const [plans, parties, payments] = await this.db.batch<Record<string, unknown>>([
+      this.db.prepare(`SELECT id, account_id, name, amount_per_installment, installments, first_due, created_at FROM installment_plans WHERE ${live} ORDER BY first_due, created_at`).bind(...a),
+      this.db.prepare(`SELECT plan_id, seq, name, iou_account_id, share FROM installment_parties WHERE plan_id IN (${ids}) ORDER BY plan_id, seq`).bind(...a),
+      // A share stays paid only while its logged entry exists: deleting the transfer un-pays it.
+      this.db.prepare(`SELECT p.plan_id, p.installment_no, p.party_seq, p.paid_at, p.entry_id, f.id AS proof_id, f.filename AS proof_filename, f.content_type AS proof_type
+        FROM installment_payments p LEFT JOIN entry_groups g ON g.id = p.entry_id LEFT JOIN attachments f ON f.id = p.proof_id
+        WHERE p.plan_id IN (${ids}) AND (p.entry_id IS NULL OR g.deleted_at IS NULL)`).bind(...a),
+    ]);
+    return {
+      plans: plans.results as PlanRow[],
+      parties: parties.results as PartyRow[],
+      payments: payments.results.map(r => ({
+        plan_id: r.plan_id as string, installment_no: r.installment_no as number, party_seq: r.party_seq as number,
+        paid_at: r.paid_at as string, entry_id: r.entry_id as string | null,
+        proof: r.proof_id ? { id: r.proof_id as string, filename: r.proof_filename as string, content_type: r.proof_type as string } : null,
+      })),
+    };
+  }
+
+  private owned = 'plan_id IN (SELECT id FROM installment_plans WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL)';
+
+  async addPayment(ws: string, p: Omit<PaymentRow, 'proof'>) {
+    // A row left behind by a deleted entry is replaced, so the share can be paid again.
+    const r = await this.db.prepare(`INSERT INTO installment_payments (plan_id, installment_no, party_seq, paid_at, entry_id)
+      SELECT ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM installment_plans WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL)
+      ON CONFLICT (plan_id, installment_no, party_seq) DO UPDATE SET paid_at = excluded.paid_at, entry_id = excluded.entry_id, proof_id = NULL
+      WHERE installment_payments.entry_id IS NOT NULL AND (SELECT deleted_at FROM entry_groups WHERE id = installment_payments.entry_id) IS NOT NULL`)
+      .bind(p.plan_id, p.installment_no, p.party_seq, p.paid_at, p.entry_id, p.plan_id, ws).run();
+    if (!r.meta.changes) throw new Error('ALREADY_PAID');
+  }
+
+  async deletePayment(ws: string, planId: string, no: number, seq: number) {
+    const row = await this.db.prepare(`SELECT entry_id FROM installment_payments WHERE ${this.owned} AND installment_no = ? AND party_seq = ?`)
+      .bind(planId, ws, no, seq).first<{ entry_id: string | null }>();
+    if (!row) return undefined;
+    await this.db.prepare(`DELETE FROM installment_payments WHERE ${this.owned} AND installment_no = ? AND party_seq = ?`).bind(planId, ws, no, seq).run();
+    return row.entry_id;
+  }
+
+  async setProof(ws: string, planId: string, no: number, seq: number, attachmentId: string | null) {
+    const r = await this.db.prepare(`UPDATE installment_payments SET proof_id = ? WHERE ${this.owned} AND installment_no = ? AND party_seq = ?`)
+      .bind(attachmentId, planId, ws, no, seq).run();
+    return r.meta.changes > 0;
+  }
+
+  async deletePlan(ws: string, id: string) {
+    const r = await this.db.prepare("UPDATE installment_plans SET deleted_at = datetime('now') WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL").bind(id, ws).run();
+    return r.meta.changes > 0;
+  }
+
+  async createAttachment(ws: string, a: Attachment) {
+    await this.db.prepare('INSERT INTO attachments (id, workspace_id, r2_key, filename, content_type, size) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(a.id, ws, a.r2_key, a.filename, a.content_type, a.size).run();
+  }
+
+  async getAttachment(ws: string, id: string) {
+    return this.db.prepare('SELECT id, r2_key, filename, content_type, size FROM attachments WHERE id = ? AND workspace_id = ?').bind(id, ws).first<Attachment>();
   }
 }
 
