@@ -1,4 +1,4 @@
-# Centient
+<h1 align="center"><img src="apps/centient/client/public/icons/og-image-1200x630.png" alt="Centient" width="480"></h1>
 
 Centient: a private balance tracker on Cloudflare Workers + D1, with a React web app you can install to your phone's Home Screen.
 
