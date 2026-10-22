@@ -5,10 +5,10 @@
 // as an account. On a pointer device the card under the pointer tilts toward it.
 import { Bank, Cardholder, Cards, ClockCountdown, CreditCard, CurrencyBtc, DeviceMobile, Handshake, Money, type Icon } from '@phosphor-icons/react';
 import type { PointerEvent, ReactNode } from 'react';
-import { formatMoney, shortMoney } from '../lib/format';
-import { buzz } from '../lib/motion';
+import { formatMoney, shortMoney } from '../../lib/format';
+import { buzz } from '../../lib/motion';
 
-export type HandCard = { id: string | null; name: string; kind: string; balance?: number; currency?: string; note?: ReactNode };
+type HandCard = { id: string | null; name: string; kind: string; balance?: number; currency?: string; note?: ReactNode };
 
 const ICON: Record<string, Icon> = {
   BANK: Bank, DEBIT_CARD: Cardholder, EWALLET: DeviceMobile, CASH: Money, CREDIT_CARD: CreditCard, PAYLATER: ClockCountdown, EXCHANGE: CurrencyBtc, IOU: Handshake, ALL: Cards,
@@ -17,7 +17,7 @@ const ICON: Record<string, Icon> = {
 const KIND: Record<string, string> = { BANK: 'Bank', DEBIT_CARD: 'Debit', EWALLET: 'E-wallet', CASH: 'Cash', CREDIT_CARD: 'Credit', PAYLATER: 'Pay later', EXCHANGE: 'Crypto', IOU: 'IOU', ALL: 'Joker' };
 const W = 112, H = 160, LIFT = 22;
 /** Up to this many accounts are held as an arched hand; more become a scrolling row. */
-export const HAND_MAX = 5;
+const HAND_MAX = 5;
 
 export function AccountHand({ cards, selected, onPick, label = 'Accounts' }: {
   cards: HandCard[]; selected: string | null | undefined; onPick: (id: string | null) => void; label?: string;

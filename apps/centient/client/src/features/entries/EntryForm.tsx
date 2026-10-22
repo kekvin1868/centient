@@ -1,13 +1,13 @@
 // The full entry form: Spent / Received / Moved, used by chips, Edit, and "+ Add manually".
 import { ListItem } from 'konsta/react';
 import { useState } from 'react';
-import { AmountField } from './AmountField';
-import { InputRow, PickerRow, StepperRow } from './Fields';
-import { Group } from './List';
-import { Segmented } from './Segmented';
-import { formatMoney } from '../lib/format';
-import type { EntryType, Form } from '../lib/form';
-import { active, catalog, everyday } from '../state';
+import { AmountField } from '../../ui/AmountField';
+import { InputRow, PickerRow, StepperRow } from '../../ui/Fields';
+import { Group } from '../../ui/List';
+import { Segmented } from '../../ui/Segmented';
+import { formatMoney } from '../../lib/format';
+import type { EntryType, Form } from './form';
+import { active, catalog, everyday } from '../../lib/state';
 
 const TYPES: { value: EntryType; label: string }[] = [
   { value: 'EXPENSE', label: 'Spent' }, { value: 'INCOME', label: 'Received' }, { value: 'TRANSFER', label: 'Moved' },

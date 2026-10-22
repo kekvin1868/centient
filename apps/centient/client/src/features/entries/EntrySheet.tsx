@@ -3,17 +3,17 @@
 // request is sent only when the Undo window ends.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { call, client } from '../api';
-import { fromCommand, toCommand, type Form } from '../lib/form';
-import { formatMoney } from '../lib/format';
-import { entryRow } from '../lib/labels';
-import { attempt } from '../lib/run';
-import { catalog, hiddenEntries, refresh } from '../state';
+import { call, client } from '../../lib/api';
+import { fromCommand, toCommand, type Form } from './form';
+import { formatMoney } from '../../lib/format';
+import { entryRow } from '../../lib/labels';
+import { attempt } from '../../lib/run';
+import { catalog, hiddenEntries, refresh } from '../../lib/state';
 import type { Entry } from './EntryList';
 import { EntryForm } from './EntryForm';
-import { Group, Row } from './List';
-import { Sheet } from './Sheet';
-import { showToast } from './Toast';
+import { Group, Row } from '../../ui/List';
+import { Sheet } from '../../ui/Sheet';
+import { showToast } from '../../ui/Toast';
 
 export function deleteWithUndo(id: string) {
   const hide = (on: boolean) => {

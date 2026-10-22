@@ -1,7 +1,7 @@
 // Emoji and plain-word titles for entries. Emoji mark categories; interface icons come from Phosphor.
 import type { EntryView } from '../../../src/application/ports';
 import type { Command } from '../../../src/application/usecases';
-import type { Catalog } from '../state';
+import { catalog, nameOf, type Catalog } from './state';
 
 const CATEGORY_EMOJI: Record<string, string> = {
   'Food & Drink': '🍜', Transport: '🚗', 'Home & Bills': '🏠', Shopping: '🛍️', Health: '💊', Fun: '🎬',
@@ -15,9 +15,16 @@ export function categoryEmoji(name: string | undefined, type: Command['type'] = 
   return (name && CATEGORY_EMOJI[name]) ?? (type === 'INCOME' ? '💰' : '🧾');
 }
 
+/** "BCA · Rent": a pocket named with its account. */
+export function pocketLabel(id: string) {
+  const cat = catalog.value;
+  const e = cat.envelopes.find(x => x.id === id);
+  return e ? `${nameOf(cat.accounts, e.account_id)} · ${e.name}` : '';
+}
+
 export const titleCase = (s: string) => s.replace(/\b\p{L}/gu, c => c.toUpperCase());
 
-export type EntryRow = { emoji: string; title: string; sub: string; amount: number; currency: string; tone: 'out' | 'in' | 'neutral' };
+type EntryRow = { emoji: string; title: string; sub: string; amount: number; currency: string; tone: 'out' | 'in' | 'neutral' };
 
 /** How an entry reads in a list: from its saved command, or from its first transaction for system entries. */
 export function entryRow(e: EntryView & { command: Command | null }, cat: Catalog): EntryRow {

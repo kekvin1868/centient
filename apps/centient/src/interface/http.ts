@@ -13,7 +13,7 @@ import { D1Catalog, D1Installments, D1Ledger, D1Prices } from '../infrastructure
 import { R2Files } from '../infrastructure/r2';
 import { identify, type AuthEnv } from './auth';
 
-export type Env = AuthEnv & { DB: D1Database; FILES: R2Bucket };
+type Env = AuthEnv & { DB: D1Database; FILES: R2Bucket };
 type Vars = { ws: string; deps: uc.Deps };
 
 const id = z.string().min(1).max(64);

@@ -2,13 +2,13 @@
 // to rename them and say what is in each now; then Home. No tour. Shown until the workspace is onboarded.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { call, client } from '../api';
-import { AmountField } from '../components/AmountField';
-import { InputRow } from '../components/Fields';
-import { Group } from '../components/List';
+import { call, client } from '../lib/api';
+import { AmountField } from '../ui/AmountField';
+import { InputRow } from '../ui/Fields';
+import { Group } from '../ui/List';
 import { ACCOUNT_KINDS } from '../lib/format';
 import { attempt } from '../lib/run';
-import { everyday, refresh } from '../state';
+import { everyday, refresh } from '../lib/state';
 
 export function FirstRun({ onDone }: { onDone: () => void }) {
   // Bank first, then e-wallet, then card: the order people think of them in.

@@ -5,16 +5,16 @@ import autoAnimate from '@formkit/auto-animate';
 import { PencilSimple, Trash } from '@phosphor-icons/react';
 import { animate, motion, useMotionValue, useTransform } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
-import type { EntryView } from '../../../src/application/ports';
-import type { Command } from '../../../src/application/usecases';
-import { dayLabel, formatMoney } from '../lib/format';
-import { entryRow } from '../lib/labels';
-import { buzz, reducedMotion } from '../lib/motion';
-import { catalog, hiddenEntries, me } from '../state';
-import { ConfirmSheet } from './ConfirmSheet';
+import type { EntryView } from '../../../../src/application/ports';
+import type { Command } from '../../../../src/application/usecases';
+import { dayLabel, formatMoney } from '../../lib/format';
+import { entryRow } from '../../lib/labels';
+import { buzz, reducedMotion } from '../../lib/motion';
+import { catalog, hiddenEntries, me } from '../../lib/state';
+import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { deleteWithUndo } from './EntrySheet';
 import { IconSheet } from './IconSheet';
-import { Group } from './List';
+import { Group } from '../../ui/List';
 
 export type Entry = EntryView & { command: Command | null };
 

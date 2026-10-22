@@ -46,7 +46,7 @@ async function accessKeys(teamDomain: string): Promise<Map<string, CryptoKey>> {
 }
 
 /** Verifies an Access JWT: RS256 signature against the team's keys, audience, issuer and expiry. */
-export async function verifyAccessJwt(jwt: string, teamDomain: string, aud: string): Promise<Claims | null> {
+async function verifyAccessJwt(jwt: string, teamDomain: string, aud: string): Promise<Claims | null> {
   const [h, p, sig] = jwt.split('.');
   if (!h || !p || !sig) return null;
   try {

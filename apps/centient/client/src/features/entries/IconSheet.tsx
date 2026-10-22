@@ -3,15 +3,15 @@
 // also remembers it for the entry's merchant. Reset goes back to the category's emoji.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { call, client } from '../api';
-import { categoryEmoji, entryRow } from '../lib/labels';
-import { attempt } from '../lib/run';
-import { catalog, refresh } from '../state';
+import { call, client } from '../../lib/api';
+import { categoryEmoji, entryRow } from '../../lib/labels';
+import { attempt } from '../../lib/run';
+import { catalog, refresh } from '../../lib/state';
 import type { Entry } from './EntryList';
-import { ToggleRow } from './Fields';
-import { Group } from './List';
-import { Sheet } from './Sheet';
-import { showToast } from './Toast';
+import { ToggleRow } from '../../ui/Fields';
+import { Group } from '../../ui/List';
+import { Sheet } from '../../ui/Sheet';
+import { showToast } from '../../ui/Toast';
 
 const PICKS = ['☕', '🧋', '🍜', '🍚', '🍔', '🍕', '🍣', '🍰', '🛵', '🚗', '🚌', '⛽', '🏠', '💡', '📱', '🛍️', '👕', '💊', '🎮', '🎬', '📚', '🎁', '✈️', '🐱', '💼', '💰', '🧾', '🎉'];
 const graphemes = (s: string) => [...new Intl.Segmenter().segment(s)].map(x => x.segment);

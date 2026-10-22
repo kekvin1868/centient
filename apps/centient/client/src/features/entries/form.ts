@@ -1,8 +1,8 @@
 // The entry form behind chips and sheets: built from a parsed draft or a saved command, turned back into
 // an API command, and judged for the chip (ready / one question / needs the form).
 import type { Draft } from '@centient/quickadd';
-import type { Command } from '../../../src/application/usecases';
-import { formatMoney } from './format';
+import type { Command } from '../../../../src/application/usecases';
+import { formatMoney } from '../../lib/format';
 
 export type EntryType = Command['type'];
 export type Form = {
@@ -86,7 +86,7 @@ export function toCommand(f: Form): { command: Command } | { error: string } {
   }
 }
 
-export type ChipView =
+type ChipView =
   | { state: 'ready' }
   | { state: 'ask'; ask: 'charged' | 'amount' | 'account'; question: string }
   | { state: 'incomplete'; missing: string };

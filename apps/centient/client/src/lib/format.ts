@@ -16,7 +16,7 @@ export const ACCOUNT_KINDS: Record<string, string> = {
   EXCHANGE: 'Crypto exchange', IOU: 'Friends owe you',
 };
 
-export const ENTRY_TYPES: Record<string, string> = { EXPENSE: 'Spent', INCOME: 'Received', TRANSFER: 'Moved', ALLOCATE: 'Moved between pockets' };
+export const POCKET_KINDS = { SPENDING: 'Spending', SAVINGS: 'Savings', GOAL: 'Goal' } as const;
 
 /** "Today", "Yesterday", else "Mon 12 Oct" (dates are YYYY-MM-DD in Jakarta time). */
 export function dayLabel(day: string, today: string): string {

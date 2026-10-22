@@ -3,10 +3,10 @@
 // answer on the device, so values still show (marked with their time) when there is no connection.
 import { DECIMALS } from '@centient/money';
 import { signal } from '@preact/signals-react';
-import { call, client } from '../api';
+import { call, client } from './api';
 import { load, save } from './storage';
 
-export type Prices = Record<string, { idrPerUnit: number; fetchedAt: string }>;
+type Prices = Record<string, { idrPerUnit: number; fetchedAt: string }>;
 export const prices = signal<Prices>(load('prices', {}));
 
 export async function loadPrices() {

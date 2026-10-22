@@ -6,14 +6,13 @@
 import { ArrowsLeftRight, PencilSimple, Plus } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useState, type ReactNode } from 'react';
-import type { Envelope } from '../../../src/application/ports';
-import { formatMoney } from '../lib/format';
-import { buzz, reducedMotion } from '../lib/motion';
-import { inkOn, pocketColor } from '../lib/pocketColors';
+import type { Envelope } from '../../../../src/application/ports';
+import { formatMoney, POCKET_KINDS } from '../../lib/format';
+import { buzz, reducedMotion } from '../../lib/motion';
+import { inkOn, pocketColor } from '../../lib/pocketColors';
 
-type Pocket = Envelope & { balance: number };
+export type Pocket = Envelope & { balance: number };
 const H = 196, PEEK = 88;
-const KIND: Record<Pocket['kind'], string> = { SPENDING: 'Spending', SAVINGS: 'Savings', GOAL: 'Goal' };
 const spring = 'cubic-bezier(.34,1.3,.64,1)';
 
 /** Set down: from a little above, tilted, then it settles flat. Picked up: lifts and fades away. */
@@ -81,7 +80,7 @@ function PocketCard({ pocket: p, index, main, open, covered, onToggle }: { pocke
   const goal = p.kind === 'GOAL' && p.target_amount ? Math.min(1, Math.max(0, p.balance / p.target_amount)) : null;
   return (
     <button type="button" aria-expanded={open} onClick={onToggle}
-      aria-label={`${p.name}, ${main ? 'Main' : KIND[p.kind]}, ${formatMoney(p.balance, p.currency_code)}`}
+      aria-label={`${p.name}, ${main ? 'Main' : POCKET_KINDS[p.kind]}, ${formatMoney(p.balance, p.currency_code)}`}
       className="halftone relative flex w-full flex-col justify-start overflow-hidden rounded-[22px] border border-black/10 p-5 text-left"
       style={{
         height: H, color: ink,
@@ -94,7 +93,7 @@ function PocketCard({ pocket: p, index, main, open, covered, onToggle }: { pocke
       <span className="relative flex items-start justify-between gap-3">
         <span className="min-w-0">
           <span className="block truncate text-[22px] font-extrabold leading-none tracking-[-0.03em]">{p.name}</span>
-          <span className="mt-1 block text-[11px] font-bold uppercase tracking-wider opacity-75">{main ? 'Main · new money lands here' : KIND[p.kind]}</span>
+          <span className="mt-1 block text-[11px] font-bold uppercase tracking-wider opacity-75">{main ? 'Main · new money lands here' : POCKET_KINDS[p.kind]}</span>
         </span>
         <span className={`num shrink-0 text-[17px] font-extrabold tracking-[-0.02em] transition-opacity duration-300 ${covered ? 'opacity-100' : 'opacity-0'}`}>
           {formatMoney(p.balance, p.currency_code)}
