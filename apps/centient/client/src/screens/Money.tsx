@@ -11,7 +11,9 @@ import { ConfirmSheet } from '../components/ConfirmSheet';
 import { InstallmentsSection, takesInstallments } from '../components/Installments';
 import { InputRow, PickerRow } from '../components/Fields';
 import { Segmented } from '../components/Segmented';
+import { ColorPicker } from '../components/ColorPicker';
 import { PocketStack } from '../components/PocketStack';
+import { nextPocketColor, pocketColor, POCKET_COLORS } from '../lib/pocketColors';
 import { Group, Row } from '../components/List';
 import { Sheet } from '../components/Sheet';
 import { showToast } from '../components/Toast';
@@ -35,6 +37,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
   const [account, setAccount] = useState<(Account & { balance: number }) | null>(null);
   const [move, setMove] = useState<{ accountId: string; from: string | null; to: string | null } | null>(null);
   const [addPocket, setAddPocket] = useState<Account | null>(null);
+  const [editPocket, setEditPocket] = useState<Pocket | null>(null);
   const [budget, setBudget] = useState<BudgetRow | 'new' | null>(null);
 
   useEffect(() => {
@@ -85,7 +88,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
         })} />
       <PickedAccount account={bal.accounts.find(a => a.id === picked) ?? null} pockets={bal.envelopes.filter(e => e.account_id === picked)}
         onUpdate={a => setAccount(a)} onShow={a => { selectedAccount.value = a.id; onShowAccount(); }}
-        onMove={setMove} onAddPocket={setAddPocket} />
+        onMove={setMove} onAddPocket={setAddPocket} onEditPocket={setEditPocket} />
 
       <Group label={`Budgets · ${days} day${days === 1 ? '' : 's'} left`}>
         {!budgets.budgets.length && <Row title={<span className="text-muted">No budgets yet. A budget shows what you can still spend each day.</span>} />}
@@ -107,7 +110,8 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
       <AccountSheet key={`account:${account?.id ?? 'none'}`} account={account} onClose={() => setAccount(null)} />
       <MoveSheet key={`move:${move ? `${move.accountId}:${move.from}:${move.to}` : 'none'}`} preset={move}
         pockets={bal.envelopes.filter(e => e.account_id === move?.accountId && !e.archived_at)} onClose={() => setMove(null)} />
-      <AddPocketSheet key={`add-pocket:${addPocket?.id ?? 'none'}`} account={addPocket} onClose={() => setAddPocket(null)} />
+      <AddPocketSheet key={`add-pocket:${addPocket?.id ?? 'none'}`} account={addPocket} used={bal.envelopes.filter(e => e.account_id === addPocket?.id).map(e => e.color)} onClose={() => setAddPocket(null)} />
+      <EditPocketSheet key={`edit-pocket:${editPocket?.id ?? 'none'}`} pocket={editPocket} onClose={() => setEditPocket(null)} />
       <BudgetSheet key={`budget:${budget === 'new' ? 'new' : budget?.id ?? 'none'}`} budget={budget} onClose={() => setBudget(null)} />
     </main>
   );
@@ -124,9 +128,9 @@ function pocketLabel(id: string) {
 }
 
 /** The lifted card's details, under the cards: balance, actions, its pockets, and installments. */
-function PickedAccount({ account: a, pockets, onUpdate, onShow, onMove, onAddPocket }: {
+function PickedAccount({ account: a, pockets, onUpdate, onShow, onMove, onAddPocket, onEditPocket }: {
   account: (Account & { balance: number }) | null; pockets: Pocket[]; onUpdate: (a: Account & { balance: number }) => void; onShow: (a: Account) => void;
-  onMove: (m: Move) => void; onAddPocket: (a: Account) => void;
+  onMove: (m: Move) => void; onAddPocket: (a: Account) => void; onEditPocket: (p: Pocket) => void;
 }) {
   return (
     <div className="mt-4 grid px-4" style={{ gridTemplateRows: a ? '1fr' : '0fr', transition: 'grid-template-rows 420ms cubic-bezier(.34,1.3,.64,1)' }}>
@@ -152,7 +156,8 @@ function PickedAccount({ account: a, pockets, onUpdate, onShow, onMove, onAddPoc
                 <div className="-mx-4">
                   <PocketStack pockets={pockets.filter(p => !p.archived_at)} mainId={a.default_envelope_id}
                     onAdd={id => onMove({ accountId: a.id, from: a.default_envelope_id, to: id })}
-                    onMoveOut={id => onMove({ accountId: a.id, from: id, to: id === a.default_envelope_id ? null : a.default_envelope_id })} />
+                    onMoveOut={id => onMove({ accountId: a.id, from: id, to: id === a.default_envelope_id ? null : a.default_envelope_id })}
+                    onEdit={onEditPocket} />
                 </div>
                 <div className="mt-3 flex gap-3">
                   <button type="button" onClick={() => onAddPocket(a)}
@@ -304,16 +309,17 @@ function BudgetSheet({ budget, onClose }: { budget: BudgetRow | 'new' | null; on
 
 const POCKET_KINDS: Record<Envelope['kind'], string> = { SPENDING: 'Spending', SAVINGS: 'Savings', GOAL: 'Goal' };
 
-/** Adds a pocket inside one account. */
-function AddPocketSheet({ account, onClose }: { account: Account | null; onClose: () => void }) {
+/** Adds a pocket inside one account, in a color not used there yet. */
+function AddPocketSheet({ account, used, onClose }: { account: Account | null; used: (string | null)[]; onClose: () => void }) {
   const [name, setName] = useState('');
+  const [color, setColor] = useState(nextPocketColor(used));
   const [kind, setKind] = useState<Envelope['kind']>('SAVINGS');
   const [target, setTarget] = useState<number | null>(null);
   const [date, setDate] = useState('');
   if (!account) return null;
   const error = !name.trim() ? 'Name the pocket' : kind === 'GOAL' && !target ? 'Enter the goal amount' : null;
   const save = () => attempt(async () => {
-    await call(client.api.envelopes.$post({ json: { accountId: account.id, name: name.trim(), kind, targetAmount: kind === 'GOAL' ? target : null, targetDate: kind === 'GOAL' && date ? date : null } }));
+    await call(client.api.envelopes.$post({ json: { accountId: account.id, name: name.trim(), kind, color, targetAmount: kind === 'GOAL' ? target : null, targetDate: kind === 'GOAL' && date ? date : null } }));
     onClose();
     showToast(`Added to ${account.name}`);
     await refresh();
@@ -325,7 +331,45 @@ function AddPocketSheet({ account, onClose }: { account: Account | null; onClose
         <InputRow label="Name" value={name} placeholder={kind === 'GOAL' ? 'e.g. Japan trip' : 'e.g. Rent'} onInput={setName} />
         {kind === 'GOAL' && <><AmountField label="Goal" value={target} currency={account.currency_code} onChange={setTarget} /><InputRow label="By" type="date" value={date} onInput={setDate} /></>}
       </Group>
+      <ColorPicker value={color} onChange={setColor} />
       <Block><Button large rounded disabled={Boolean(error)} onClick={save}>{error ?? 'Add pocket'}</Button></Block>
+    </Sheet>
+  );
+}
+
+/** Edit a pocket: name, color, goal; hide it once it's empty. Main keeps its name and can't be hidden. */
+function EditPocketSheet({ pocket: p, onClose }: { pocket: Pocket | null; onClose: () => void }) {
+  const cat = catalog.value;
+  const account = cat.accounts.find(a => a.id === p?.account_id);
+  const main = account?.default_envelope_id === p?.id;
+  const siblings = cat.envelopes.filter(e => e.account_id === p?.account_id && !e.archived_at);
+  const [name, setName] = useState(p?.name ?? '');
+  const [color, setColor] = useState(p ? pocketColor(p.color, Math.max(0, siblings.findIndex(e => e.id === p.id)), main) : POCKET_COLORS[0].hex);
+  const [target, setTarget] = useState<number | null>(p?.target_amount ?? null);
+  const [date, setDate] = useState(p?.target_date ?? '');
+  if (!p || !account) return null;
+  const patch = (json: Record<string, unknown>, done: string) => attempt(async () => {
+    await call(client.api[':table{accounts|envelopes|categories}'][':id'].$patch({ param: { table: 'envelopes', id: p.id }, json }));
+    onClose();
+    showToast(done);
+    await refresh();
+  });
+  const save = () => patch({ ...(main ? {} : { name: name.trim() }), color, ...(p.kind === 'GOAL' ? { target_amount: target, target_date: date || null } : {}) }, 'Saved');
+  return (
+    <Sheet open onClose={onClose} title={`${p.name} · ${account.name}`}>
+      <Group>
+        {!main && <InputRow label="Name" value={name} onInput={setName} />}
+        {p.kind === 'GOAL' && <><AmountField label="Goal" value={target} currency={p.currency_code} onChange={setTarget} /><InputRow label="By" type="date" value={date} onInput={setDate} /></>}
+      </Group>
+      <ColorPicker value={color} onChange={setColor} />
+      <Block className="flex flex-col gap-2.5">
+        <Button large rounded disabled={!main && !name.trim()} onClick={save}>Save</Button>
+        {!main && (
+          <Button large rounded tonal onClick={() => (p.balance ? showToast('Move its money out first, then hide it') : patch({ archived: true }, `${p.name} hidden`))}>
+            Hide this pocket
+          </Button>
+        )}
+      </Block>
     </Sheet>
   );
 }
