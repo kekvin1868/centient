@@ -70,7 +70,7 @@ export function Settings() {
       </Group>
 
       <Group>
-        <Row title={<span className="text-red-500">Reset Centient</span>} onClick={() => setReset(true)} />
+        <Row title={<span className="k-color-brand-red font-semibold text-primary">Reset Centient</span>} onClick={() => setReset(true)} />
       </Group>
       <ResetSheet open={reset} onClose={() => setReset(false)} />
 
@@ -179,11 +179,11 @@ function EditSheet({ edit, onClose }: { edit: Edit | null; onClose: () => void }
           </>
         )}
       </Group>
-      {edit.table === 'accounts' && <BlockFooter>Currency can change only before the account has entries.</BlockFooter>}
+      {edit.table === 'accounts' && <BlockFooter inset>Currency can change only before the account has entries.</BlockFooter>}
       <Block className="flex flex-col gap-2.5">
-        <Button large disabled={!name.trim()} onClick={save}>Save</Button>
-        <Button large tonal onClick={() => patch({ archived: true }, `Hidden. Find it under Hidden to show it again.`)}>Hide this {what}</Button>
-        {edit.table === 'accounts' && <Button large tonal className="k-color-brand-red" onClick={askDelete}>Delete account</Button>}
+        <Button large rounded disabled={!name.trim()} onClick={save}>Save</Button>
+        <Button large rounded tonal onClick={() => patch({ archived: true }, `Hidden. Find it under Hidden to show it again.`)}>Hide this {what}</Button>
+        {edit.table === 'accounts' && <Button large rounded tonal className="k-color-brand-red" onClick={askDelete}>Delete account</Button>}
       </Block>
     </Sheet>
     <ConfirmSheet open={Boolean(confirmDelete)} message={confirmDelete ?? ''} confirmLabel="Delete account"
@@ -208,7 +208,7 @@ function ResetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   };
   return (
     <Sheet open={open} onClose={onClose} title="Reset Centient">
-      <p className="mx-4 my-4 opacity-60">
+      <p className="mx-4 my-4 text-muted">
         This removes your accounts, entries, Pockets, categories and budgets from the app, and you start again from the first screen.
         A copy stays on the server, marked as deleted.
       </p>
@@ -216,8 +216,8 @@ function ResetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
         <ToggleRow label="Download a backup first" checked={backup} onChange={setBackup} />
       </Group>
       <Block className="flex flex-col gap-2.5">
-        <Button large className="k-color-brand-red" disabled={busy} onClick={run}>{busy ? 'Resetting…' : 'Reset Centient'}</Button>
-        <Button large tonal onClick={onClose}>Cancel</Button>
+        <Button large rounded className="k-color-brand-red" disabled={busy} onClick={run}>{busy ? 'Resetting…' : 'Reset Centient'}</Button>
+        <Button large rounded tonal onClick={onClose}>Cancel</Button>
       </Block>
     </Sheet>
   );
@@ -242,7 +242,7 @@ function AddPocket({ open, onClose }: { open: boolean; onClose: () => void }) {
         <InputRow label="Name" value={name} placeholder={kind === 'GOAL' ? 'e.g. Japan trip' : 'e.g. Social'} onInput={setName} />
         {kind === 'GOAL' && <><AmountField label="Goal" value={target} onChange={setTarget} /><InputRow label="By" type="date" value={date} onInput={setDate} /></>}
       </Group>
-      <Block><Button large disabled={Boolean(error)} onClick={save}>{error ?? 'Add Pocket'}</Button></Block>
+      <Block><Button large rounded disabled={Boolean(error)} onClick={save}>{error ?? 'Add Pocket'}</Button></Block>
     </Sheet>
   );
 }
@@ -260,7 +260,7 @@ function AddCategory({ open, onClose }: { open: boolean; onClose: () => void }) 
     <Sheet open={open} onClose={onClose} title="Add category">
       <Segmented label="Kind" value={kind} onChange={setKind} options={[{ value: 'EXPENSE', label: 'Spending' }, { value: 'INCOME', label: 'Income' }]} />
       <Group><InputRow label="Name" value={name} onInput={setName} /></Group>
-      <Block><Button large disabled={!name.trim()} onClick={save}>{name.trim() ? 'Add category' : 'Enter a name'}</Button></Block>
+      <Block><Button large rounded disabled={!name.trim()} onClick={save}>{name.trim() ? 'Add category' : 'Enter a name'}</Button></Block>
     </Sheet>
   );
 }

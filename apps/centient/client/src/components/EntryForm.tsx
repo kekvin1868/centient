@@ -35,7 +35,7 @@ export function EntryForm({ form, onChange, lockType }: { form: Form; onChange: 
       <Group>
         <AmountField value={form.amount} currency={currency} onChange={amount => set({ amount })} />
         {form.originalAmount !== null && form.originalCurrency && (
-          <ListItem title={<span className="text-sm opacity-60">Price was {formatMoney(form.originalAmount, form.originalCurrency)}</span>} />
+          <ListItem title={<span className="text-sm text-muted">Price was {formatMoney(form.originalAmount, form.originalCurrency)}</span>} />
         )}
       </Group>
       {(form.type === 'EXPENSE' || form.type === 'INCOME') && (

@@ -1,13 +1,13 @@
-// Grouped inset lists (Konsta List, iOS Settings style). Group = optional label + list + footnote.
+// Grouped inset lists (Konsta List on flat gray cards). Group = optional bold heading + list + footnote.
 import { BlockFooter, BlockTitle, List, ListItem } from 'konsta/react';
 import type { ReactNode } from 'react';
 
 export function Group({ label, foot, children }: { label?: string; foot?: string; children: ReactNode }) {
   return (
     <>
-      {label && <BlockTitle className="!text-[13px] !font-normal uppercase tracking-wide opacity-60">{label}</BlockTitle>}
+      {label && <BlockTitle medium className="!pl-4 !text-[22px] !font-extrabold !leading-none !tracking-[-0.03em]">{label}</BlockTitle>}
       <List strong inset dividers>{children}</List>
-      {foot && <BlockFooter>{foot}</BlockFooter>}
+      {foot && <BlockFooter inset>{foot}</BlockFooter>}
     </>
   );
 }
@@ -17,7 +17,7 @@ type RowProps = { title: ReactNode; sub?: ReactNode; trail?: ReactNode; media?: 
 /** One list row. Tappable rows render a real button, so they work from the keyboard too. */
 export function Row({ title, sub, trail, media, onClick, chevron }: RowProps) {
   return (
-    <ListItem title={title} subtitle={sub && <span className="text-black/55 dark:text-white/55">{sub}</span>} after={trail} media={media} strongTitle={false} chevron={Boolean(onClick && chevron)}
+    <ListItem title={title} subtitle={sub && <span className="text-muted">{sub}</span>} after={trail} media={media} strongTitle={false} chevron={Boolean(onClick && chevron)}
       link={Boolean(onClick)} linkComponent="button" linkProps={onClick ? { type: 'button', onClick } : undefined} />
   );
 }

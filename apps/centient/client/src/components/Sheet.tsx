@@ -80,8 +80,8 @@ export function Sheet({ open, onClose, title, children }: Props) {
       <button className="block mx-auto mt-2 mb-1 h-[5px] w-10 rounded-full bg-black/20 dark:bg-white/25" aria-label="Close" onClick={close} />
       {title && (
         <div className="flex items-center justify-between px-4 pt-2">
-          <span className="text-xl font-bold truncate">{title}</span>
-          <Link onClick={close}>Done</Link>
+          <span className="truncate text-[22px] font-extrabold tracking-[-0.02em]">{title}</span>
+          <Link className="font-bold" onClick={close}>Done</Link>
         </div>
       )}
       <div className="pb-6">{children}</div>

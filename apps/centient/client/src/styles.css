@@ -1,20 +1,63 @@
-/* Tailwind + Konsta UI (iOS theme). Components come from Konsta; this file only sets the brand and the
-   few app-wide rules Konsta does not cover. */
+/* Tailwind + Konsta UI (iOS theme). Components come from Konsta; this file sets Centient's look on top:
+   one typeface (Geist), Hatsune Miku's palette (teal, aqua, pink, silver-gray, charcoal), and a light game
+   feel: hairline outlines, a short "lip" shadow under raised pieces, cards dealt and floating. */
 @import "tailwindcss";
 @import "konsta/react/theme.css";
 /* Our own components are styled with Tailwind classes too. */
 @source "./";
 
 @theme {
-  /* Deep Miku teal: 6.1:1 as text on white, and white text on it reads at the same ratio. */
-  --color-brand-primary: #0b6e67;
-  /* Destructive actions: add class k-color-brand-red to a Konsta component. */
-  --color-brand-red: #ff3b30;
+  /* Accent as text on light surfaces: deep Miku teal, 5.3:1 on white. Fills use --miku instead. */
+  --color-brand-primary: #007268;
+  /* Destructive actions (Miku's pink, not red): add class k-color-brand-red to a Konsta component. 5.6:1 on white. */
+  --color-brand-red: #c4126f;
   --font-ios: "Geist Variable", -apple-system, SF Pro Text, system-ui, sans-serif;
+
+  --color-ios-light-surface: #fff;
+  --color-ios-light-surface-1: #f2f5f6;
+  --color-ios-dark-surface: #000;
+  --color-ios-dark-surface-1: #141819;
+
+  /* Tailwind names for our own pieces. */
+  --color-miku: var(--miku);
+  --color-on-miku: var(--on-miku);
+  --color-pink: var(--pink);
+  --color-raised: var(--raised);
+  --color-raised-2: var(--raised-2);
+  --color-muted: var(--muted);
+  --color-ink: var(--ink);
+  --color-edge: var(--edge);
 }
 
-/* On black, the deep teal is too dark to read; lift it (5:1 on black, 4.2:1 under white text). */
-.dark { --k-color-primary: rgb(23 138 129); }
+/* Miku palette: teal #39c5bb (hair), aqua #86cecb, deep teal #137a7f, pink #e12885 (ties), silver #bec8d1, charcoal #373b3e. */
+:root {
+  /* Her teal, pushed bright; on P3 screens (every recent iPhone, Mac) it goes past sRGB. */
+  --miku: #1ff0dc;
+  --on-miku: #002624; /* 11:1 on --miku */
+  --pink: #e12885; /* "overspent" panel; white on it reads 4.6:1 */
+  --negative: #c4126f; /* minus amounts as text */
+  --raised: #f2f5f6;
+  --raised-2: #e4eaec;
+  --muted: #5f686c; /* 4.9:1 on --raised */
+  --ink: #0b0f10;
+  --edge: rgb(55 59 62 / 0.14); /* hairline outlines, charcoal at low strength */
+  --lip: rgb(55 59 62 / 0.10); /* the short shadow under raised pieces */
+}
+@supports (color: color(display-p3 0 0 0)) {
+  :root { --miku: color(display-p3 0.05 0.95 0.86); --pink: color(display-p3 0.9 0.12 0.53); }
+}
+.dark {
+  --k-color-primary: var(--miku); /* bright cyan reads at 12:1 on the dark cards */
+  --k-color-brand-red: #ff6fb5;
+  --negative: #ff6fb5;
+  --raised: #141819;
+  --raised-2: #222829;
+  --muted: #8e989c;
+  --ink: #fff;
+  --edge: rgb(190 200 209 / 0.14);
+  --lip: color-mix(in oklab, var(--miku) 16%, transparent);
+}
+.dark .k-color-brand-red { --k-color-primary: #ff6fb5; }
 
 /* Clip sideways overflow: a phone would otherwise widen the page and stay zoomed out. */
 html, body { overflow-x: clip; }
@@ -23,20 +66,128 @@ body {
   overscroll-behavior-y: none;
 }
 .num { font-variant-numeric: tabular-nums; }
+/* In the base layer, so a component's own outline-none / ring utilities still win. */
+@layer base { :focus-visible { outline: 2px solid var(--k-color-primary); outline-offset: 2px; } }
+::selection { background: color-mix(in oklab, var(--miku) 45%, transparent); }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition-duration: 1ms !important; }
+  *, *::before, *::after { transition-duration: 1ms !important; animation: none !important; }
 }
 
+/* Screens scroll the page; the tab bar sits over the bottom. The top clears the status bar plus the strip
+   under it that iOS fades and blurs in Home Screen apps. */
+.screen {
+  max-width: 640px; margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 28px) 0 calc(env(safe-area-inset-bottom) + 112px);
+}
+.screen-title { margin: 8px 16px 4px; font-size: 34px; font-weight: 800; line-height: 1.05; letter-spacing: -0.04em; }
+.text-negative { color: var(--negative); }
+
+/* ---- The kit ------------------------------------------------------------------------------------------- */
+
+/* A raised piece: hairline outline and a short lip under it (no blur, no thick outline). */
+.panel { border: 1px solid var(--edge); box-shadow: 0 3px 0 var(--lip); }
+/* Halftone dots, for drenched panels. Sits under the content (add to a positioned element). */
+.halftone::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: radial-gradient(circle, rgb(0 0 0 / 0.10) 1.1px, transparent 1.5px) 0 0 / 7px 7px;
+  mask-image: linear-gradient(115deg, transparent 40%, #000 100%);
+}
+/* A keycap: the "press [Enter]" prompt. */
+.keycap {
+  display: inline-grid; place-items: center; min-width: 44px; height: 44px; padding: 0 10px; border-radius: 12px;
+  font-weight: 700; font-size: 15px; background: var(--miku); color: var(--on-miku);
+  border: 1px solid var(--edge); box-shadow: 0 3px 0 color-mix(in oklab, var(--miku) 45%, #137a7f);
+}
+.keycap:active { box-shadow: 0 1px 0 color-mix(in oklab, var(--miku) 45%, #137a7f); }
+.keycap-quiet { background: var(--raised-2); color: var(--ink); box-shadow: 0 3px 0 var(--lip); }
+
+/* Money set big: heavy, tight, tabular; the currency smaller and lifted like Cash App's "$". */
+.money-big { font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.045em; }
+.money-big .cur { font-size: 0.5em; font-weight: 700; letter-spacing: -0.02em; vertical-align: 0.72em; margin-right: 0.08em; }
+
+/* Account types get colors from Miku's palette (loot-rarity style). Text on them is dark ink. */
+.rarity-CASH { --rarity: #e9eef1; }
+.rarity-EWALLET { --rarity: #86cecb; }
+.rarity-BANK { --rarity: #39c5bb; }
+.rarity-CREDIT_CARD { --rarity: #ff8cc6; }
+.rarity-PAYLATER { --rarity: #ffc2df; }
+.rarity-EXCHANGE { --rarity: #b6f2ec; }
+.rarity-IOU { --rarity: #bec8d1; }
+.rarity-ALL { --rarity: var(--miku); }
+
+/* Idle float for cards in hand (Balatro). */
+@keyframes bob { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-4px) rotate(0.6deg); } }
+/* Paused under a finger or pointer, so the card holds still while it is being tapped. */
+.bob { animation: bob 3.2s ease-in-out infinite; }
+.bob:hover, .bob:has(:active) { animation-play-state: paused; }
+/* Cards are dealt in from below, one after another. */
+@keyframes deal { from { transform: translateY(140%) rotate(-24deg); opacity: 0; } }
+/* A short score "pop" when a number changes. */
+@keyframes pop { 40% { transform: scale(1.06) rotate(-1deg); } }
+/* A hint that breathes. */
+@keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+/* ---- Konsta, re-skinned -------------------------------------------------------------------------- */
+
+/* No glass anywhere. */
+.k-glass { box-shadow: none !important; backdrop-filter: none !important; }
+
+/* Toast: a solid ink pill, Undo in Miku. */
+.k-toast > .k-glass { background: var(--ink); color: var(--raised); border-radius: 16px; }
+.k-toast .k-button { color: var(--miku); font-weight: 700; }
+.dark .k-toast > .k-glass { background: var(--raised-2); color: #fff; border: 1px solid var(--edge); }
 /* While a sheet is open the bottom is taken, so toasts drop in from the top instead of covering its fields. */
 body:has(.k-sheet.-translate-y-full) .k-toast { top: calc(env(safe-area-inset-top) + 12px); bottom: auto; }
 
-/* Screens scroll the page; the tab bar floats over the bottom. */
-.screen {
-  max-width: 640px; margin: 0 auto;
-  padding: calc(env(safe-area-inset-top) + 12px) 0 calc(env(safe-area-inset-bottom) + 120px);
-}
-.screen-title { margin: 8px 16px 8px; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+/* Big buttons: rounded slabs with a hairline and a lip. Press flattens the lip; the button itself never
+   moves (a target that moves under the finger can swallow the tap). */
+.k-button.h-12 { height: 56px; border-radius: 16px; font-size: 17px; font-weight: 700; border: 1px solid var(--edge); box-shadow: 0 3px 0 var(--lip); }
+.k-button.h-12:active { box-shadow: 0 1px 0 var(--lip); }
+.k-button.bg-primary:not(.k-color-brand-red) { background: var(--miku); color: var(--on-miku); box-shadow: 0 3px 0 color-mix(in oklab, var(--miku) 45%, #137a7f); }
+.k-button.bg-primary.k-color-brand-red { color: #fff; }
+/* ~= matches the whole class, so clear buttons (active:bg-primary/15) keep their transparent fill. */
+.k-button[class~="bg-primary/15"] { background: var(--raised); }
+.k-button[class~="bg-primary/15"]:not(.k-color-brand-red) { color: var(--ink); }
+/* Disabled big buttons lose the lip. */
+.k-button.h-12[class~="bg-black/10"], .dark .k-button.h-12[class~="dark:bg-white/10"] { box-shadow: none; border-color: transparent; font-weight: 600; }
+/* Anything Konsta fills with the accent and labels white (stepper) gets dark ink once the accent is bright. */
+.dark .bg-primary.text-white { color: var(--on-miku); }
+.k-button:active { opacity: 0.85; }
+
+/* Segmented: hairline track, Miku pill for the choice. */
+.k-segmented { background: var(--raised) !important; border: 1px solid var(--edge); border-radius: 16px !important; }
+.k-segmented-strong-highlight, .k-segmented > span[class*="bg-white"] { background: var(--miku) !important; box-shadow: none !important; border-radius: 12px !important; }
+.k-segmented .k-button { color: var(--muted); font-weight: 600; }
+.k-segmented .k-button[class*="text-black"] { color: var(--on-miku); }
+
+/* Progress: a slightly thicker bar. */
+.k-progressbar { height: 10px; background: var(--raised-2); border-radius: 9999px; }
+.k-progressbar > span:not(.k-color-brand-red *) { background: var(--miku); }
+
+/* Lists: raised panels too. */
+.k-list:where(:not(.k-list .k-list)) > ul { border: 1px solid var(--edge); box-shadow: 0 3px 0 var(--lip); }
+/* Section headings: heavy and tight. */
+.k-block-title { font-weight: 800; letter-spacing: -0.03em; }
+
+/* Action sheet (confirm). */
+.k-actions-group { background: var(--raised); border: 1px solid var(--edge); }
+.dark .k-actions-group { background: var(--raised-2); }
+
+/* Sheets: canvas color, hairline top. */
+.k-sheet { border-radius: 28px 28px 0 0; border-top: 1px solid var(--edge); }
+
+/* ---- Spacing ------------------------------------------------------------------------------------------ */
+
+/* One vertical rhythm: 24px between sections, 8px from a section's label or footnote to its list.
+   Unlayered, so it beats Konsta's my-8 / -mb-6 / -mt-6. */
+.k-list:where(:not(.k-list .k-list)), .k-block { margin-block: 24px; }
+.k-block-title { margin-top: 28px; margin-bottom: 8px; }
+.k-block-title + .k-list, .k-block-title + .k-block { margin-top: 0; }
+.k-list:has(+ .k-block-footer) { margin-bottom: 0; }
+.k-block-footer { margin-top: 10px; margin-bottom: 24px; color: var(--muted); }
+/* A button block right under a list belongs to it: 16px, not a full section gap. */
+.k-list + .k-block, .k-block-footer + .k-block { margin-top: -8px; }
 
 /* Tappable rows render a <button> (keyboard access) as Konsta's row content; make it fill the row like
    Konsta's own <a>. Passing a className through linkProps would replace Konsta's row classes. */

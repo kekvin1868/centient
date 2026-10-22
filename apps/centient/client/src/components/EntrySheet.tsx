@@ -52,10 +52,10 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
           <>
             <EntryForm form={form} onChange={setForm} lockType />
             <Block className="flex flex-col gap-2.5">
-              <Button large disabled={'error' in (result ?? {})} onClick={save}>
+              <Button large rounded disabled={'error' in (result ?? {})} onClick={save}>
                 {result && 'error' in result ? result.error : 'Save'}
               </Button>
-              <Button large tonal className="k-color-brand-red" onClick={() => setConfirm(true)}>Delete</Button>
+              <Button large rounded tonal className="k-color-brand-red" onClick={() => setConfirm(true)}>Delete</Button>
             </Block>
           </>
         ) : (
@@ -63,7 +63,7 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
             <Group foot={entry.kind === 'OPENING' ? 'To change it, use Update balance on the Money tab.' : 'Corrections come from Update balance on the Money tab.'}>
               <Row title={row.sub || row.title} trail={formatMoney(row.amount, row.currency)} />
             </Group>
-            <Block><Button large tonal className="k-color-brand-red" onClick={() => setConfirm(true)}>Delete</Button></Block>
+            <Block><Button large rounded tonal className="k-color-brand-red" onClick={() => setConfirm(true)}>Delete</Button></Block>
           </>
         )}
       </Sheet>

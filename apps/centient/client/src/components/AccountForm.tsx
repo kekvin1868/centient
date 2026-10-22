@@ -42,7 +42,7 @@ export function AccountForm({ onDone, submitLabel = 'Add account' }: { onDone: (
         {!otherCurrency && kind !== 'EXCHANGE' && (
           <Button clear inline onClick={() => setOtherCurrency(true)}>Different currency</Button>
         )}
-        <Button large disabled={!name.trim()} onClick={save}>{name.trim() ? submitLabel : 'Enter a name'}</Button>
+        <Button large rounded disabled={!name.trim()} onClick={save}>{name.trim() ? submitLabel : 'Enter a name'}</Button>
       </Block>
     </>
   );

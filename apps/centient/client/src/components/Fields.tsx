@@ -1,5 +1,5 @@
 // Form rows for grouped lists. Pickers are native selects (the phone's own wheel) laid over the row.
-import { ListInput, ListItem, Stepper, Toggle } from 'konsta/react';
+import { ListItem, Stepper, Toggle } from 'konsta/react';
 
 type Opt = { value: string; label: string };
 
@@ -22,9 +22,11 @@ export function PickerRow({ label, value, options, onChange, placeholder = 'Choo
 export function InputRow({ label, value, onInput, placeholder, type = 'text', inputMode }: {
   label: string; value: string; onInput: (v: string) => void; placeholder?: string; type?: string; inputMode?: 'numeric' | 'text';
 }) {
+  // Label on the left, value on the right, like PickerRow (Konsta's ListInput stacks the label above).
   return (
-    <ListInput label={label} type={type} inputMode={inputMode} value={value} placeholder={placeholder}
-      onChange={(e: Event) => onInput((e.target as HTMLInputElement).value)} />
+    <ListItem label title={label} strongTitle={false}
+      after={<input className="w-[60vw] max-w-56 bg-transparent text-right outline-none placeholder:opacity-40" type={type} inputMode={inputMode}
+        value={value} placeholder={placeholder} aria-label={label} onChange={e => onInput(e.target.value)} />} />
   );
 }
 

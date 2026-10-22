@@ -26,8 +26,8 @@ export function AmountField({ value, currency = 'IDR', onChange, label = 'Amount
   return (
     <ListInput label={`${label}${currency !== 'IDR' ? ` (${currency})` : ''}`}
       input={
-        <span className="flex items-baseline gap-1 text-[28px] font-semibold">
-          {currency === 'IDR' && <span className="opacity-50">Rp</span>}
+        <span className="money-big flex items-baseline gap-1 py-1 text-[40px]">
+          {currency === 'IDR' && <span className="text-[0.55em] text-muted">Rp</span>}
           <input className="num w-full bg-transparent outline-none placeholder:opacity-30" aria-label={label} inputMode={d ? 'decimal' : 'numeric'}
             placeholder="0" value={text} autoFocus={autoFocus}
             onChange={e => {
