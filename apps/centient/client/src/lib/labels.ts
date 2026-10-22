@@ -21,6 +21,11 @@ export type EntryRow = { emoji: string; title: string; sub: string; amount: numb
 
 /** How an entry reads in a list: from its saved command, or from its first transaction for system entries. */
 export function entryRow(e: EntryView & { command: Command | null }, cat: Catalog): EntryRow {
+  const row = baseRow(e, cat);
+  return e.icon ? { ...row, emoji: e.icon } : row;
+}
+
+function baseRow(e: EntryView & { command: Command | null }, cat: Catalog): EntryRow {
   const name = (rows: { id: string; name: string }[], id?: string | null) => rows.find(r => r.id === id)?.name ?? '';
   const accCur = (id?: string | null) => cat.accounts.find(a => a.id === id)?.currency_code ?? 'IDR';
   const c = e.command;

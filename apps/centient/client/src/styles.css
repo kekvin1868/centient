@@ -194,3 +194,5 @@ body:has(.k-sheet.-translate-y-full) .k-toast { top: calc(env(safe-area-inset-to
 /* Tappable rows render a <button> (keyboard access) as Konsta's row content; make it fill the row like
    Konsta's own <a>. Passing a className through linkProps would replace Konsta's row classes. */
 .k-list li > button { width: 100%; text-align: start; }
+/* Swipeable entry rows: Konsta's hairline between rows, lined up with the text like its own. */
+.entry-row + .entry-row::before { content: ""; position: absolute; top: 0; right: 0; left: 68px; height: 1px; background: var(--edge); z-index: 1; }
