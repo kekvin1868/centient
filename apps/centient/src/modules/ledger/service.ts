@@ -27,14 +27,21 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
     return { c, cmds: cmds.map(x => (x.type === 'EXPENSE' && x.split && !x.split.iouAccountId ? { ...x, split: { ...x.split, iouAccountId: id } } : x)) };
   }
 
+  /** Checks each command against the catalog and builds its entry (a split or a fee adds a second transaction). */
+  async function prepare(cmds: Command[]): Promise<NewEntry[]> {
+    const { c, cmds: ready } = await withIou(await catalog.load(), cmds);
+    const at = now();
+    const entries: NewEntry[] = ready.map(cmd => ({ kind: 'USER', command: cmd, txs: build(c, cmd, at) }));
+    for (const e of entries) for (const tx of e.txs) assertBalanced(tx, id => c.accountOf(id));
+    return entries;
+  }
+
   return {
-    /** Saves each command as one entry (a split or a fee adds a second transaction to it); returns the entry ids. */
+    prepare,
+
+    /** Saves each command as one entry; returns the entry ids. */
     async record(cmds: Command[]): Promise<string[]> {
-      const { c, cmds: ready } = await withIou(await catalog.load(), cmds);
-      const at = now();
-      const entries: NewEntry[] = ready.map(cmd => ({ kind: 'USER', command: cmd, txs: build(c, cmd, at) }));
-      for (const e of entries) for (const tx of e.txs) assertBalanced(tx, id => c.accountOf(id));
-      return repos.entries.insert(ws, entries);
+      return repos.entries.insert(ws, await prepare(cmds));
     },
 
     /** Rebuilds an entry from an edited command. Its type is fixed; a same-day edit keeps the original time. */

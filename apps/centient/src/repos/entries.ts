@@ -38,6 +38,19 @@ export function entriesRepo(db: D1Database) {
     ];
   }
 
+  function insertStatements(ws: string, entries: NewEntry[]) {
+    const ids: string[] = [];
+    const stmts: D1PreparedStatement[] = [];
+    for (const g of entries) {
+      const gid = uid();
+      ids.push(gid);
+      stmts.push(db.prepare('INSERT INTO entry_groups (id, workspace_id, kind, command) VALUES (?, ?, ?, ?)')
+        .bind(gid, ws, g.kind, g.command === null ? null : JSON.stringify(g.command)));
+      for (const t of g.txs) stmts.push(...txStatements(ws, gid, t));
+    }
+    return { ids, stmts };
+  }
+
   /** Attaches entry and allocation lines; json_each keeps the bound-parameter count at one, whatever the page size. */
   async function withLines<T extends { id: string }>(rows: T[]) {
     const ids = JSON.stringify(rows.map(r => r.id));
@@ -72,17 +85,12 @@ export function entriesRepo(db: D1Database) {
   }
 
   return {
+    /** The statements that write these entries, for a caller that batches them with other writes. */
+    insertStatements,
+
     /** Writes every entry, its transactions and their lines in one atomic batch; returns the entry ids. */
     async insert(ws: string, entries: NewEntry[]) {
-      const ids: string[] = [];
-      const stmts: D1PreparedStatement[] = [];
-      for (const g of entries) {
-        const gid = uid();
-        ids.push(gid);
-        stmts.push(db.prepare('INSERT INTO entry_groups (id, workspace_id, kind, command) VALUES (?, ?, ?, ?)')
-          .bind(gid, ws, g.kind, g.command === null ? null : JSON.stringify(g.command)));
-        for (const t of g.txs) stmts.push(...txStatements(ws, gid, t));
-      }
+      const { ids, stmts } = insertStatements(ws, entries);
       await db.batch(stmts); // one batch = one atomic write
       return ids;
     },

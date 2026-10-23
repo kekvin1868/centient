@@ -48,8 +48,8 @@ export function createInstallmentsService({ ws, now, repos, catalog, ledger }: S
      * their share sits on what they owe you: logging a new purchase splits it like a split bill (your part is
      * spending in `categoryId`, theirs a transfer to their IOU account); a purchase already in the balance only
      * moves their part onto their IOU account as a "Balance adjustment" that budgets ignore.
-     * ponytail: plan rows and ledger entries are two writes, not one batch; a failure between them leaves the
-     * entries without a plan (visible and deletable in activity). One batch needs a cross-repository write.
+     * The entries and the plan rows are one atomic write. A new IOU account is written before them; if the
+     * plan then fails it stays, empty, and is reused by name next time.
      */
     async create(i: NewPlan): Promise<PlanView> {
       const c = await catalog.load();
@@ -94,7 +94,7 @@ export function createInstallmentsService({ ws, now, repos, catalog, ledger }: S
         if (!adj) throw new DomainError('NO_ADJUSTMENT_CATEGORY', 'Create a "Balance adjustment" income category first');
         for (const o of ious) cmds.push({ type: 'INCOME', accountId: o.id, categoryId: adj.id, amount: o.share * left, date: today, merchant: i.name.trim(), note: `${o.name}'s share · ${note}` });
       }
-      if (cmds.length) await ledger.record(cmds);
+      const entries = cmds.length ? await ledger.prepare(cmds) : [];
 
       const id = crypto.randomUUID();
       const parties: PartyRow[] = [
@@ -103,7 +103,10 @@ export function createInstallmentsService({ ws, now, repos, catalog, ledger }: S
       ];
       const at = new Date(now()).toISOString();
       const prepaid = Array.from({ length: i.paidCount }, (_, k) => parties.map(x => ({ plan_id: id, installment_no: k + 1, party_seq: x.seq, paid_at: at, entry_id: null }))).flat();
-      await repos.installments.createPlan(ws, { id, account_id: account.id, name: i.name.trim(), amount_per_installment: i.amountPerInstallment, installments: i.installments, first_due: i.firstDue }, parties, prepaid);
+      await repos.batch([
+        ...repos.entries.insertStatements(ws, entries).stmts,
+        ...repos.installments.planInserts(ws, { id, account_id: account.id, name: i.name.trim(), amount_per_installment: i.amountPerInstallment, installments: i.installments, first_due: i.firstDue }, parties, prepaid),
+      ]);
       return (await list(account.id)).find(p => p.id === id)!;
     },
 

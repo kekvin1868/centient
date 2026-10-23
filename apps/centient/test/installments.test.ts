@@ -100,6 +100,22 @@ describe('installment plans', () => {
     })).rejects.toThrow('pay later');
   });
 
+  it('writes the purchase entries and the plan together: if the plan fails, nothing is logged', async () => {
+    const { w } = world();
+    const t = await setup(w);
+    const shopping = (await w.repos.categories.list(t.ws)).find(c => c.name === 'Shopping')!.id;
+    const before = await t.balance(t.kredivo);
+    const real = w.repos.installments.planInserts;
+    w.repos.installments.planInserts = () => [w.db.prepare('INSERT INTO no_such_table VALUES (1)')];
+    await expect(t.s().installments.create({
+      accountId: t.kredivo, name: 'TV', amountPerInstallment: 300_000, installments: 3, firstDue: '2026-11-01', paidCount: 0,
+      myShare: 300_000, others: [], alreadyInBalance: false, categoryId: shopping,
+    })).rejects.toThrow();
+    w.repos.installments.planInserts = real;
+    expect(await t.balance(t.kredivo)).toBe(before);
+    expect((await t.s().ledger.listEntries({ limit: 50 })).items.some(e => e.transactions.some(x => x.merchant === 'tv'))).toBe(false);
+  });
+
   it('keeps due dates on the same day, clamped to short months', () => {
     expect([1, 2, 3].map(k => addMonths('2026-01-31', k))).toEqual(['2026-02-28', '2026-03-31', '2026-04-30']);
   });

@@ -13,15 +13,16 @@ export function installmentsRepo(db: D1Database) {
   const owned = 'plan_id IN (SELECT id FROM installment_plans WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL)';
 
   return {
-    async createPlan(ws: string, p: Omit<PlanRow, 'created_at'>, parties: PartyRow[], prepaid: Omit<PaymentRow, 'proof'>[]) {
-      await db.batch([
+    /** The statements that write a plan, its parties and the installments already paid; the caller batches them. */
+    planInserts(ws: string, p: Omit<PlanRow, 'created_at'>, parties: PartyRow[], prepaid: Omit<PaymentRow, 'proof'>[]): D1PreparedStatement[] {
+      return [
         db.prepare('INSERT INTO installment_plans (id, workspace_id, account_id, name, amount_per_installment, installments, first_due) VALUES (?, ?, ?, ?, ?, ?, ?)')
           .bind(p.id, ws, p.account_id, p.name, p.amount_per_installment, p.installments, p.first_due),
         ...parties.map(x => db.prepare('INSERT INTO installment_parties (plan_id, seq, name, iou_account_id, share) VALUES (?, ?, ?, ?, ?)')
           .bind(p.id, x.seq, x.name, x.iou_account_id, x.share)),
         ...prepaid.map(x => db.prepare('INSERT INTO installment_payments (plan_id, installment_no, party_seq, paid_at, entry_id) VALUES (?, ?, ?, ?, ?)')
           .bind(p.id, x.installment_no, x.party_seq, x.paid_at, x.entry_id)),
-      ]);
+      ];
     },
 
     /** Live plans (optionally of one account) with their parties and paid shares. A share whose logged entry was deleted counts as unpaid. */

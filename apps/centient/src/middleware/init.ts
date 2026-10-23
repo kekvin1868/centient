@@ -27,6 +27,8 @@ export function createRepos(db: D1Database, store?: FileStore) {
     workspaces: workspacesRepo(db), accounts: accountsRepo(db), envelopes: envelopesRepo(db), categories: categoriesRepo(db),
     aliases: aliasesRepo(db), budgets: budgetsRepo(db), entries: entriesRepo(db), prices: pricesRepo(db),
     installments: installmentsRepo(db), files: filesRepo(db, store),
+    /** One atomic write across repos (D1 runs a batch as one transaction). */
+    batch: (stmts: D1PreparedStatement[]) => db.batch(stmts),
   };
 }
 export type Repos = ReturnType<typeof createRepos>;

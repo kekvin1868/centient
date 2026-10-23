@@ -43,8 +43,8 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
           return { id: x.id, name: x.name, kind: x.kind, balance: x.balance, currency: x.currency_code, note: v !== null ? `≈ ${formatMoney(v)}` : undefined };
         })} />
       <PickedAccount account={a} onShow={x => { selectedAccount.value = x.id; onShowAccount(); }}>
-        {a && a.kind !== 'IOU' && <AccountPockets key={a.id} account={a} pockets={bal.envelopes.filter(e => e.account_id === a.id)} />}
-        {a && takesInstallments(a.kind) && <InstallmentsSection key={a.id} account={a} />}
+        {a && a.kind !== 'IOU' && <AccountPockets key={`pockets:${a.id}`} account={a} pockets={bal.envelopes.filter(e => e.account_id === a.id)} />}
+        {a && takesInstallments(a.kind) && <InstallmentsSection key={`plans:${a.id}`} account={a} />}
       </PickedAccount>
       <Budgets />
     </Page>
