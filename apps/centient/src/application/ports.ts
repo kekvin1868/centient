@@ -12,6 +12,8 @@ export type Envelope = {
   target_amount: number | null; target_date: string | null; archived_at: string | null;
   /** Hex color the user picked for the pocket's card; null = the default for its place. */
   color: string | null;
+  /** Which card pattern (0-23); unique among an account's live pockets. */
+  pattern: number;
 };
 export type Category = { id: string; name: string; kind: 'EXPENSE' | 'INCOME'; archived_at: string | null };
 export type Alias = { alias: string; kind: 'MERCHANT' | 'ACCOUNT' | 'CATEGORY'; value: string };

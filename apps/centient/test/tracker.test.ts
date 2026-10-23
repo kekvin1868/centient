@@ -453,4 +453,15 @@ describe('personal touches', () => {
     expect((await deps.catalog.listEnvelopes(t.ws)).find(e => e.id === p.id)!.color).toBe('#c3b1ff');
     await expect(uc.updateItem(deps, t.ws, 'envelopes', p.id, { color: 'red' })).rejects.toThrow();
   });
+
+  it('gives every pocket in an account its own pattern, reusing one only after its pocket is hidden', async () => {
+    const t = await setup('pattern@test');
+    const make = (name: string) => uc.createPocket(deps, t.ws, { accountId: t.bca, name, kind: 'SPENDING' });
+    const [a, b] = [await make('A'), await make('B')];
+    const live = (await deps.catalog.listEnvelopes(t.ws)).filter(e => e.account_id === t.bca);
+    expect(new Set(live.map(e => e.pattern)).size).toBe(live.length); // Main + A + B, all different
+    await uc.updateItem(deps, t.ws, 'envelopes', a.id, { archived: true });
+    expect((await make('C')).pattern).toBe(a.pattern); // A's pattern is free again
+    expect(b.pattern).not.toBe(a.pattern);
+  });
 });

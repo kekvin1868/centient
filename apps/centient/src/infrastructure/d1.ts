@@ -94,7 +94,7 @@ export class D1Catalog implements CatalogRepository {
   }
   listAccounts(ws: string) { return this.all<Account>(`SELECT id, name, ${KIND_SQL} AS kind, provider, currency_code, default_envelope_id, due_day, reconciled_at, archived_at FROM accounts WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY name`, ws); }
   // Main first in each account, then by name.
-  listEnvelopes(ws: string) { return this.all<Envelope>("SELECT e.id, e.account_id, e.name, e.currency_code, e.kind, e.target_amount, e.target_date, e.archived_at, e.color FROM envelopes e JOIN accounts a ON a.id = e.account_id AND a.deleted_at IS NULL WHERE e.workspace_id = ? ORDER BY e.account_id, e.id <> a.default_envelope_id, e.name", ws); }
+  listEnvelopes(ws: string) { return this.all<Envelope>("SELECT e.id, e.account_id, e.name, e.currency_code, e.kind, e.target_amount, e.target_date, e.archived_at, e.color, e.pattern FROM envelopes e JOIN accounts a ON a.id = e.account_id AND a.deleted_at IS NULL WHERE e.workspace_id = ? ORDER BY e.account_id, e.id <> a.default_envelope_id, e.name", ws); }
   listCategories(ws: string) { return this.all<Category>('SELECT id, name, kind, archived_at FROM categories WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY kind, name', ws); }
 
   async createAccount(ws: string, a: Omit<Account, 'id' | 'reconciled_at' | 'archived_at' | 'default_envelope_id'>) {
@@ -105,8 +105,8 @@ export class D1Catalog implements CatalogRepository {
 
   async createEnvelope(ws: string, e: Omit<Envelope, 'id' | 'archived_at'>) {
     const id = uid();
-    await this.db.prepare('INSERT INTO envelopes (id, workspace_id, account_id, name, currency_code, kind, target_amount, target_date, color) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, ws, e.account_id, e.name, e.currency_code, e.kind, e.target_amount, e.target_date, e.color).run();
+    await this.db.prepare('INSERT INTO envelopes (id, workspace_id, account_id, name, currency_code, kind, target_amount, target_date, color, pattern) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, ws, e.account_id, e.name, e.currency_code, e.kind, e.target_amount, e.target_date, e.color, e.pattern).run();
     return { ...e, id, archived_at: null };
   }
 

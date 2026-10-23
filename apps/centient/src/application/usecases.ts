@@ -389,10 +389,13 @@ export async function createPocket(deps: Deps, ws: string, i: { accountId: strin
   const account = c.account(i.accountId).row;
   if (account.kind === 'IOU') throw new DomainError('IOU_POCKETS', 'What friends owe you has no pockets');
   if ((i.kind === 'GOAL') !== Boolean(i.targetAmount)) throw new DomainError('GOAL_TARGET', 'A goal needs a target amount; other kinds must not have one');
+  // The first pattern no live pocket of this account has (24 kinds; past that they repeat).
+  const taken = new Set(c.envelopes.filter(e => e.account_id === account.id && !e.archived_at).map(e => e.pattern));
+  const pattern = Array.from({ length: 24 }, (_, k) => k).find(k => !taken.has(k)) ?? taken.size % 24;
   return deps.catalog.createEnvelope(ws, {
     account_id: account.id, name: i.name.trim(), currency_code: account.currency_code, kind: i.kind,
     target_amount: i.kind === 'GOAL' ? i.targetAmount ?? null : null, target_date: i.kind === 'GOAL' ? i.targetDate ?? null : null,
-    color: i.color ?? null,
+    color: i.color ?? null, pattern,
   });
 }
 
