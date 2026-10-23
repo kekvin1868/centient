@@ -26,9 +26,9 @@ npm run build -w apps/centient   # production build into apps/centient/dist/
 - `packages/money` - amount parsing (25rb, 1,5jt, Rp52.500, $20, 0.001 btc) and formatting
 - `packages/quickadd` - quick-add parser: abbreviations, Hokkien words, price-range context engine, currencies
 - `apps/centient/src/domain` - ledger rules and budget cycles (no I/O)
-- `apps/centient/src/application` - use cases and ports
-- `apps/centient/src/infrastructure` - D1 repositories
-- `apps/centient/src/interface` - Hono routes (typed for the client), Zod validation, Access auth
+- `apps/centient/src/modules` - one folder per domain (ledger, accounts, pockets, categories, budgets, quickadd, installments, workspace): `routes.ts` (Hono, Zod, typed for the client) + `service.ts` (use cases)
+- `apps/centient/src/repos` - D1 SQL, one file per table group
+- `apps/centient/src/middleware` - Access auth, per-request service wiring (`init.ts`), error mapping
 - `apps/centient/migrations` - D1 schema (0001 init, 0002 entry groups)
 - `apps/centient/client` - React + Konsta UI + Vite app: Home (log + activity), Money (accounts, Pockets, budgets), Settings; Geist font, Phosphor icons, manifest and icons
 

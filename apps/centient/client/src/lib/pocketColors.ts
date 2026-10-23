@@ -25,3 +25,23 @@ export function inkOn(hex: string): string {
   const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255).map(v => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
   return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.3 ? '#0b0f10' : '#ffffff';
 }
+
+/**
+ * Twelve card patterns, drawn with CSS gradients in `--pc` (a tint of the card's ink). A pocket's `pattern`
+ * (0-23) picks one; 12-23 are the same twelve turned 90 degrees. Painted once: moving the card doesn't repaint.
+ */
+const PATTERNS = [
+  'radial-gradient(circle, var(--pc) 1.3px, transparent 1.7px) 0 0 / 8px 8px', // dots
+  'repeating-linear-gradient(45deg, var(--pc) 0 2px, transparent 2px 10px)', // stripes
+  'linear-gradient(var(--pc) 1px, transparent 1px) 0 0 / 14px 14px, linear-gradient(90deg, var(--pc) 1px, transparent 1px) 0 0 / 14px 14px', // grid
+  'conic-gradient(var(--pc) 25%, transparent 0 50%, var(--pc) 0 75%, transparent 0) 0 0 / 16px 16px', // checks
+  'radial-gradient(circle at 50% 0, transparent 6px, var(--pc) 6.5px 8px, transparent 8.5px) 0 0 / 18px 11px', // waves
+  'linear-gradient(135deg, var(--pc) 25%, transparent 25%) -7px 0 / 14px 14px, linear-gradient(225deg, var(--pc) 25%, transparent 25%) -7px 0 / 14px 14px', // chevrons
+  'repeating-radial-gradient(circle at 100% 100%, var(--pc) 0 2px, transparent 2px 11px)', // rings
+  'repeating-linear-gradient(45deg, var(--pc) 0 1px, transparent 1px 9px), repeating-linear-gradient(-45deg, var(--pc) 0 1px, transparent 1px 9px)', // cross-hatch
+  'repeating-linear-gradient(90deg, var(--pc) 0 1.5px, transparent 1.5px 8px)', // pinstripes
+  'radial-gradient(circle at 50% 100%, transparent 6px, var(--pc) 6.5px 8px, transparent 8.5px) 0 0 / 16px 9px', // scales
+  'linear-gradient(45deg, var(--pc) 25%, transparent 25% 75%, var(--pc) 75%) 0 0 / 14px 14px', // diamonds
+  'repeating-conic-gradient(from 0deg at 100% 100%, var(--pc) 0 3deg, transparent 3deg 10deg)', // sunburst
+];
+export const patternOf = (pattern: number) => ({ background: PATTERNS[pattern % 12], turned: pattern >= 12 });

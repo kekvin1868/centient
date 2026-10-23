@@ -1,6 +1,6 @@
 // Emoji and plain-word titles for entries. Emoji mark categories; interface icons come from Phosphor.
-import type { EntryView } from '../../../src/application/ports';
-import type { Command } from '../../../src/application/usecases';
+import type { EntryView } from '../../../src/repos/entries';
+import type { Command } from '../../../src/lib/schemas';
 import { catalog, nameOf, type Catalog } from './state';
 
 const CATEGORY_EMOJI: Record<string, string> = {

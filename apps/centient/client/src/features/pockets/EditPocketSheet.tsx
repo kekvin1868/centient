@@ -2,7 +2,7 @@
 // name and can't be hidden.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import type { Envelope } from '../../../../src/application/ports';
+import type { Envelope } from '../../../../src/repos/envelopes';
 import { patchRow } from '../../lib/api';
 import { pocketColor, POCKET_COLORS } from '../../lib/pocketColors';
 import { attempt } from '../../lib/run';

@@ -2,7 +2,7 @@
 // before it has entries); hide it, or delete it with its entries.
 import { Block, BlockFooter, Button } from 'konsta/react';
 import { useState } from 'react';
-import type { Account } from '../../../../src/application/ports';
+import type { Account } from '../../../../src/repos/accounts';
 import { call, client, patchRow } from '../../lib/api';
 import { ACCOUNT_KINDS } from '../../lib/format';
 import { attempt } from '../../lib/run';

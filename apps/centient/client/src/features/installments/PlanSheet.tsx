@@ -3,8 +3,8 @@
 import { CheckCircle, Paperclip, Trash, X } from '@phosphor-icons/react';
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import type { PlanView } from '../../../../src/application/installments';
-import type { Account } from '../../../../src/application/ports';
+import type { PlanView } from '../../../../src/modules/installments/service';
+import type { Account } from '../../../../src/repos/accounts';
 import { call, client } from '../../lib/api';
 import { dayLabel, formatMoney } from '../../lib/format';
 import { attempt } from '../../lib/run';

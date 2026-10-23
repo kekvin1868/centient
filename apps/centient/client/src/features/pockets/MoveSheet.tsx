@@ -10,7 +10,7 @@ import { PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
-import type { Pocket } from './PocketStack';
+import type { Pocket } from './PocketDeck';
 
 export type Move = { accountId: string; from: string | null; to: string | null };
 

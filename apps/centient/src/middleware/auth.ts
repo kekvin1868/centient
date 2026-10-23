@@ -1,4 +1,6 @@
 // Identity: Cloudflare Access in production, a fixed email on localhost in development.
+import type { MiddlewareHandler } from 'hono';
+import type { AppEnv } from '../context';
 
 export type AuthEnv = {
   ACCESS_TEAM_DOMAIN?: string; // e.g. "yourteam.cloudflareaccess.com"
@@ -6,6 +8,14 @@ export type AuthEnv = {
   SERVICE_TOKEN_EMAIL?: string; // the user an Access service token (the Shortcut) acts as
   DEV_EMAIL?: string; // .dev.vars only; honoured on localhost, private LAN addresses and DEV_HOSTS
   DEV_HOSTS?: string; // .dev.vars only; comma-separated extra hosts, e.g. an ngrok domain behind ngrok OAuth
+};
+
+/** Every /api request must be signed in; sets c.var.email. */
+export const auth = (): MiddlewareHandler<AppEnv> => async (c, next) => {
+  const email = await identify(c.req.raw, c.env);
+  if (!email) return c.json({ code: 'UNAUTHORIZED', message: 'Sign in through Cloudflare Access' }, 401);
+  c.set('email', email);
+  await next();
 };
 
 /** Returns the signed-in email, or null. */

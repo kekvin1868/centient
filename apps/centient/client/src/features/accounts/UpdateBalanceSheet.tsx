@@ -1,7 +1,7 @@
 // Update balance: type what the bank app shows; the difference is logged, optionally in a category.
 import { Block, BlockFooter, Button } from 'konsta/react';
 import { useState } from 'react';
-import type { Account } from '../../../../src/application/ports';
+import type { Account } from '../../../../src/repos/accounts';
 import { call, client } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
 import { categoryEmoji } from '../../lib/labels';

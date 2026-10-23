@@ -11,6 +11,7 @@
     "@centient/money": "*",
     "@centient/quickadd": "*",
     "@fontsource-variable/geist": "5.3.0",
+    "@fontsource-variable/geist-mono": "5.3.0",
     "@formkit/auto-animate": "0.10.0",
     "@phosphor-icons/react": "2.1.10",
     "@preact/signals-react": "3.12.0",

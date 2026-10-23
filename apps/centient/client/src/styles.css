@@ -12,6 +12,7 @@
   /* Destructive actions (Miku's pink, not red): add class k-color-brand-red to a Konsta component. 5.6:1 on white. */
   --color-brand-red: #c4126f;
   --font-ios: "Geist Variable", -apple-system, SF Pro Text, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
 
   --color-ios-light-surface: #fff;
   --color-ios-light-surface-1: #f2f5f6;
@@ -196,3 +197,28 @@ body:has(.k-sheet.-translate-y-full) .k-toast { top: calc(env(safe-area-inset-to
 .k-list li > button { width: 100%; text-align: start; }
 /* Swipeable entry rows: Konsta's hairline between rows, lined up with the text like its own. */
 .entry-row + .entry-row::before { content: ""; position: absolute; top: 0; right: 0; left: 68px; height: 1px; background: var(--edge); z-index: 1; }
+
+/* ---- Pocket deck ---------------------------------------------------------------------------------- */
+/* The front pocket floats a little; cards behind hold still. */
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.float { animation: float 3.6s ease-in-out infinite; }
+
+/* ---- Receipt (entry form) ---------------------------------------------------------------------------- */
+/* Paper stays paper in dark mode; it's the one place with the mono face (Geist Mono, same family). */
+:root { --paper: #fffdf7; --paper-ink: #22262a; --paper-faint: #686e73; }
+.dark { --paper: #f4f1e8; --paper-faint: #646a6f; }
+.receipt-stage { filter: drop-shadow(0 16px 18px rgb(0 0 0 / 0.16)) drop-shadow(0 1px 1px rgb(0 0 0 / 0.12)); }
+.receipt { position: relative; margin-block: 12px; padding: 20px 20px 24px; background: var(--paper); color: var(--paper-ink); font-family: var(--font-mono); font-size: 14px; }
+/* Torn edges: a row of paper teeth above and below. */
+.receipt::before, .receipt::after { content: ""; position: absolute; left: 0; right: 0; height: 12px; background-size: 16px 12px; background-repeat: repeat-x; }
+.receipt::before { top: -11px; background-image: conic-gradient(from 135deg at 50% 0, var(--paper) 0 90deg, transparent 0); }
+.receipt::after { bottom: -11px; background-image: conic-gradient(from -45deg at 50% 100%, var(--paper) 0 90deg, transparent 0); }
+.receipt-stamp { position: absolute; right: 14px; top: 16px; padding: 2px 8px; border: 2px solid currentColor; border-radius: 6px; color: #c2185b; font-weight: 800; font-size: 13px; letter-spacing: 0.14em; transform: rotate(8deg); opacity: 0.85; }
+/* Typewriter: each new letter strikes the paper; a block cursor blinks after the last one. */
+@keyframes strike { 0% { transform: translateY(-5px) scale(1.15); opacity: 0.2; filter: blur(1px); } 60% { transform: translateY(1px); } 100% { transform: none; opacity: 1; filter: none; } }
+.strike { animation: strike 0.16s ease-out; }
+@keyframes blink { 50% { opacity: 0; } }
+.typewriter-caret { display: inline-block; width: 0.55em; height: 0.8em; margin-left: 1px; vertical-align: -0.08em; background: var(--paper-ink); animation: blink 1s steps(1) infinite; }
+.receipt-stamp-btn { border: 2px solid currentColor; border-radius: 6px; padding: 3px 10px; font-weight: 700; font-size: 13px; letter-spacing: 0.04em; color: var(--paper-faint); }
+.receipt-stamp-btn[aria-pressed="true"] { color: var(--sc); background: color-mix(in oklab, var(--sc) 12%, transparent); animation: thunk 0.22s ease-out; }
+@keyframes thunk { 0% { transform: scale(1.2); } }

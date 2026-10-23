@@ -1,6 +1,7 @@
 // End to end: first run with the three starting accounts, categories (ten broad ones, deleting one), list
-// borders, account cards layout, pockets inside an account, crypto accounts, and pay later installments with
-// per-person payments and proof of payment, entry icons and swipe actions. One workspace (dev sign-in), so tests run in order.
+// borders, the account hand, pockets inside an account and their deck, crypto accounts, pay later installments
+// with per-person payments and proof of payment, entry icons and swipe actions, and the receipt form.
+// One workspace (dev sign-in), so tests run in order.
 import { expect, test, type Page } from '@playwright/test';
 
 test.describe.configure({ mode: 'serial' });
@@ -70,39 +71,55 @@ test('lists have one even hairline on the rounded card', async () => {
   await expect(list.locator('> ul')).toHaveCSS('border-top-width', '0px');
 });
 
-test('up to five accounts are held as an arched hand; six or more scroll in a straight row', async () => {
+test('accounts are a hand you turn: drag sideways and it settles on (and picks) the next card', async () => {
   await tab('Money').tap();
-  await expect(cards()).toHaveAttribute('data-layout', 'arch'); // the three starting accounts
-  // Arched: the outer cards sit lower than the middle one, and are tilted.
-  // Centers, not tops: a tilted card's box grows upward.
-  const mids = await cards().locator('[data-slot]').evaluateAll(els => els.map(e => { const r = e.getBoundingClientRect(); return (r.top + r.bottom) / 2; }));
-  expect(mids[0]).toBeGreaterThan(mids[1]);
-  await expect(cards().locator('[data-slot]').first()).not.toHaveCSS('transform', 'none');
   for (const a of [{ name: 'Kredivo', kind: 'PAYLATER', openingBalance: -1_788_000 }, { name: 'Jago', kind: 'BANK' }, { name: 'Mandiri', kind: 'BANK' }]) {
     expect((await api('/accounts', { method: 'POST', data: a })).ok()).toBe(true);
   }
   await page.reload();
   await tab('Money').tap();
-  await expect(cards()).toHaveAttribute('data-layout', 'scroll');
-  // Straight: every card's slot sits on the same line. Slots, not cards: cards float and deal in.
-  const slots = cards().locator('.snap-start');
-  await expect(slots).toHaveCount(6);
-  const row = await slots.evaluateAll(els => els.map(e => Math.round(e.getBoundingClientRect().top)));
-  expect(new Set(row).size).toBe(1);
+  // One fan for any count: six cards, the middle one highest, the outer ones lower and tilted.
+  await expect(cards().locator('[data-slot]')).toHaveCount(6);
+  const mid = async (name: string) => { const b = (await cards().getByRole('button', { name: new RegExp(`^${name}`) }).boundingBox())!; return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+  const box = (await cards().boundingBox())!;
+  const centre = box.x + box.width / 2;
+  // Turn the hand: drag left by about a card.
+  await page.mouse.move(centre, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(centre - 110, box.y + box.height / 2, { steps: 12 });
+  await page.mouse.up();
+  const picked = cards().getByRole('button', { pressed: true });
+  await expect(picked).toHaveCount(1);
+  const name = (await picked.getAttribute('aria-label'))!.split(',')[0];
+  await expect(page.getByText(name, { exact: true }).last()).toBeVisible(); // its details opened below
+  await expect.poll(async () => Math.abs((await mid(name)).x - centre)).toBeLessThan(4); // settled in the middle
+  // The cards beside it stay visible: the picked card does not cover their centres.
+  const others = await cards().getByRole('button', { pressed: false }).all();
+  expect(others.length).toBe(5);
 });
 
+/** Picks an account card the way a keyboard user would: focus turns the hand to it, Enter picks it. */
+async function pick(name: string) {
+  const card = cards().getByRole('button', { name: new RegExp(`^${name}`) });
+  if ((await card.getAttribute('aria-pressed')) === 'true') return;
+  await card.focus();
+  await card.press('Enter');
+  await expect(card).toHaveAttribute('aria-pressed', 'true');
+}
+
 test('pockets live inside an account: add one, move money in, the account balance stays', async () => {
-  await cards().getByRole('button', { name: /^Main Account/ }).tap({ force: true });
+  await pick('Main Account');
   const pockets = page.getByRole('region', { name: 'Pockets in Main Account' });
-  await expect(pockets.getByRole('button', { name: /^Main,/ })).toBeVisible();
-  await pockets.getByRole('button', { name: '+ Add pocket' }).tap();
+  await expect(pockets.getByRole('group', { name: /^Main,/ })).toBeVisible();
+  await pockets.getByRole('button', { name: '+ New pocket' }).tap();
   const add = page.getByRole('dialog', { name: 'New pocket in Main Account' });
   await add.getByRole('textbox', { name: 'Name' }).fill('Rent');
   await add.getByRole('radio', { name: 'Lilac' }).tap();
   await add.getByRole('button', { name: 'Add pocket' }).tap();
   await expect(add).toBeHidden();
-  await pockets.getByRole('button', { name: /^Rent,/ }).tap({ position: { x: 120, y: 30 } });
-  await pockets.getByRole('button', { name: 'Add from Main' }).tap();
+  // A new pocket is set on top of the deck, so its actions are the ones showing.
+  await expect(pockets.getByRole('toolbar', { name: 'Rent actions' })).toBeVisible();
+  await pockets.getByRole('button', { name: 'Add money' }).tap();
   const move = page.getByRole('dialog', { name: 'Add money to Rent' });
   await move.getByRole('textbox', { name: 'Amount' }).fill('1500000');
   await move.getByRole('button', { name: 'Move' }).tap();
@@ -124,12 +141,12 @@ test('a crypto account has its own Main pocket and keeps its balance', async () 
   expect(await balance('TokoCrypto')).toBe(250_000);
   await page.reload();
   await tab('Money').tap();
-  await cards().getByRole('button', { name: /^TokoCrypto/ }).tap({ force: true });
-  await expect(page.getByRole('region', { name: 'Pockets in TokoCrypto' }).getByRole('button', { name: /^Main,.*BTC 0.0025/ })).toBeVisible();
+  await pick('TokoCrypto');
+  await expect(page.getByRole('region', { name: 'Pockets in TokoCrypto' }).getByRole('group', { name: /^Main,.*BTC 0.0025/ })).toBeVisible();
 });
 
 test('pay later: add a shared plan, pay each share, attach proof', async () => {
-  await cards().getByRole('button', { name: /^Kredivo/ }).tap({ force: true });
+  await pick('Kredivo');
   await page.getByRole('button', { name: 'Add installments' }).tap();
   const form = page.getByRole('dialog', { name: 'Add installments' });
   await form.getByRole('textbox', { name: 'What' }).fill('iPhone');
@@ -175,7 +192,7 @@ test('a plan only you pay has no proof of payment', async () => {
   expect(r.status()).toBe(201);
   await page.reload();
   await tab('Money').tap();
-  await cards().getByRole('button', { name: /^Kredivo/ }).tap({ force: true });
+  await pick('Kredivo');
   await page.getByRole('button', { name: /Shoes, 0 of 2 paid/ }).tap();
   const plan = page.getByRole('dialog', { name: 'Shoes' });
   await plan.getByRole('button', { name: 'Mark your share of installment 1 paid' }).tap();
@@ -220,4 +237,51 @@ test('swiping a row left unlocks edit and delete; deleting can be undone, then g
   const edit = page.getByRole('dialog', { name: 'Edit' });
   await expect(edit.getByRole('button', { name: 'Save' })).toBeVisible();
   await expect(edit.getByRole('button', { name: 'Delete' })).toHaveCount(0);
+});
+
+test('the pocket deck: swipe the front card away and the next one comes forward; patterns differ', async () => {
+  await page.keyboard.press('Escape'); // the edit sheet from the test before
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await tab('Money').tap();
+  await pick('Main Account');
+  const pockets = page.getByRole('region', { name: 'Pockets in Main Account' });
+  await expect(pockets.getByRole('toolbar')).toHaveAttribute('aria-label', /actions$/);
+  const before = await pockets.getByRole('toolbar').getAttribute('aria-label');
+  const front = pockets.getByRole('group', { name: new RegExp(`^${before!.replace(' actions', '')},`) });
+  await pockets.getByRole('toolbar').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(600); // the details panel finishes opening, so the card holds still
+  const b = (await front.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2 + 170, b.y + b.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await expect(pockets.getByRole('toolbar')).not.toHaveAttribute('aria-label', before!);
+  await pockets.getByRole('button', { name: 'Next pocket' }).tap(); // the arrows do the same
+  await expect(pockets.getByRole('toolbar')).toHaveAttribute('aria-label', before!);
+  const all = (await (await api('/catalog')).json()).envelopes as { account_id: string; pattern: number; archived_at: string | null }[];
+  const main = await accountId('Main Account');
+  const mine = all.filter(e => e.account_id === main && !e.archived_at).map(e => e.pattern);
+  expect(new Set(mine).size).toBe(mine.length);
+});
+
+test('a manual entry is a receipt: type the title, pick a pocket stamp, enter the total', async () => {
+  await tab('Home').tap();
+  await page.getByRole('button', { name: 'Add without typing' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'New entry' });
+  await sheet.getByRole('textbox', { name: 'What was it?' }).pressSequentially('Sewa', { delay: 20 });
+  await sheet.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Home & Bills' });
+  await sheet.getByRole('combobox', { name: 'Paid with' }).selectOption({ label: 'Main Account' });
+  await sheet.getByRole('group', { name: 'From pocket' }).getByRole('button', { name: 'RENT' }).tap();
+  await sheet.getByRole('textbox', { name: 'Amount' }).fill('100000');
+  await sheet.getByRole('button', { name: 'Log it' }).tap();
+  await expect(sheet).toBeHidden();
+  const rent = (await balances()).envelopes.find(e => e.name === 'Rent')!;
+  expect(rent.balance).toBe(1_400_000); // 1.5jt set aside, 100rb spent from it
+  // Editing shows the same receipt, stamped, with only Save.
+  await page.locator('.entry-row', { hasText: 'Sewa' }).getByRole('button', { name: /^Sewa/ }).click();
+  const edit = page.getByRole('dialog', { name: 'Edit' });
+  await expect(edit.getByText('EDITING')).toBeVisible();
+  await expect(edit.getByRole('textbox', { name: 'What was it?' })).toHaveValue('Sewa');
+  await expect(edit.getByRole('group', { name: 'From pocket' }).getByRole('button', { name: 'RENT' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
 });

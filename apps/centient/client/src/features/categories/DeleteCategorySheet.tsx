@@ -1,7 +1,7 @@
 // Delete a category: its entries, budget and quick-add words move to another category of the same kind.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import type { Category } from '../../../../src/application/ports';
+import type { Category } from '../../../../src/repos/categories';
 import { call, client } from '../../lib/api';
 import { attempt } from '../../lib/run';
 import { active, catalog, refresh } from '../../lib/state';

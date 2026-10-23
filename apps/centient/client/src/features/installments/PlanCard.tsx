@@ -1,6 +1,6 @@
 // One plan in the list: what is due next, and one pip per installment.
 import { ClockCountdown } from '@phosphor-icons/react';
-import type { PlanView } from '../../../../src/application/installments';
+import type { PlanView } from '../../../../src/modules/installments/service';
 import { formatMoney } from '../../lib/format';
 
 const shortDate = (d: string) => new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });

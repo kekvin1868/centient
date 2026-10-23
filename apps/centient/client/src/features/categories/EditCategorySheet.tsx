@@ -2,7 +2,7 @@
 // up by name can't be deleted.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import type { Category } from '../../../../src/application/ports';
+import type { Category } from '../../../../src/repos/categories';
 import { patchRow } from '../../lib/api';
 import { attempt } from '../../lib/run';
 import { refresh } from '../../lib/state';

@@ -1,7 +1,9 @@
 // Settings: accounts, pockets, categories, hidden items, when the month starts, backup and reset. "Hide"
 // keeps history; deleting an account or resetting flags data as deleted rather than erasing it.
 import { useState } from 'react';
-import type { Account, Category, Envelope } from '../../../src/application/ports';
+import type { Account } from '../../../src/repos/accounts';
+import type { Category } from '../../../src/repos/categories';
+import type { Envelope } from '../../../src/repos/envelopes';
 import { AccountForm } from '../features/accounts/AccountForm';
 import { EditAccountSheet } from '../features/accounts/EditAccountSheet';
 import { AddCategorySheet } from '../features/categories/AddCategorySheet';

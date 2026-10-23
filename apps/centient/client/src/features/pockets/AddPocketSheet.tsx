@@ -2,7 +2,8 @@
 // from Settings you pick which account it goes inside.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import type { Account, Envelope } from '../../../../src/application/ports';
+import type { Account } from '../../../../src/repos/accounts';
+import type { Envelope } from '../../../../src/repos/envelopes';
 import { call, client } from '../../lib/api';
 import { POCKET_KINDS } from '../../lib/format';
 import { nextPocketColor } from '../../lib/pocketColors';
