@@ -5,7 +5,7 @@
 import { CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { animate, AnimatePresence, motion, useMotionValue, useTransform } from 'motion/react';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { Envelope } from '../../../../src/application/ports';
+import type { Envelope } from '../../../../src/repos/envelopes';
 import { formatMoney, POCKET_KINDS } from '../../lib/format';
 import { buzz, reducedMotion } from '../../lib/motion';
 import { inkOn, patternOf, pocketColor } from '../../lib/pocketColors';

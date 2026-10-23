@@ -1,7 +1,8 @@
 // Money: the total, accounts as cards (tap one for its balance, actions, pockets and installments), budgets.
 import { BlockTitle } from 'konsta/react';
 import { useEffect, useState } from 'react';
-import type { Account, Envelope } from '../../../src/application/ports';
+import type { Account } from '../../../src/repos/accounts';
+import type { Envelope } from '../../../src/repos/envelopes';
 import { AccountHand } from '../features/accounts/AccountHand';
 import { PickedAccount } from '../features/accounts/PickedAccount';
 import { TotalBalance } from '../features/accounts/TotalBalance';

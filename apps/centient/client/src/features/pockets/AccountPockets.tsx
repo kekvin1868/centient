@@ -2,7 +2,8 @@
 // it opens. Pockets live inside the account (like Jago's Kantong): its balance is the sum of its pockets.
 import { ArrowsLeftRight, ArrowUUpLeft, PencilSimple, Plus } from '@phosphor-icons/react';
 import { useState, type ReactNode } from 'react';
-import type { Account, Envelope } from '../../../../src/application/ports';
+import type { Account } from '../../../../src/repos/accounts';
+import type { Envelope } from '../../../../src/repos/envelopes';
 import { AddPocketSheet } from './AddPocketSheet';
 import { EditPocketSheet } from './EditPocketSheet';
 import { MoveSheet, type Move } from './MoveSheet';

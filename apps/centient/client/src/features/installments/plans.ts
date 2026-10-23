@@ -1,6 +1,6 @@
 // Installment plans: which accounts take them, loading them, and which are due soon.
 import { useEffect, useState } from 'react';
-import type { PlanView } from '../../../../src/application/installments';
+import type { PlanView } from '../../../../src/modules/installments/service';
 import { call, client } from '../../lib/api';
 import { attempt } from '../../lib/run';
 import { version } from '../../lib/state';

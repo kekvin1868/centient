@@ -1,6 +1,6 @@
 // HTTP test: the real Hono app over the SQLite D1 shim, signed in through the localhost dev bypass.
 import { beforeAll, describe, expect, it } from 'vitest';
-import { app } from '../src/interface/http';
+import { app } from '../src/app';
 import { migrationsSql, testD1 } from './d1shim';
 
 let env: { DB: D1Database; DEV_EMAIL: string };

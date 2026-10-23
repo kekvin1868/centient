@@ -3,7 +3,7 @@
 import { Plus } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
-import type { Account } from '../../../../src/application/ports';
+import type { Account } from '../../../../src/repos/accounts';
 import { formatMoney } from '../../lib/format';
 import { reducedMotion } from '../../lib/motion';
 import { NewPlanSheet } from './NewPlanSheet';

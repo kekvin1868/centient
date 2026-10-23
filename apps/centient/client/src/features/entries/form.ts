@@ -1,7 +1,7 @@
 // The entry form behind chips and sheets: built from a parsed draft or a saved command, turned back into
 // an API command, and judged for the chip (ready / one question / needs the form).
 import type { Draft } from '@centient/quickadd';
-import type { Command } from '../../../../src/application/usecases';
+import type { Command } from '../../../../src/lib/schemas';
 import { formatMoney } from '../../lib/format';
 
 export type EntryType = Command['type'];

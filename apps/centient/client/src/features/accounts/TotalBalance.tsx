@@ -1,6 +1,6 @@
 // The total across accounts: rupiah, with crypto counted at its last known price (marked ≈); currencies
 // without a rupiah price are listed apart.
-import type { Account } from '../../../../src/application/ports';
+import type { Account } from '../../../../src/repos/accounts';
 import { formatMoney } from '../../lib/format';
 import { idrValue, priceAge, prices } from '../../lib/prices';
 import { BigMoney } from '../../ui/BigMoney';

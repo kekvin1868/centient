@@ -3,7 +3,7 @@
 import { X } from '@phosphor-icons/react';
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import type { Account } from '../../../../src/application/ports';
+import type { Account } from '../../../../src/repos/accounts';
 import { call, client } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
 import { attempt } from '../../lib/run';

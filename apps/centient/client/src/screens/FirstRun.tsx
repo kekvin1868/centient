@@ -24,7 +24,7 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
     const ok = await attempt(async () => {
       for (const a of accounts) {
         const name = names[a.id].trim();
-        if (name !== a.name) await call(client.api[':table{accounts|envelopes|categories}'][':id'].$patch({ param: { table: 'accounts', id: a.id }, json: { name } }));
+        if (name !== a.name) await call(client.api.accounts[':id'].$patch({ param: { id: a.id }, json: { name } }));
         const amount = amounts[a.id];
         // The first balance on an empty account is recorded as its opening balance.
         if (amount) await call(client.api.accounts[':id'].balance.$post({ param: { id: a.id }, json: { actual: amount } }));
