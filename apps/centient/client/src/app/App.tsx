@@ -1,15 +1,15 @@
 // App shell: first-run card, then three screens behind a tab bar, inside Konsta's iOS theme.
 import { App as KonstaApp } from 'konsta/react';
 import { useEffect, useRef, useState } from 'react';
-import { BottomNav, type Screen } from './components/BottomNav';
-import { Toast } from './components/Toast';
-import { screenIn } from './lib/motion';
-import { attempt } from './lib/run';
-import { FirstRun } from './screens/FirstRun';
-import { Home } from './screens/Home';
-import { Money } from './screens/Money';
-import { Settings } from './screens/Settings';
-import { everyday, loadBasics, me } from './state';
+import { BottomNav, type Screen } from '../layouts/BottomNav';
+import { Toast } from '../ui/Toast';
+import { screenIn } from '../lib/motion';
+import { attempt } from '../lib/run';
+import { FirstRun } from '../screens/FirstRun';
+import { Home } from '../screens/Home';
+import { Money } from '../screens/Money';
+import { Settings } from '../screens/Settings';
+import { loadBasics, me } from '../lib/state';
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -28,7 +28,7 @@ export function App() {
 
   return (
     <KonstaApp theme="ios" safeAreas>
-      {!ready || !me.value ? null : !everyday().length ? <FirstRun onDone={() => setScreen('home')} /> : (
+      {!ready || !me.value ? null : !me.value.workspace.onboarded_at ? <FirstRun onDone={() => setScreen('home')} /> : (
         <>
           <div ref={main} key={screen}>
             {screen === 'home' && <Home onGoMoney={() => setScreen('money')} />}

@@ -1,7 +1,7 @@
 // Integration test: use cases and D1 repositories against SQLite with the real migrations.
 import { beforeAll, describe, expect, it } from 'vitest';
 import * as uc from '../src/application/usecases';
-import { D1Catalog, D1Ledger } from '../src/infrastructure/d1';
+import { D1Catalog, D1Ledger, D1Prices } from '../src/infrastructure/d1';
 import { migrationsSql, testD1 } from './d1shim';
 
 let deps: uc.Deps;
@@ -15,13 +15,18 @@ beforeAll(() => {
 
 async function setup(email: string) {
   const { workspaceId: ws } = await deps.catalog.ensureWorkspace(email);
-  const [envelopes, categories] = await Promise.all([deps.catalog.listEnvelopes(ws), deps.catalog.listCategories(ws)]);
+  const categories = await deps.catalog.listCategories(ws);
   const cat = (n: string) => categories.find(c => c.name === n)!.id;
-  const monthly = envelopes.find(e => e.name === 'Monthly')!.id;
   const bca = await uc.createAccount(deps, ws, { name: 'BCA', kind: 'BANK', provider: 'bca', openingBalance: 10_000_000 });
   const gopay = await uc.createAccount(deps, ws, { name: 'GoPay', kind: 'EWALLET', provider: 'gopay' });
-  const friends = (await deps.catalog.listAccounts(ws)).find(a => a.kind === 'IOU')!.id;
-  return { ws, cat, monthly, bca: bca.id, gopay: gopay.id, friends };
+  const friends = await uc.createAccount(deps, ws, { name: 'Friends', kind: 'IOU' });
+  return { ws, cat, bca: bca.id, gopay: gopay.id, friends: friends.id, main: (account: string) => `${account}:main` };
+}
+
+/** Every account's balance equals the sum of its pockets. */
+async function pocketsAddUp(ws: string) {
+  const b = await uc.getBalances(deps, ws);
+  for (const a of b.accounts) expect(b.envelopes.filter(e => e.account_id === a.id).reduce((s, e) => s + e.balance, 0)).toBe(a.balance);
 }
 
 const sum = (xs: { balance: number }[]) => xs.reduce((s, x) => s + x.balance, 0);
@@ -40,8 +45,8 @@ describe('tracker', () => {
     expect(bal(t.gopay)).toBe(475_000);
     expect(bal(t.friends)).toBe(66_666); // they owe me; my share was 33,334
     expect(sum(b.accounts)).toBe(sum(b.envelopes)); // the ledger invariant
-    // Only spending leaves the envelope; money lent to friends is still mine.
-    expect(b.envelopes.find(e => e.id === t.monthly)!.balance).toBe(10_000_000 - 33_334 - 2_500 - 25_000);
+    await pocketsAddUp(t.ws); // and per account: money moves with the pockets (transfers too)
+    expect(b.envelopes.find(e => e.id === t.main(t.friends))!.balance).toBe(66_666);
   });
 
   it('keeps workspaces apart', async () => {
@@ -180,7 +185,8 @@ describe('tracker', () => {
     const t = await setup('currency@test');
     const wise = await uc.createAccount(deps, t.ws, { name: 'Wise', kind: 'BANK' });
     await uc.updateItem(deps, t.ws, 'accounts', wise.id, { currency_code: 'USD' });
-    expect((await deps.catalog.listAccounts(t.ws)).find(a => a.id === wise.id)).toMatchObject({ currency_code: 'USD', default_envelope_id: null });
+    expect((await deps.catalog.listAccounts(t.ws)).find(a => a.id === wise.id)).toMatchObject({ currency_code: 'USD', default_envelope_id: `${wise.id}:main` });
+    expect((await deps.catalog.listEnvelopes(t.ws)).find(e => e.id === `${wise.id}:main`)!.currency_code).toBe('USD');
     await expect(uc.updateItem(deps, t.ws, 'accounts', t.bca, { currency_code: 'USD' })).rejects.toMatchObject({ code: 'CURRENCY_LOCKED' });
   });
 });
@@ -222,7 +228,7 @@ describe('deleting and resetting', () => {
     await uc.resetWorkspace(deps, t.ws);
     const { workspaceId: fresh } = await deps.catalog.ensureWorkspace('reset@test');
     expect(fresh).not.toBe(t.ws);
-    expect((await deps.catalog.listAccounts(fresh)).map(a => a.name)).toEqual(['Friends']);
+    expect((await deps.catalog.listAccounts(fresh)).map(a => [a.name, a.kind])).toEqual([['Dailies', 'EWALLET'], ['Main Account', 'BANK'], ['Miscs', 'DEBIT_CARD']]);
     expect((await uc.listEntries(deps, fresh, { limit: 50 })).items).toHaveLength(0);
     // Soft delete: the old workspace and its data are still there.
     expect((await uc.listEntries(deps, t.ws, { limit: 50 })).items).toHaveLength(2);
@@ -244,9 +250,207 @@ describe('migration 0002', () => {
     const db = testD1(`${init}\n${seed}\n-- Entry groups:${groups}`);
     const old: uc.Deps = { catalog: new D1Catalog(db), ledger: new D1Ledger(db), now: () => NOW };
     const [entry] = (await uc.listEntries(old, 'w', { limit: 10 })).items;
-    expect(entry).toMatchObject({ id: 't1', kind: 'USER', command: { type: 'EXPENSE', accountId: 'acc', envelopeId: 'env', amount: 20000, date: '2026-10-01' } });
+    // 0007 moved the money into the account's own Main pocket.
+    expect(entry).toMatchObject({ id: 't1', kind: 'USER', command: { type: 'EXPENSE', accountId: 'acc', envelopeId: 'acc:main', amount: 20000, date: '2026-10-01' } });
     await uc.editEntry(old, 'w', 't1', { ...(entry.command as uc.Command & { type: 'EXPENSE' }), amount: 25000 });
     expect((await uc.getBalances(old, 'w')).accounts[0].balance).toBe(-25000);
     expect((await old.catalog.listCategories('w')).find(c => c.id === 'adj')!.kind).toBe('INCOME');
+  });
+});
+
+describe('migration 0004', () => {
+  it('folds the old fifteen spending categories into the ten broad ones, with everything that pointed at them', async () => {
+    const [before, merge] = migrationsSql().split('-- Merge legacy categories:');
+    const seed = `
+      INSERT INTO workspaces (id, name) VALUES ('w', 'Old');
+      INSERT INTO accounts (id, workspace_id, name, kind) VALUES ('acc', 'w', 'BCA', 'BANK');
+      INSERT INTO envelopes (id, workspace_id, name) VALUES ('env', 'w', 'Monthly');
+      INSERT INTO categories (id, workspace_id, name, kind) VALUES ('food', 'w', 'Food & Drink', 'EXPENSE'), ('coffee', 'w', 'Coffee', 'EXPENSE'),
+        ('groc', 'w', 'Groceries', 'EXPENSE'), ('house', 'w', 'Housing', 'EXPENSE'), ('snacks', 'w', 'Snacks', 'EXPENSE');
+      INSERT INTO entry_groups (id, workspace_id, kind, command) VALUES ('g1', 'w', 'USER',
+        '{"type":"EXPENSE","accountId":"acc","envelopeId":"env","categoryId":"coffee","amount":25000,"date":"2026-10-01"}');
+      INSERT INTO transactions (id, workspace_id, group_id, type, occurred_at, category_id) VALUES ('t1', 'w', 'g1', 'EXPENSE', '2026-10-01T09:00:00+07:00', 'coffee');
+      INSERT INTO entries VALUES ('t1', 'acc', -25000);
+      INSERT INTO allocations VALUES ('t1', 'env', -25000);
+      INSERT INTO budgets (id, workspace_id, category_id, envelope_id) VALUES ('b1', 'w', 'coffee', NULL), ('b2', 'w', 'groc', NULL);
+      INSERT INTO budget_limits VALUES ('b1', '2026-10-01', 100000), ('b2', '2026-10-01', 200000);
+      INSERT INTO aliases VALUES ('w', 'kopi', 'CATEGORY', 'coffee');
+    `;
+    const db = testD1(`${before}\n${seed}\n-- Merge legacy categories:${merge}`);
+    const old: uc.Deps = { catalog: new D1Catalog(db), ledger: new D1Ledger(db), now: () => NOW };
+    const cats = await old.catalog.listCategories('w');
+    const live = cats.filter(c => !c.archived_at).map(c => c.name).sort();
+    expect(live).toEqual(['Food & Drink', 'Home & Bills', 'Snacks']);
+    expect(cats.filter(c => c.archived_at).map(c => c.name).sort()).toEqual(['Coffee', 'Groceries', 'Housing']);
+    const [entry] = (await uc.listEntries(old, 'w', { limit: 10 })).items;
+    expect(entry.transactions[0].category_id).toBe('food');
+    expect(entry.command).toMatchObject({ categoryId: 'food' });
+    const budgets = await old.catalog.listBudgets('w');
+    expect(budgets).toHaveLength(1);
+    expect(budgets[0]).toMatchObject({ category_id: 'food', limits: [{ effective_from: '2026-10-01', amount: 300000 }] });
+    expect(await old.catalog.listAliases('w')).toEqual([{ alias: 'kopi', kind: 'CATEGORY', value: 'food' }]);
+    // The moved entry still edits: its saved command points at a live category.
+    await uc.editEntry(old, 'w', 'g1', { ...(entry.command as uc.Command & { type: 'EXPENSE' }), amount: 30000 });
+    expect((await uc.getBalances(old, 'w')).accounts[0].balance).toBe(-30000);
+  });
+});
+
+describe('crypto prices', () => {
+  it('prices held crypto in rupiah, caches for 10 minutes, and serves the last price when the service is down', async () => {
+    const db = testD1(migrationsSql());
+    let clock = NOW;
+    let calls = 0;
+    let up = true;
+    const fakeFetch = (async (url: string) => {
+      calls++;
+      if (!up) throw new Error('offline');
+      expect(url).toContain('ids=bitcoin');
+      return new Response(JSON.stringify({ bitcoin: { idr: 1_650_000_000.4 } }));
+    }) as unknown as typeof fetch;
+    const p: uc.Deps = { catalog: new D1Catalog(db), ledger: new D1Ledger(db), prices: new D1Prices(db), fetch: fakeFetch, now: () => clock };
+    const { workspaceId: ws } = await p.catalog.ensureWorkspace('crypto@test');
+    expect(await uc.getPrices(p, ws)).toEqual({}); // no crypto account, no call
+    expect(calls).toBe(0);
+    await uc.createAccount(p, ws, { name: 'TokoCrypto', kind: 'EXCHANGE', currency: 'BTC' });
+    expect(await uc.getPrices(p, ws)).toEqual({ BTC: { idrPerUnit: 1_650_000_000, fetchedAt: new Date(NOW).toISOString() } });
+    clock = NOW + 5 * 60_000;
+    await uc.getPrices(p, ws);
+    expect(calls).toBe(1); // still fresh
+    clock = NOW + 30 * 60_000;
+    up = false;
+    expect((await uc.getPrices(p, ws)).BTC).toEqual({ idrPerUnit: 1_650_000_000, fetchedAt: new Date(NOW).toISOString() });
+    expect(calls).toBe(2);
+  });
+});
+
+describe('pockets inside accounts', () => {
+  it('starts a workspace with three everyday accounts, each with a Main pocket, and no IOU', async () => {
+    const { workspaceId: ws } = await deps.catalog.ensureWorkspace('seed@test');
+    const accounts = await deps.catalog.listAccounts(ws);
+    expect(accounts.map(a => [a.name, a.kind])).toEqual([['Dailies', 'EWALLET'], ['Main Account', 'BANK'], ['Miscs', 'DEBIT_CARD']]);
+    const pockets = await deps.catalog.listEnvelopes(ws);
+    expect(pockets.map(e => [accounts.find(a => a.id === e.account_id)!.name, e.name]).sort()).toEqual([['Dailies', 'Main'], ['Main Account', 'Main'], ['Miscs', 'Main']]);
+    expect(accounts.every(a => pockets.some(e => e.id === a.default_envelope_id))).toBe(true);
+    expect((await deps.catalog.getWorkspace(ws)).onboarded_at).toBeNull();
+  });
+
+  it("keeps an account's balance as the sum of its pockets, and moves money only within one account", async () => {
+    const t = await setup('pockets@test');
+    const rent = await uc.createPocket(deps, t.ws, { accountId: t.bca, name: 'Rent', kind: 'SAVINGS' });
+    const holiday = await uc.createPocket(deps, t.ws, { accountId: t.gopay, name: 'Rent', kind: 'SPENDING' }); // same name, other account: fine
+    await uc.recordTransactions(deps, t.ws, [
+      { type: 'ALLOCATE', fromEnvelopeId: t.main(t.bca), toEnvelopeId: rent.id, amount: 3_000_000, date: '2026-10-17' },
+      { type: 'EXPENSE', accountId: t.bca, envelopeId: rent.id, categoryId: t.cat('Home & Bills'), amount: 2_500_000, date: '2026-10-17' },
+      { type: 'TRANSFER', fromAccountId: t.bca, toAccountId: t.gopay, toEnvelopeId: holiday.id, amount: 100_000, date: '2026-10-17' },
+    ]);
+    const b = await uc.getBalances(deps, t.ws);
+    const pocket = (id: string) => b.envelopes.find(e => e.id === id)!.balance;
+    expect(pocket(rent.id)).toBe(500_000);
+    expect(pocket(t.main(t.bca))).toBe(10_000_000 - 3_000_000 - 100_000);
+    expect(pocket(holiday.id)).toBe(100_000);
+    await pocketsAddUp(t.ws);
+    await expect(uc.recordTransactions(deps, t.ws, [{ type: 'ALLOCATE', fromEnvelopeId: rent.id, toEnvelopeId: holiday.id, amount: 1, date: '2026-10-17' }]))
+      .rejects.toMatchObject({ code: 'POCKET_ACCOUNT' });
+    await expect(uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.gopay, envelopeId: rent.id, categoryId: t.cat('Food & Drink'), amount: 1, date: '2026-10-17' }]))
+      .rejects.toMatchObject({ code: 'POCKET_ACCOUNT' });
+    await expect(uc.updateItem(deps, t.ws, 'envelopes', rent.id, { archived: true })).rejects.toMatchObject({ code: 'POCKET_NOT_EMPTY' });
+    await expect(uc.updateItem(deps, t.ws, 'envelopes', t.main(t.bca), { archived: true })).rejects.toMatchObject({ code: 'MAIN_POCKET' });
+    await expect(uc.createPocket(deps, t.ws, { accountId: t.friends, name: 'X', kind: 'SPENDING' })).rejects.toMatchObject({ code: 'IOU_POCKETS' });
+  });
+
+  it('creates "Friends" on the first split bill, and sets a first balance as the opening balance', async () => {
+    const { workspaceId: ws } = await deps.catalog.ensureWorkspace('split@test');
+    const accounts = await deps.catalog.listAccounts(ws);
+    const main = accounts.find(a => a.name === 'Main Account')!;
+    await uc.updateBalance(deps, ws, main.id, { actual: 2_000_000 });
+    const food = (await deps.catalog.listCategories(ws)).find(c => c.name === 'Food & Drink')!.id;
+    await uc.recordTransactions(deps, ws, [{ type: 'EXPENSE', accountId: main.id, categoryId: food, amount: 90_000, date: '2026-10-17', split: { people: 3 } }]);
+    const friends = (await deps.catalog.listAccounts(ws)).find(a => a.kind === 'IOU')!;
+    expect(friends.name).toBe('Friends');
+    const b = await uc.getBalances(deps, ws);
+    expect(b.accounts.find(a => a.id === friends.id)!.balance).toBe(60_000);
+    const kinds = (await uc.listEntries(deps, ws, { limit: 10 })).items.map(e => e.kind).sort();
+    expect(kinds).toEqual(['OPENING', 'USER']);
+  });
+
+  it('switches an account to and from Debit card', async () => {
+    const t = await setup('debit@test');
+    await uc.updateItem(deps, t.ws, 'accounts', t.bca, { kind: 'DEBIT_CARD' });
+    expect((await deps.catalog.listAccounts(t.ws)).find(a => a.id === t.bca)!.kind).toBe('DEBIT_CARD');
+    await uc.updateItem(deps, t.ws, 'accounts', t.bca, { kind: 'BANK' });
+    expect((await deps.catalog.listAccounts(t.ws)).find(a => a.id === t.bca)!.kind).toBe('BANK');
+  });
+});
+
+describe('deleting a category', () => {
+  it('moves its entries, budget and quick-add words to another category, then frees its name', async () => {
+    const t = await setup('delcat@test');
+    const snacks = await deps.catalog.createCategory(t.ws, { name: 'Snacks', kind: 'EXPENSE' });
+    const [id] = await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: snacks.id, amount: 15_000, date: '2026-10-17' }]);
+    await uc.setBudget(deps, t.ws, { categoryId: snacks.id, limit: 100_000 });
+    await deps.catalog.saveAlias(t.ws, { alias: 'chiki', kind: 'CATEGORY', value: snacks.id });
+    await uc.deleteCategory(deps, t.ws, snacks.id, t.cat('Food & Drink'));
+    expect((await deps.catalog.listCategories(t.ws)).some(c => c.id === snacks.id)).toBe(false);
+    const entry = (await uc.listEntries(deps, t.ws, { limit: 10 })).items.find(e => e.id === id)!;
+    expect(entry.transactions[0].category_id).toBe(t.cat('Food & Drink'));
+    expect(entry.command).toMatchObject({ categoryId: t.cat('Food & Drink') });
+    expect((await uc.getBudgetStatus(deps, t.ws)).budgets).toMatchObject([{ categoryId: t.cat('Food & Drink'), spent: 15_000 }]);
+    expect(await deps.catalog.listAliases(t.ws)).toEqual([{ alias: 'chiki', kind: 'CATEGORY', value: t.cat('Food & Drink') }]);
+    await deps.catalog.createCategory(t.ws, { name: 'Snacks', kind: 'EXPENSE' }); // name is free
+    await expect(uc.deleteCategory(deps, t.ws, t.cat('Fees'), t.cat('Other'))).rejects.toMatchObject({ code: 'BUILT_IN' });
+    await expect(uc.deleteCategory(deps, t.ws, t.cat('Food & Drink'), t.cat('Salary'))).rejects.toMatchObject({ code: 'WRONG_CATEGORY_KIND' });
+  });
+});
+
+describe('crypto accounts', () => {
+  it('have their own Main pocket in their currency, so a BTC balance can be set and updated', async () => {
+    const t = await setup('btc@test');
+    const btc = await uc.createAccount(deps, t.ws, { name: 'TokoCrypto', kind: 'EXCHANGE', currency: 'BTC', openingBalance: 250_000 });
+    const pocket = (await deps.catalog.listEnvelopes(t.ws)).find(e => e.currency_code === 'BTC')!;
+    expect(pocket).toMatchObject({ name: 'Main', account_id: btc.id });
+    await uc.updateBalance(deps, t.ws, btc.id, { actual: 300_000 });
+    const b = await uc.getBalances(deps, t.ws);
+    expect(b.accounts.find(a => a.id === btc.id)!.balance).toBe(300_000);
+    expect(b.envelopes.find(e => e.id === pocket.id)!.balance).toBe(300_000);
+    expect((await deps.catalog.listEnvelopes(t.ws)).filter(e => e.currency_code === 'BTC')).toHaveLength(1);
+  });
+});
+
+describe('first sign-in', () => {
+  it('seeds exactly one workspace when several requests arrive at once', async () => {
+    const ids = await Promise.all(Array.from({ length: 5 }, () => deps.catalog.ensureWorkspace('rush@test')));
+    expect(new Set(ids.map(x => x.workspaceId)).size).toBe(1);
+    expect(await deps.catalog.listAccounts(ids[0].workspaceId)).toHaveLength(3);
+  });
+});
+
+describe('personal touches', () => {
+  it('gives an entry its own emoji and remembers it for the merchant', async () => {
+    const t = await setup('icon@test');
+    const food = t.cat('Food & Drink');
+    const [first] = await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: food, amount: 35_000, date: '2026-10-17', merchant: 'Kopi' }]);
+    await uc.setEntryIcon(deps, t.ws, first, { icon: '☕', forMerchant: true });
+    const [second] = await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: food, amount: 30_000, date: '2026-10-17', merchant: 'kopi' }]);
+    const [other] = await uc.recordTransactions(deps, t.ws, [{ type: 'EXPENSE', accountId: t.bca, categoryId: food, amount: 20_000, date: '2026-10-17', merchant: 'Warteg' }]);
+    const icon = async (id: string) => (await uc.listEntries(deps, t.ws, { limit: 50 })).items.find(e => e.id === id)!.icon;
+    expect(await icon(first)).toBe('☕');
+    expect(await icon(second)).toBe('☕'); // same merchant
+    expect(await icon(other)).toBeNull(); // category emoji
+    await uc.setEntryIcon(deps, t.ws, second, { icon: '🧋', forMerchant: false });
+    expect(await icon(second)).toBe('🧋');
+    expect(await icon(first)).toBe('☕');
+    await uc.setEntryIcon(deps, t.ws, first, { icon: null, forMerchant: true });
+    expect(await icon(first)).toBeNull();
+    await expect(uc.setEntryIcon(deps, t.ws, first, { icon: 'kopi', forMerchant: false })).rejects.toMatchObject({ code: 'NOT_AN_EMOJI' });
+    await expect(uc.setEntryIcon(deps, t.ws, first, { icon: '☕☕', forMerchant: false })).rejects.toMatchObject({ code: 'NOT_AN_EMOJI' });
+  });
+
+  it('keeps a pocket color', async () => {
+    const t = await setup('color@test');
+    const p = await uc.createPocket(deps, t.ws, { accountId: t.bca, name: 'Food', kind: 'SPENDING', color: '#ff8cc6' });
+    expect(p.color).toBe('#ff8cc6');
+    await uc.updateItem(deps, t.ws, 'envelopes', p.id, { color: '#c3b1ff' });
+    expect((await deps.catalog.listEnvelopes(t.ws)).find(e => e.id === p.id)!.color).toBe('#c3b1ff');
+    await expect(uc.updateItem(deps, t.ws, 'envelopes', p.id, { color: 'red' })).rejects.toThrow();
   });
 });

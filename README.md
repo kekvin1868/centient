@@ -11,6 +11,7 @@ cp apps/centient/.dev.vars.example apps/centient/.dev.vars   # first time only
 npm run dev                      # local D1 migrations, then the Worker + app on http://localhost:8787 with live reload
 npm test                         # money, quick-add, ledger, D1 and HTTP tests (vitest)
 npm run typecheck                # Worker and app
+npm run e2e                      # end-to-end (Playwright): its own server on :8790 with fresh data, never your dev data
 npm run build -w apps/centient   # production build into apps/centient/dist/
 ```
 
@@ -33,7 +34,7 @@ npm run build -w apps/centient   # production build into apps/centient/dist/
 
 ## Deployment
 
-1. `npx wrangler d1 create centsdb` and put the id in `apps/centient/wrangler.toml` (the Worker is named `cts`).
+1. `npx wrangler d1 create centsdb` and put the id in `apps/centient/wrangler.toml` (the Worker is named `cts`). Create the file bucket for proof of payment: `npx wrangler r2 bucket create centient-files`.
 2. Protect the hostname with Cloudflare Access; set `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`, `SERVICE_TOKEN_EMAIL`.
 3. `npm run deploy -w apps/centient` (remote migrations, build, deploy).
 

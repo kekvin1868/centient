@@ -1,6 +1,6 @@
 // Downloads everything in the workspace as one JSON file (centient-backup-YYYY-MM-DD.json).
-import { call, client } from '../api';
-import { me } from '../state';
+import { call, client } from './api';
+import { me } from './state';
 
 export async function downloadBackup(): Promise<void> {
   const data = await call(client.api.backup.$get());

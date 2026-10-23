@@ -1,11 +1,11 @@
 // App-wide state. Screens read these signals; any write calls refresh() so every screen reloads its data.
 import type { QAContext } from '@centient/quickadd';
 import { effect, signal } from '@preact/signals-react';
-import type { Account, Category, Envelope } from '../../src/application/ports';
+import type { Account, Category, Envelope } from '../../../src/application/ports';
 import { call, client } from './api';
-import { load, save } from './lib/storage';
+import { load, save } from './storage';
 
-export type Me = { workspace: { id: string; name: string; cycle_start_day: number }; today: string; cycle: { from: string; to: string }; currencies: Record<string, number> };
+type Me = { workspace: { id: string; name: string; cycle_start_day: number; onboarded_at: string | null }; today: string; cycle: { from: string; to: string }; currencies: Record<string, number> };
 export type Catalog = { accounts: Account[]; envelopes: Envelope[]; categories: Category[] };
 
 export const me = signal<Me | null>(null);

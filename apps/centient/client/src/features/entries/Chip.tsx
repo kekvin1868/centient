@@ -3,7 +3,7 @@
 import { Card, Chip as KChip } from 'konsta/react';
 import { Children, type ReactNode } from 'react';
 
-export type ChipState = 'ready' | 'ask' | 'incomplete';
+type ChipState = 'ready' | 'ask' | 'incomplete';
 type Props = {
   state: ChipState;
   emoji: string;

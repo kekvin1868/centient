@@ -1,15 +1,15 @@
 // Add an account: name, type, what's in it now. Currency stays rupiah unless you ask for another.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { call, client } from '../api';
-import { attempt } from '../lib/run';
-import { ACCOUNT_KINDS } from '../lib/format';
-import { me, refresh } from '../state';
-import { AmountField } from './AmountField';
-import { InputRow, PickerRow } from './Fields';
-import { Group } from './List';
+import { call, client } from '../../lib/api';
+import { attempt } from '../../lib/run';
+import { ACCOUNT_KINDS } from '../../lib/format';
+import { me, refresh } from '../../lib/state';
+import { AmountField } from '../../ui/AmountField';
+import { InputRow, PickerRow } from '../../ui/Fields';
+import { Group } from '../../ui/List';
 
-const KINDS = ['BANK', 'EWALLET', 'CASH', 'CREDIT_CARD', 'PAYLATER', 'EXCHANGE'] as const;
+const KINDS = ['BANK', 'DEBIT_CARD', 'EWALLET', 'CASH', 'CREDIT_CARD', 'PAYLATER', 'EXCHANGE'] as const;
 type Kind = (typeof KINDS)[number];
 
 export function AccountForm({ onDone, submitLabel = 'Add account' }: { onDone: () => void; submitLabel?: string }) {

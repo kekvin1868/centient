@@ -4,7 +4,7 @@ import { Button, Toast as KToast } from 'konsta/react';
 import { useEffect, useRef } from 'react';
 
 type ToastState = { id: number; message: string; action?: { label: string; run: () => void }; ms: number; onExpire?: () => void };
-export const toast = signal<ToastState | null>(null);
+const toast = signal<ToastState | null>(null);
 let seq = 0;
 
 /** Shows a message; `onExpire` runs when it times out without the action being used. */

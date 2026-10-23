@@ -14,6 +14,12 @@ database_name = "centsdb"
 database_id = "00000000-0000-0000-0000-000000000000" # replace with `wrangler d1 create centsdb` output before deploying
 migrations_dir = "migrations"
 
+# Private files (proof of payment). Local dev keeps them in .wrangler/; production needs
+# `npx wrangler r2 bucket create centient-files` once.
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "centient-files"
+
 # Production identity: set these once Cloudflare Access protects the hostname.
 # [vars]
 # ACCESS_TEAM_DOMAIN = "yourteam.cloudflareaccess.com"
