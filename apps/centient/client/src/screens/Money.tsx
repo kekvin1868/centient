@@ -36,7 +36,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
       <BlockTitle medium className="!pl-4 !text-[22px] !font-extrabold !leading-none !tracking-[-0.03em]">
         Accounts <span className="ml-1 text-[15px] font-bold text-muted">{bal.accounts.length}</span>
       </BlockTitle>
-      <AccountHand selected={picked} onPick={setPicked}
+      <AccountHand selected={picked} onPick={setPicked} pickOnSettle
         cards={bal.accounts.map(x => {
           const v = x.currency_code === 'IDR' ? null : idrValue(x.balance, x.currency_code, prices.value);
           return { id: x.id, name: x.name, kind: x.kind, balance: x.balance, currency: x.currency_code, note: v !== null ? `≈ ${formatMoney(v)}` : undefined };
