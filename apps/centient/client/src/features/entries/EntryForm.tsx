@@ -8,6 +8,7 @@ import { formatMoney } from '../../lib/format';
 import { pocketColor } from '../../lib/pocketColors';
 import { active, catalog, everyday } from '../../lib/state';
 import { LineSelect, Receipt, ReceiptLine, Rule } from '../../ui/Receipt';
+import { useSumInput } from '../../ui/MathKeys';
 import { Segmented } from '../../ui/Segmented';
 import { Typewriter } from '../../ui/Typewriter';
 import type { EntryType, Form } from './form';
@@ -71,7 +72,7 @@ export function EntryForm({ form, onChange, lockType }: { form: Form; onChange: 
         )}
         {form.type === 'TRANSFER' && (
           <ReceiptLine label="Admin fee" value={form.fee ? formatMoney(form.fee) : 'None'} empty={!form.fee}
-            control={<input aria-label="Admin fee" inputMode="numeric" value={showAmount(form.fee, 'IDR')} onChange={e => set({ fee: amountInput(e.target.value, 'IDR').minor })}
+            control={<input aria-label="Admin fee" inputMode="numeric" value={showAmount(form.fee, 'IDR')} onChange={e => set({ fee: amountInput(e.target.value.replace(/\D/g, ''), 'IDR').minor })}
               className="absolute inset-0 w-full cursor-text opacity-0 [font-size:16px]" />} />
         )}
         <ReceiptLine label="Date" value={dateLabel(form.date)}
@@ -136,19 +137,21 @@ function Step({ label, onClick, children }: { label: string; onClick: () => void
   return <button type="button" aria-label={label} onClick={onClick} className="grid size-7 place-items-center rounded-md border-2 border-current active:opacity-60">{children}</button>;
 }
 
-/** The TOTAL line: the amount, typed in place. */
+/** The TOTAL line: the amount, typed in place (sums too). */
 function Total({ value, currency, onChange }: { value: number | null; currency: string; onChange: (minor: number | null) => void }) {
-  const [text, setText] = useState(showAmount(value, currency));
+  const { input, below, text } = useSumInput(value, currency, onChange);
   return (
-    <label className="flex items-baseline justify-between gap-3">
-      <span className="text-[13px] font-extrabold tracking-[0.2em]">TOTAL</span>
-      <span className="flex min-w-0 items-baseline justify-end gap-1.5 text-[30px] font-extrabold tracking-[-0.02em]">
-        <span className="text-[0.6em]">{currency === 'IDR' ? 'Rp' : currency}</span>
-        <input aria-label="Amount" inputMode={currency === 'IDR' ? 'numeric' : 'decimal'} placeholder="0" value={text}
-          onChange={e => { const r = amountInput(e.target.value, currency); setText(r.text); onChange(r.minor); }}
-          style={{ width: `${Math.max(1, text.length) + 0.4}ch` }}
-          className="num min-w-0 max-w-full bg-transparent text-right outline-none placeholder:text-[var(--paper-faint)] focus:underline focus:decoration-dotted focus:decoration-2" />
-      </span>
-    </label>
+    <div>
+      <label className="flex items-baseline justify-between gap-3">
+        <span className="text-[13px] font-extrabold tracking-[0.2em]">TOTAL</span>
+        <span className="flex min-w-0 items-baseline justify-end gap-1.5 text-[30px] font-extrabold tracking-[-0.02em]">
+          <span className="text-[0.6em]">{currency === 'IDR' ? 'Rp' : currency}</span>
+          <input aria-label="Amount" placeholder="0" {...input}
+            style={{ width: `${Math.max(1, text.length) + 0.4}ch` }}
+            className="num min-w-0 max-w-full bg-transparent text-right outline-none placeholder:text-[var(--paper-faint)] focus:underline focus:decoration-dotted focus:decoration-2" />
+        </span>
+      </label>
+      <span className="block text-right">{below}</span>
+    </div>
   );
 }
