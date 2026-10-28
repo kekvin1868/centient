@@ -13,7 +13,7 @@ const TABS: { screen: Screen; label: string; icon: Icon }[] = [
 
 export function BottomNav({ current, onGo }: { current: Screen; onGo: (s: Screen) => void }) {
   return (
-    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-edge bg-white pb-safe dark:bg-black">
+    <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-edge bg-ios-light-surface pb-safe dark:bg-ios-dark-surface">
       <div className="mx-auto flex h-16 max-w-[640px] gap-2 px-3 py-1.5">
         {TABS.map(({ screen, label, icon: I }) => {
           const on = screen === current;

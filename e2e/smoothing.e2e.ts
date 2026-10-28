@@ -1,4 +1,4 @@
-// End to end: first run with the three starting accounts, categories (ten broad ones, deleting one), list
+// End to end: first run (the night menu) with the three starting accounts, categories (ten broad ones, deleting one), list
 // borders, the account hand, pockets inside an account and their deck, crypto accounts, pay later installments
 // with per-person payments and proof of payment, entry icons and swipe actions, and the receipt form.
 // One workspace (dev sign-in), so tests run in order.
@@ -23,18 +23,28 @@ const balance = async (name: string) => (await balances()).accounts.find(a => a.
 const tab = (name: string) => page.getByRole('button', { name, exact: true });
 const cards = () => page.getByRole('group', { name: 'Accounts' });
 
-test('first run: three everyday accounts to name and fill, then Home', async () => {
+test('first run: the night menu sets starting balances, then Home', async () => {
   expect((await accounts()).map(a => [a.name, a.kind])).toEqual([['Dailies', 'EWALLET'], ['Main Account', 'BANK'], ['Miscs', 'DEBIT_CARD']]);
-  await expect(page.getByRole('heading', { name: 'Welcome to Centient' })).toBeVisible();
-  await page.getByRole('textbox', { name: 'In Main Account now' }).fill('5000000');
-  await page.getByRole('textbox', { name: 'In Dailies now' }).fill('300000');
-  await page.getByRole('button', { name: 'Start' }).tap();
+  await page.getByRole('button', { name: 'CLICK TO START' }).tap();
+  const menu = page.getByRole('listbox', { name: 'Accounts' });
+  await expect(menu).toBeVisible({ timeout: 10_000 });
+  const setMain = async (digits: string) => {
+    await page.getByRole('button', { name: /^Main/ }).tap();
+    await page.keyboard.type(digits);
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  };
+  await setMain('5000000'); // Main Account is picked first
+  await menu.getByRole('option', { name: /Dailies/ }).tap();
+  await setMain('300000');
+  await page.getByRole('button', { name: 'CONFIRM ▸' }).tap();
+  await page.getByRole('dialog', { name: 'Confirm changes' }).getByRole('button', { name: 'CONFIRM ▸' }).tap();
   await expect(page.getByRole('img', { name: 'Centient' })).toBeVisible();
   expect(await balance('Main Account')).toBe(5_000_000);
   // Nothing set aside yet: everything in the Main pockets is free to spend.
   await expect(page.getByRole('heading', { name: 'Free to spend' })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Welcome to Centient' })).toHaveCount(0); // onboarded once
+  await expect(page.getByRole('heading', { name: 'ACCOUNTS' })).toHaveCount(0); // onboarded once
 });
 
 test('only the ten broad spending categories are offered', async () => {

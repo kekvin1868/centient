@@ -13,7 +13,7 @@ export function BigMoney({ minor, currency = 'IDR', max = 56, inset = 32, classN
   return (
     <span className={`money-big block whitespace-nowrap ${className}`} style={{ fontSize: fit }}>
       <span className="sr-only">{formatMoney(minor, currency)}</span>
-      <span key={minor} className="inline-block origin-left [animation:pop_.45s_ease-out]" aria-hidden="true">
+      <span key={minor} className="inline-block origin-left [animation:pop_.45s_steps(1)]" aria-hidden="true">
         <span className="cur">{sign && '−'}{cur.trim()}</span>{digits}
       </span>
     </span>

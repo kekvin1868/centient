@@ -1,6 +1,7 @@
-/* Tailwind + Konsta UI (iOS theme). Components come from Konsta; this file sets Centient's look on top:
-   one typeface (Geist), Hatsune Miku's palette (teal, aqua, pink, silver-gray, charcoal), and a light game
-   feel: hairline outlines, a short "lip" shadow under raised pieces, cards dealt and floating. */
+/* Tailwind + Konsta UI (iOS theme). Components come from Konsta; this file sets Centient's look on top: the retro
+   theme's paper (NieR:Automata beige in light, VA-11 Hall-A night in dark; tokens and dialogs in ui/night/night.css),
+   pixel words (DotGothic16) with clean digits (Centient Digits), Hatsune Miku's teal and pink as accents, and a
+   light game feel: hairline outlines, a short "lip" shadow under raised pieces, cards dealt and floating. */
 @import "tailwindcss";
 @import "konsta/react/theme.css";
 /* Our own components are styled with Tailwind classes too. */
@@ -8,16 +9,20 @@
 
 @theme {
   /* Accent as text on light surfaces: deep Miku teal, 5.3:1 on white. Fills use --miku instead. */
-  --color-brand-primary: #007268;
+  --color-brand-primary: #005f57;
   /* Destructive actions (Miku's pink, not red): add class k-color-brand-red to a Konsta component. 5.6:1 on white. */
-  --color-brand-red: #c4126f;
-  --font-ios: "Geist Variable", -apple-system, SF Pro Text, system-ui, sans-serif;
+  --color-brand-red: #a8125f;
+  --font-ios: "Centient Digits", "DotGothic16", "Geist Variable", -apple-system, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
 
-  --color-ios-light-surface: #fff;
-  --color-ios-light-surface-1: #f2f5f6;
-  --color-ios-dark-surface: #000;
-  --color-ios-dark-surface-1: #141819;
+  /* NieR paper (light) and VA-11 night (dark); same values as --n-bg in ui/night/night.css. */
+  --color-ios-light-surface: #dad4bb;
+  --color-ios-light-surface-1: #cfc9b1;
+  --color-ios-dark-surface: #0c0a1a;
+  --color-ios-dark-surface-1: #16122a;
+
+  /* NieR's UI is square: every rounded-* step is a hard corner or a hint of one (rounded-full stays round). */
+  --radius-xs: 1px; --radius-sm: 2px; --radius-md: 2px; --radius-lg: 3px; --radius-xl: 3px; --radius-2xl: 4px; --radius-3xl: 4px;
 
   /* Tailwind names for our own pieces. */
   --color-miku: var(--miku);
@@ -36,13 +41,14 @@
   --miku: #1ff0dc;
   --on-miku: #002624; /* 11:1 on --miku */
   --pink: #e12885; /* "overspent" panel; white on it reads 4.6:1 */
-  --negative: #c4126f; /* minus amounts as text */
-  --raised: #f2f5f6;
-  --raised-2: #e4eaec;
-  --muted: #5f686c; /* 4.9:1 on --raised */
-  --ink: #0b0f10;
-  --edge: rgb(55 59 62 / 0.14); /* hairline outlines, charcoal at low strength */
-  --lip: rgb(55 59 62 / 0.10); /* the short shadow under raised pieces */
+  --negative: #a8125f; /* minus amounts as text */
+  --raised: #cfc9b1;
+  --raised-2: #c3bda4;
+  --muted: #57534a; /* 4.9:1 on --raised */
+  --ink: #3d3a33;
+  --edge: rgb(78 75 66 / 0.32); /* hairline outlines, NieR's brown-gray ink at low strength */
+  --lip: rgb(78 75 66 / 0.2); /* the short shadow under raised pieces */
+  --logo-edge: #4e4b42; /* outline that keeps the light coin visible on paper */
 }
 @supports (color: color(display-p3 0 0 0)) {
   :root { --miku: color(display-p3 0.05 0.95 0.86); --pink: color(display-p3 0.9 0.12 0.53); }
@@ -51,11 +57,12 @@
   --k-color-primary: var(--miku); /* bright cyan reads at 12:1 on the dark cards */
   --k-color-brand-red: #ff6fb5;
   --negative: #ff6fb5;
-  --raised: #141819;
-  --raised-2: #222829;
-  --muted: #8e989c;
-  --ink: #fff;
-  --edge: rgb(190 200 209 / 0.14);
+  --raised: #16122a;
+  --raised-2: #221c3c;
+  --muted: #9a92b3;
+  --ink: #e6dcc0;
+  --edge: rgb(230 220 192 / 0.16);
+  --logo-edge: #07050d;
   --lip: color-mix(in oklab, var(--miku) 16%, transparent);
 }
 .dark .k-color-brand-red { --k-color-primary: #ff6fb5; }
@@ -63,9 +70,18 @@
 /* Clip sideways overflow: a phone would otherwise widen the page and stay zoomed out. */
 html, body { overflow-x: clip; }
 body {
-  @apply bg-ios-light-surface dark:bg-ios-dark-surface text-black dark:text-white font-ios antialiased;
+  @apply bg-ios-light-surface dark:bg-ios-dark-surface font-ios antialiased;
+  color: var(--ink);
   overscroll-behavior-y: none;
+  font-synthesis: none; /* the pixel face has one weight; a faked bold smears it */
+  /* NieR's faint grid on the paper */
+  background-image: repeating-linear-gradient(0deg, rgb(var(--n-ink-rgb) / .05) 0 1px, transparent 1px 8px), repeating-linear-gradient(90deg, rgb(var(--n-ink-rgb) / .05) 0 1px, transparent 1px 8px);
+  background-attachment: fixed;
 }
+/* A convex old monitor over everything: scanlines and darker edges. Never takes a tap. */
+body::after { content: ""; position: fixed; inset: 0; z-index: 9999; pointer-events: none; background: radial-gradient(ellipse at center, transparent 62%, rgb(var(--n-shade-rgb) / .22)), repeating-linear-gradient(0deg, rgb(var(--n-shade-rgb) / .06) 0 1px, transparent 1px 3px); }
+/* The logo's light coin and the wordmark keep a one-pixel outline, so they stay clear on paper. */
+.logo-edge { filter: drop-shadow(1px 0 0 var(--logo-edge)) drop-shadow(-1px 0 0 var(--logo-edge)) drop-shadow(0 1px 0 var(--logo-edge)) drop-shadow(0 -1px 0 var(--logo-edge)); }
 .num { font-variant-numeric: tabular-nums; }
 /* In the base layer, so a component's own outline-none / ring utilities still win. */
 @layer base { :focus-visible { outline: 2px solid var(--k-color-primary); outline-offset: 2px; } }
@@ -81,7 +97,7 @@ body {
   max-width: 640px; margin: 0 auto;
   padding: calc(env(safe-area-inset-top) + 28px) 0 calc(env(safe-area-inset-bottom) + 112px);
 }
-.screen-title { margin: 8px 16px 4px; font-size: 34px; font-weight: 800; line-height: 1.05; letter-spacing: -0.04em; }
+.screen-title { margin: 8px 16px 4px; font-size: 34px; font-weight: 400; line-height: 1.05; letter-spacing: .06em; }
 .text-negative { color: var(--negative); }
 
 /* ---- The kit ------------------------------------------------------------------------------------------- */
@@ -104,7 +120,7 @@ body {
 .keycap-quiet { background: var(--raised-2); color: var(--ink); box-shadow: 0 3px 0 var(--lip); }
 
 /* Money set big: heavy, tight, tabular; the currency smaller and lifted like Cash App's "$". */
-.money-big { font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.045em; }
+.money-big { font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 .money-big .cur { font-size: 0.5em; font-weight: 700; letter-spacing: -0.02em; vertical-align: 0.72em; margin-right: 0.08em; }
 
 /* Account types get colors from Miku's palette (loot-rarity style). Text on them is dark ink. */
@@ -125,8 +141,8 @@ body {
 .bob:hover, .bob:has(:active) { animation-play-state: paused; }
 /* Cards are dealt in from below, one after another. */
 @keyframes deal { from { transform: translateY(140%) rotate(-24deg); opacity: 0; } }
-/* A short score "pop" when a number changes. */
-@keyframes pop { 40% { transform: scale(1.06) rotate(-1deg); } }
+/* When a number changes it flashes like a CRT redraw: bright, blank, a jitter, settled (used with steps). */
+@keyframes pop { 0% { filter: brightness(2.4); } 20% { opacity: .3; } 40% { opacity: 1; transform: translateX(2px); } 60% { transform: translateX(-1px); } 100% { transform: none; filter: none; } }
 /* A hint that breathes. */
 @keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 
@@ -135,16 +151,11 @@ body {
 /* No glass anywhere. */
 .k-glass { box-shadow: none !important; backdrop-filter: none !important; }
 
-/* Toast: a solid ink pill, Undo in Miku. */
-.k-toast > .k-glass { background: var(--ink); color: var(--raised); border-radius: 16px; }
-.k-toast .k-button { color: var(--miku); font-weight: 700; }
-.dark .k-toast > .k-glass { background: var(--raised-2); color: #fff; border: 1px solid var(--edge); }
-/* While a sheet is open the bottom is taken, so toasts drop in from the top instead of covering its fields. */
-body:has(.k-sheet.-translate-y-full) .k-toast { top: calc(env(safe-area-inset-top) + 12px); bottom: auto; }
+/* Toast: restyled with the dialogs in ui/night/night.css. */
 
 /* Big buttons: rounded slabs with a hairline and a lip. Press flattens the lip; the button itself never
    moves (a target that moves under the finger can swallow the tap). */
-.k-button.h-12 { height: 56px; border-radius: 16px; font-size: 17px; font-weight: 700; border: 1px solid var(--edge); box-shadow: 0 3px 0 var(--lip); }
+.k-button.h-12 { height: 56px; border-radius: 3px; font-size: 17px; font-weight: 700; border: 1px solid var(--edge); box-shadow: 0 3px 0 var(--lip); }
 .k-button.h-12:active { box-shadow: 0 1px 0 var(--lip); }
 .k-button.bg-primary:not(.k-color-brand-red) { background: var(--miku); color: var(--on-miku); box-shadow: 0 3px 0 color-mix(in oklab, var(--miku) 45%, #137a7f); }
 .k-button.bg-primary.k-color-brand-red { color: #fff; }
@@ -158,8 +169,8 @@ body:has(.k-sheet.-translate-y-full) .k-toast { top: calc(env(safe-area-inset-to
 .k-button:active { opacity: 0.85; }
 
 /* Segmented: hairline track, Miku pill for the choice. */
-.k-segmented { background: var(--raised) !important; border: 1px solid var(--edge); border-radius: 16px !important; }
-.k-segmented-strong-highlight, .k-segmented > span[class*="bg-white"] { background: var(--miku) !important; box-shadow: none !important; border-radius: 12px !important; }
+.k-segmented { background: var(--raised) !important; border: 1px solid var(--edge); border-radius: 3px !important; }
+.k-segmented-strong-highlight, .k-segmented > span[class*="bg-white"] { background: var(--miku) !important; box-shadow: none !important; border-radius: 2px !important; }
 .k-segmented .k-button { color: var(--muted); font-weight: 600; }
 .k-segmented .k-button[class*="text-black"] { color: var(--on-miku); }
 
@@ -171,14 +182,8 @@ body:has(.k-sheet.-translate-y-full) .k-toast { top: calc(env(safe-area-inset-to
    children; on the inner <ul> (square corners) the clip cut the line at every corner. */
 .k-list:where(:not(.k-list .k-list))[class*="rounded"] { border: 1px solid var(--edge); }
 /* Section headings: heavy and tight. */
-.k-block-title { font-weight: 800; letter-spacing: -0.03em; }
+.k-block-title { font-weight: 400; letter-spacing: .08em; }
 
-/* Action sheet (confirm). */
-.k-actions-group { background: var(--raised); border: 1px solid var(--edge); }
-.dark .k-actions-group { background: var(--raised-2); }
-
-/* Sheets: canvas color, hairline top. */
-.k-sheet { border-radius: 28px 28px 0 0; border-top: 1px solid var(--edge); }
 
 /* ---- Spacing ------------------------------------------------------------------------------------------ */
 
@@ -222,3 +227,15 @@ body:has(.k-sheet.-translate-y-full) .k-toast { top: calc(env(safe-area-inset-to
 .receipt-stamp-btn { border: 2px solid currentColor; border-radius: 6px; padding: 3px 10px; font-weight: 700; font-size: 13px; letter-spacing: 0.04em; color: var(--paper-faint); }
 .receipt-stamp-btn[aria-pressed="true"] { color: var(--sc); background: color-mix(in oklab, var(--sc) 12%, transparent); animation: thunk 0.22s ease-out; }
 @keyframes thunk { 0% { transform: scale(1.2); } }
+
+/* ---- Coin3D: the brand coin turning (ui/Coin3D) ---------------------------------------------------------- */
+.coin3d { position: relative; width: 100%; height: 100%; perspective: 520px; }
+.coin3d::before { content: ""; position: absolute; inset: -30%; background: radial-gradient(closest-side, color-mix(in oklab, var(--miku) 32%, transparent), transparent); animation: coin3d-glow 4s ease-in-out infinite; }
+.coin3d-spin { position: absolute; inset: 0; transform-style: preserve-3d; animation: coin3d-turn 4s linear infinite; }
+.coin3d-spin > i { position: absolute; inset: 0; }
+.coin3d-spin > i svg { display: block; width: 100%; height: 100%; }
+.coin3d-spin > i.mid { filter: brightness(.42) saturate(1.4); }
+.coin3d-spin > b { position: absolute; left: 50%; top: 22%; height: 56%; width: 14px; margin-left: -7px; background: repeating-linear-gradient(0deg, #137a7f 0 5px, #0b4f53 5px 7px); transform: rotateY(90deg); }
+.coin3d.paused .coin3d-spin, .coin3d.paused::before { animation-play-state: paused; }
+@keyframes coin3d-turn { from { transform: rotateX(-10deg) rotateY(0); } to { transform: rotateX(-10deg) rotateY(360deg); } }
+@keyframes coin3d-glow { 25%, 75% { opacity: .5; } }
