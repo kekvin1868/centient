@@ -12,7 +12,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1, // one shared workspace (dev sign-in), so tests run in order
   reporter: [['list']],
-  use: { baseURL: `http://localhost:${port}`, ...devices['iPhone 13'], browserName: 'chromium', trace: 'retain-on-failure' },
+  // Reduced motion: the retro screen and dialog effects are off, so layout is measured at rest (and that path is tested).
+  use: { baseURL: `http://localhost:${port}`, ...devices['iPhone 13'], browserName: 'chromium', trace: 'retain-on-failure', reducedMotion: 'reduce' },
   webServer: {
     // Fresh database every run: wipe, migrate, then serve.
     command: `rm -rf "${state}" && cd apps/centient && npx wrangler d1 migrations apply DB --local --persist-to "${state}" && PORT=${port} CENTIENT_STATE="${state}" npx vite dev`,
