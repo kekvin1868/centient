@@ -12,9 +12,10 @@ import { typing, useLayerKeys } from '../../../ui/night/useLayers';
 import { FlowBoard } from '../board/FlowBoard';
 import type { Board } from '../board/state';
 import { HINTS } from '../model/copy';
-import { accountBalance, addAccount, addPocket, editPocket, kept, MAX_ACCOUNTS, removePocket, rename, setKind, toggle, type Draft } from '../model/draft';
+import { accountBalance, addAccount, addPocket, editPocket, kept, MAX_ACCOUNTS, moveBalance, owes, removePocket, rename, setKind, toggle, type Draft } from '../model/draft';
 import { ConfirmChanges } from '../sheets/ConfirmChanges';
 import { GuideSheet } from '../sheets/GuideSheet';
+import { MoveBalances } from '../sheets/MoveBalances';
 import { PocketSheet } from '../sheets/PocketSheet';
 import { TypePicker } from '../sheets/TypePicker';
 import { AccountPanel } from './AccountPanel';
@@ -25,7 +26,7 @@ type Props = {
   onSave: () => Promise<void>;
   closing: boolean;
 };
-type Open = { kind: 'type' } | { kind: 'pocket'; key: string } | { kind: 'confirm' } | { kind: 'guide' } | { kind: 'board' } | null;
+type Open = { kind: 'type' } | { kind: 'pocket'; key: string } | { kind: 'move' } | { kind: 'confirm' } | { kind: 'guide' } | { kind: 'board' } | null;
 
 export function NightMenu({ draft, setDraft, undo, board, setBoard, undoBoard, onSave, closing }: Props) {
   const [sel, setSel] = useState(0);
@@ -67,6 +68,7 @@ export function NightMenu({ draft, setDraft, undo, board, setBoard, undoBoard, o
     change(r.draft);
     setOpen({ kind: 'pocket', key: r.key });
   };
+  // 0 is the balance (Main, always first); 1-9 the pockets under it.
   const openPocket = (i: number) => { const p = a?.kept && a.pockets[i]; if (p) setOpen({ kind: 'pocket', key: p.key }); };
   const confirm = () => { if (kept(draft).length) setOpen({ kind: 'confirm' }); };
 
@@ -85,7 +87,7 @@ export function NightMenu({ draft, setDraft, undo, board, setBoard, undoBoard, o
     else if (k === 't') type();
     else if (k === 'd' || k === 'Delete' || k === 'Backspace') { e.preventDefault(); drop(); }
     else if (k === 'p') newPocket();
-    else if (/^[1-9]$/.test(k)) openPocket(+k - 1);
+    else if (/^[0-9]$/.test(k)) openPocket(+k);
     else if (k === 'c') setOpen({ kind: 'board' });
     else if (k === '?') setOpen({ kind: 'guide' });
   }, !open && !closing);
@@ -128,7 +130,10 @@ export function NightMenu({ draft, setDraft, undo, board, setBoard, undoBoard, o
         onPick={kind => { if (kind !== a.kind) change(setKind(draft, a.key, kind)); }} />}
       {pocket && a && <PocketSheet key={pocket.key} account={a} pocket={pocket} onClose={() => setOpen(null)}
         onSave={patch => change(editPocket(draft, a.key, pocket.key, patch))}
-        onDelete={() => change(removePocket(draft, a.key, pocket.key), `${pocket.name} DELETED`)} />}
+        onDelete={() => change(removePocket(draft, a.key, pocket.key), `${pocket.name} DELETED`)}
+        onMove={pocket.main && !owes(a.kind) ? () => setOpen({ kind: 'move' }) : undefined} />}
+      {open?.kind === 'move' && a && <MoveBalances draft={draft} account={a} onClose={() => setOpen(null)}
+        onMove={(to, amount) => change(moveBalance(draft, a.key, to.account, to.pocket, amount), `MOVED ${formatMoney(amount)} TO ${draft.find(x => x.key === to.account)?.name}`)} />}
       {open?.kind === 'confirm' && <ConfirmChanges draft={draft} links={board.links.length} sketches={board.strokes.length} onConfirm={onSave} onClose={() => setOpen(null)} />}
       {open?.kind === 'guide' && <GuideSheet onClose={() => setOpen(null)} />}
       {open?.kind === 'board' && <FlowBoard draft={draft} board={board} setBoard={setBoard} undo={undoBoard} onClose={() => setOpen(null)} />}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Account } from '../../../../../src/repos/accounts';
 import type { Envelope } from '../../../../../src/repos/envelopes';
-import { accountBalance, addAccount, addPocket, editPocket, fromCatalog, MAX_ACCOUNTS, removePocket, rename, toggle, type Draft } from './draft';
+import { accountBalance, addAccount, addPocket, editPocket, fromCatalog, MAX_ACCOUNTS, moveBalance, removePocket, rename, toggle, type Draft } from './draft';
 
 const acc = (id: string, name: string, kind: string): Account =>
   ({ id, name, kind, provider: null, currency_code: 'IDR', default_envelope_id: `${id}:main`, due_day: null, reconciled_at: null, archived_at: null });
@@ -48,5 +48,28 @@ describe('draft', () => {
   it('ignores blank names', () => {
     const d = seed();
     expect(rename(d, d[0].key, '   ')[0].name).toBe('Main Account');
+  });
+
+  it('moves balance from one account to another account, into its balance or a pocket', () => {
+    let d = seed();
+    const [a, b] = d;
+    d = editPocket(d, a.key, a.pockets[0].key, { balance: 1000 });
+    const r = addPocket(d, b.key);
+    d = r.draft;
+    d = moveBalance(d, a.key, b.key, b.pockets[0].key, 300);
+    d = moveBalance(d, a.key, b.key, r.key, 200);
+    expect(d[0].pockets[0].balance).toBe(500);
+    expect(d[1].pockets.map(p => p.balance)).toEqual([300, 200]);
+    expect(accountBalance(d[0])! + accountBalance(d[1])!).toBe(1000);
+  });
+
+  it('refuses a move larger than the balance, to itself, or of nothing', () => {
+    let d = seed();
+    d = editPocket(d, d[0].key, d[0].pockets[0].key, { balance: 100 });
+    const to = d[1].pockets[0].key;
+    expect(moveBalance(d, d[0].key, d[1].key, to, 101)).toBe(d);
+    expect(moveBalance(d, d[0].key, d[0].key, d[0].pockets[0].key, 50)).toBe(d);
+    expect(moveBalance(d, d[0].key, d[1].key, to, 0)).toBe(d);
+    expect(moveBalance(d, d[1].key, d[0].key, d[0].pockets[0].key, 1)).toBe(d); // ??? holds nothing
   });
 });

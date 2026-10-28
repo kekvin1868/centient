@@ -8,9 +8,9 @@ import { useLayerKeys } from './useLayers';
 
 type Props = {
   label: string;
-  /** Header strip: left text and right text. */
+  /** Header strip: left text and right text (or buttons, given `close`), before the close button. */
   title?: ReactNode;
-  meta?: ReactNode;
+  meta?: ReactNode | ((close: () => Promise<void>) => ReactNode);
   onClose: () => void;
   /** Keys other than Escape and Tab; `close` plays the exit first. */
   onKey?: (e: KeyboardEvent, close: () => Promise<void>) => void;
@@ -74,7 +74,7 @@ export function NightSheet({ label, title, meta, onClose, onKey, place = 'end', 
         {title !== undefined && (
           <div className="n-ph">
             <span>{title}</span>
-            <span className="n-ph-end">{meta}<button type="button" className="n-x" aria-label="Close" onClick={close}><CloseGlyph /></button></span>
+            <span className="n-ph-end">{typeof meta === 'function' ? meta(close) : meta}<button type="button" className="n-x" aria-label="Close" onClick={close}><CloseGlyph /></button></span>
           </div>
         )}
         {typeof children === 'function' ? children(close) : children}

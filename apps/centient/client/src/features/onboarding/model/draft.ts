@@ -87,3 +87,15 @@ export const editPocket = (d: Draft, k: string, pk: string, patch: Partial<Pick<
 
 export const removePocket = (d: Draft, k: string, pk: string) =>
   map(d, k, a => ({ ...a, pockets: a.pockets.filter(p => p.main || p.key !== pk) }));
+
+/** Moves `amount` out of an account's Main balance into another account's pocket (its Main or a named one). Opening
+ * balances only: nothing is logged as a transfer. Unchanged when the amount is more than the Main balance holds. */
+export function moveBalance(d: Draft, from: string, to: string, toPocket: string, amount: number): Draft {
+  const src = d.find(a => a.key === from)?.pockets.find(p => p.main);
+  if (from === to || !src || amount <= 0 || (src.balance ?? 0) < amount || !d.find(a => a.key === to)?.pockets.some(p => p.key === toPocket)) return d;
+  return d.map(a => (a.key !== from && a.key !== to ? a : {
+    ...a,
+    pockets: a.pockets.map(p => (a.key === from && p.main ? { ...p, balance: p.balance! - amount }
+      : a.key === to && p.key === toPocket ? { ...p, balance: (p.balance ?? 0) + amount } : p)),
+  }));
+}
