@@ -41,18 +41,33 @@ function draw(paths: Record<string, string>, rows: string[], ox: number, oy: num
 }
 
 const coinW = COIN[0].length, coinH = COIN.length;
-const art: Record<string, string> = {};
-draw(art, COIN, 0, 0, 1);
-const wordX = coinW + 2.5;
+const coinArt: Record<string, string> = {};
+draw(coinArt, COIN, 0, 0, 1);
+const wordArt: Record<string, string> = {};
 let x = 0;
-for (const ch of 'centient') { draw(art, GLYPHS[ch], wordX + x * U, (coinH - 7 * U) / 2, U); x += GLYPHS[ch][0].length + 1; }
-const width = wordX + (x - 1) * U;
+for (const ch of 'centient') { draw(wordArt, GLYPHS[ch], x * U, 0, U); x += GLYPHS[ch][0].length + 1; }
+const wordW = (x - 1) * U, wordH = 7 * U;
+const wordX = coinW + 2.5, wordY = (coinH - wordH) / 2;
+const width = wordX + wordW;
+
+const paths = (art: Record<string, string>) => Object.entries(art).map(([c, d]) => <path key={c} d={d} fill={FILL[c]} />);
 
 /** The lockup: coin + wordmark. Height sets the size; multiples of 15px keep every pixel whole. */
 export function Logo({ height = 30, className = '' }: { height?: number; className?: string }) {
   return (
-    <svg viewBox={`0 0 ${width} ${coinH}`} height={height} width={(height * width) / coinH} shapeRendering="crispEdges" className={className} role="img" aria-label="Centient">
-      {Object.entries(art).map(([c, d]) => <path key={c} d={d} fill={FILL[c]} />)}
+    <svg viewBox={`0 0 ${width} ${coinH}`} height={height} width={(height * width) / coinH} shapeRendering="crispEdges" className={`logo-edge ${className}`} role="img" aria-label="Centient">
+      {paths(coinArt)}
+      <g transform={`translate(${wordX} ${wordY})`}>{paths(wordArt)}</g>
     </svg>
   );
+}
+
+/** The coin alone, filling its box (decorative). */
+export function CoinMark({ className = '' }: { className?: string }) {
+  return <svg viewBox={`0 0 ${coinW} ${coinH}`} shapeRendering="crispEdges" className={className} aria-hidden="true">{paths(coinArt)}</svg>;
+}
+
+/** The wordmark alone, in the text color, filling its width. */
+export function Wordmark({ className = '' }: { className?: string }) {
+  return <svg viewBox={`0 0 ${wordW} ${wordH}`} shapeRendering="crispEdges" className={className} role="img" aria-label="Centient">{paths(wordArt)}</svg>;
 }
