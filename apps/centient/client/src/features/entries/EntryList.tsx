@@ -9,7 +9,7 @@ import type { EntryView } from '../../../../src/repos/entries';
 import type { Command } from '../../../../src/lib/schemas';
 import { dayLabel, formatMoney } from '../../lib/format';
 import { entryRow } from '../../lib/labels';
-import { buzz, reducedMotion } from '../../lib/motion';
+import { buzz, reducedMotion, retroList } from '../../lib/motion';
 import { catalog, hiddenEntries, me } from '../../lib/state';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { deleteWithUndo } from './EntrySheet';
@@ -30,7 +30,7 @@ export function EntryList({ entries, onOpen, empty = 'Nothing here yet.' }: { en
   const visible = entries.filter(e => !hiddenEntries.value.has(e.id));
   // Start animating only once the list has content: the first fill appears at once, later changes animate.
   useEffect(() => {
-    if (!animating.current && list.current && visible.length) { autoAnimate(list.current, { duration: 220 }); animating.current = true; }
+    if (!animating.current && list.current && visible.length) { autoAnimate(list.current, retroList); animating.current = true; }
   }, [visible.length]);
   const days = [...new Set(visible.map(e => e.occurred_at.slice(0, 10)))];
   const del = deleting ? entryRow(deleting, catalog.value) : null;
