@@ -1,25 +1,37 @@
-// The pockets section under a lifted account card: the deck, one toolbar for the front pocket, and the sheets
-// it opens. Pockets live inside the account (like Jago's Kantong): its balance is the sum of its pockets.
+// Under a lifted account card: Move money, then its pockets as a list (tap one for Add money / Back to balance /
+// Edit), and the sheets they open. Pockets live inside the account (like Jago's Kantong): its total is the sum of
+// its pockets; the Main pocket is the account's free balance and never shows as a pocket.
 import { ArrowsLeftRight, ArrowUUpLeft, PencilSimple, Plus } from '@phosphor-icons/react';
-import { useState, type ReactNode } from 'react';
+import { Button } from 'konsta/react';
+import { useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
 import type { Envelope } from '../../../../src/repos/envelopes';
+import { formatMoney } from '../../lib/format';
+import { Group, Row } from '../../ui/List';
+import { Sheet } from '../../ui/Sheet';
 import { AddPocketSheet } from './AddPocketSheet';
 import { EditPocketSheet } from './EditPocketSheet';
 import { MoveSheet, type Move } from './MoveSheet';
-import { PocketDeck, type Pocket } from './PocketDeck';
+import { PocketRows, type Pocket } from './PocketRows';
 
-export function AccountPockets({ account: a, pockets }: { account: Account; pockets: Pocket[] }) {
+type Bal = Account & { balance: number };
+
+export function AccountPockets({ account: a, accounts, pockets }: { account: Bal; accounts: Bal[]; pockets: Pocket[] }) {
   const [move, setMove] = useState<Move | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Envelope | null>(null);
-  const [frontId, setFrontId] = useState<string | null>(a.default_envelope_id);
-  const shown = pockets.filter(p => !p.archived_at);
-  const front = shown.find(p => p.id === frontId) ?? shown[0];
+  // The pocket whose actions show; it stays set while the sheet plays its exit.
+  const [acting, setActing] = useState<Pocket | null>(null);
+  const [actOpen, setActOpen] = useState(false);
+  const act = (fn: () => void) => { setActOpen(false); fn(); };
   const main = a.default_envelope_id;
+  const rows = pockets.filter(p => p.id !== main);
   return (
-    <section className="mt-6" aria-label={`Pockets in ${a.name}`}>
-      <div className="mb-3 flex items-center justify-between gap-3">
+    <section className="mt-3" aria-label={`Pockets in ${a.name}`}>
+      <Button large rounded tonal onClick={() => setMove({ from: main, to: null })}>
+        <ArrowsLeftRight size={18} weight="bold" className="mr-1.5" aria-hidden="true" />Move money
+      </Button>
+      <div className="mb-3 mt-6 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-[17px] font-extrabold tracking-[-0.02em]">Pockets</h3>
           <p className="text-[13px] font-semibold text-muted">Inside {a.name}</p>
@@ -27,34 +39,20 @@ export function AccountPockets({ account: a, pockets }: { account: Account; pock
         <button type="button" onClick={() => setAdding(true)}
           className="shrink-0 rounded-full border border-dashed border-current/40 px-3 py-1.5 text-[14px] font-bold active:opacity-70">+ New pocket</button>
       </div>
-      <PocketDeck pockets={shown} mainId={main} front={front?.id ?? null} onFront={setFrontId} />
-      {front && (
-        <div className="panel mt-5 flex gap-1.5 rounded-[20px] bg-raised p-1.5" role="toolbar" aria-label={`${front.name} actions`}>
-          {front.id === main
-            ? <Tool icon={<ArrowsLeftRight size={18} weight="bold" />} onClick={() => setMove({ accountId: a.id, from: main, to: null })}>Move to a pocket</Tool>
-            : <>
-                <Tool icon={<Plus size={18} weight="bold" />} onClick={() => setMove({ accountId: a.id, from: main, to: front.id })}>Add money</Tool>
-                <Tool icon={<ArrowUUpLeft size={18} weight="bold" />} onClick={() => setMove({ accountId: a.id, from: front.id, to: main })}>Back to Main</Tool>
-              </>}
-          <button type="button" onClick={() => setEditing(front)} aria-label={`Edit ${front.name}`}
-            className="grid size-12 shrink-0 place-items-center rounded-[14px] bg-white shadow-[0_2px_0_var(--lip)] active:opacity-70 dark:bg-raised-2">
-            <PencilSimple size={18} weight="bold" aria-hidden="true" />
-          </button>
-        </div>
-      )}
+      <PocketRows pockets={rows} colorIndex={p => pockets.indexOf(p)} onOpen={p => { setActing(p); setActOpen(true); }} />
       {/* Sheets are keyed by what they show, so each opening starts from fresh state set at mount. */}
-      <MoveSheet key={`move:${move ? `${move.from}:${move.to}` : 'none'}`} preset={move} pockets={shown} onClose={() => setMove(null)} />
+      <Sheet open={actOpen} onClose={() => setActOpen(false)} title={acting ? `${acting.name} · ${formatMoney(acting.balance, acting.currency_code)}` : ''}>
+        {acting && (
+          <Group>
+            <Row title="Add money" media={<Plus size={20} weight="bold" />} onClick={() => act(() => setMove({ from: main, to: acting.id }))} />
+            <Row title="Back to balance" media={<ArrowUUpLeft size={20} weight="bold" />} onClick={() => act(() => setMove({ from: acting.id, to: main }))} />
+            <Row title="Edit" media={<PencilSimple size={20} weight="bold" />} onClick={() => act(() => setEditing(acting))} />
+          </Group>
+        )}
+      </Sheet>
+      <MoveSheet key={`move:${move ? `${move.from}:${move.to}` : 'none'}`} preset={move} account={a} pockets={pockets} accounts={accounts} onClose={() => setMove(null)} />
       <AddPocketSheet key={`add-pocket:${adding}`} open={adding} account={a} onClose={() => setAdding(false)} />
       <EditPocketSheet key={`edit-pocket:${editing?.id ?? 'none'}`} pocket={editing} onClose={() => setEditing(null)} />
     </section>
-  );
-}
-
-function Tool({ icon, children, onClick }: { icon: ReactNode; children: ReactNode; onClick: () => void }) {
-  return (
-    <button type="button" onClick={onClick}
-      className="flex h-12 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[14px] bg-white text-[15px] font-bold shadow-[0_2px_0_var(--lip)] active:opacity-70 dark:bg-raised-2">
-      <span aria-hidden="true">{icon}</span><span className="truncate">{children}</span>
-    </button>
   );
 }
