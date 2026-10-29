@@ -45,4 +45,4 @@ npm run build -w apps/centient   # production build into apps/centient/dist/
   create `apps/centient/ngrok.policy.yml` (Google sign-in, your email only), run
   `ngrok http 8787 --traffic-policy-file ngrok.policy.yml`, set `DEV_HOSTS=<your ngrok host>` in
   `apps/centient/.dev.vars`, then `npm run dev`. Never run the tunnel without the policy file.
-  If the page says the host is not allowed, the dev server is blocking the ngrok hostname: add it to `server.allowedHosts` in `apps/centient/vite.config.ts`.
+  ngrok's domains are already in `server.allowedHosts` (`apps/centient/vite.config.ts`); a custom domain needs adding there.
