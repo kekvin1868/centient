@@ -25,11 +25,13 @@ export function LogBox() {
 
   const live = useMemo(() => {
     if (!text.trim() || !qctx.value) return [];
-    return parseQuickAdd(text, qctx.value).map((d, i) => {
+    // The account Home shows is where a line goes unless it names one; else the last one used.
+    const ctx = { ...qctx.value, lastAccountId: selectedAccount.value ?? qctx.value.lastAccountId };
+    return parseQuickAdd(text, ctx).map((d, i) => {
       const key = `${i}:${d.text}`;
       return edits[key] ?? fromDraft(d, key, iou);
     });
-  }, [text, edits, qctx.value]);
+  }, [text, edits, qctx.value, selectedAccount.value]);
   const items = [...live, ...pending];
   const ready = items.filter(i => chipView(i).state === 'ready');
 
