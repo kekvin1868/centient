@@ -141,10 +141,15 @@ test('pockets live inside an account: add one, move money in, the account balanc
   await add.getByRole('radio', { name: 'Lilac' }).tap();
   await add.getByRole('button', { name: 'Add pocket' }).tap();
   await expect(add).toBeHidden();
-  // A row opens the pocket's actions.
-  await pockets.getByRole('button', { name: /^Rent,/ }).tap();
-  await page.getByRole('dialog', { name: /^Rent/ }).getByRole('button', { name: 'Add money' }).tap();
+  // A card opens the pocket's actions (by keyboard here: the closing sheet hands focus back to the card).
+  await pockets.getByRole('button', { name: /^Rent,/ }).focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('dialog', { name: /^Rent/ }).getByRole('button', { name: 'Add money' }).focus();
+  await page.keyboard.press('Enter');
   const move = page.getByRole('dialog', { name: 'Add money to Rent' });
+  // It opens once the actions sheet is gone, so the focus handed back doesn't land behind it.
+  await page.waitForTimeout(500); // the actions sheet's exit is over by now
+  expect(await move.evaluate(d => d.contains(document.activeElement))).toBe(true);
   await move.getByRole('textbox', { name: 'Amount' }).fill('(1000000+500000)*2/2'); // a sum, worked out
   await expect(move).toContainText('= Rp1.500.000');
   await move.getByRole('button', { name: 'Move' }).tap();

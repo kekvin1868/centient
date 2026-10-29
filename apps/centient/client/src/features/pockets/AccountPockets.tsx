@@ -3,7 +3,7 @@
 // its pockets; the Main pocket is the account's free balance and never shows as a pocket.
 import { ArrowsLeftRight, ArrowUUpLeft, PencilSimple, Plus } from '@phosphor-icons/react';
 import { Button } from 'konsta/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
 import type { Envelope } from '../../../../src/repos/envelopes';
 import { formatMoney } from '../../lib/format';
@@ -20,10 +20,12 @@ export function AccountPockets({ account: a, accounts, pockets }: { account: Bal
   const [move, setMove] = useState<Move | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Envelope | null>(null);
-  // The pocket whose actions show; it stays set while the sheet plays its exit.
+  // The pocket whose actions show; it stays set while the sheet plays its exit. The action picked runs once the sheet
+  // is gone, so the sheet it opens keeps focus.
   const [acting, setActing] = useState<Pocket | null>(null);
   const [actOpen, setActOpen] = useState(false);
-  const act = (fn: () => void) => { setActOpen(false); fn(); };
+  const next = useRef<(() => void) | null>(null);
+  const act = (fn: () => void) => { next.current = fn; setActOpen(false); };
   const main = a.default_envelope_id;
   const rows = pockets.filter(p => p.id !== main);
   return (
@@ -41,7 +43,7 @@ export function AccountPockets({ account: a, accounts, pockets }: { account: Bal
       </div>
       <PocketCards pockets={rows} colorIndex={p => pockets.indexOf(p)} onOpen={p => { setActing(p); setActOpen(true); }} />
       {/* Sheets are keyed by what they show, so each opening starts from fresh state set at mount. */}
-      <Sheet open={actOpen} onClose={() => setActOpen(false)} title={acting ? `${acting.name} · ${formatMoney(acting.balance, acting.currency_code)}` : ''}>
+      <Sheet open={actOpen} onClose={() => setActOpen(false)} onClosed={() => { next.current?.(); next.current = null; }} title={acting ? `${acting.name} · ${formatMoney(acting.balance, acting.currency_code)}` : ''}>
         {acting && (
           <Group>
             <Row title="Add money" media={<Plus size={20} weight="bold" />} onClick={() => act(() => setMove({ from: main, to: acting.id }))} />
