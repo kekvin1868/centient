@@ -25,11 +25,15 @@ export function LogBox() {
 
   const live = useMemo(() => {
     if (!text.trim() || !qctx.value) return [];
-    return parseQuickAdd(text, qctx.value).map((d, i) => {
+    // The account Home shows is where a line goes unless it names one; else the last one used. Rupiah accounts only:
+    // a typed "25rb" is rupiah, and on a crypto account it would be read as that coin's smallest units.
+    const home = catalog.value.accounts.find(a => a.id === selectedAccount.value);
+    const ctx = { ...qctx.value, lastAccountId: home?.currency_code === 'IDR' ? home.id : qctx.value.lastAccountId };
+    return parseQuickAdd(text, ctx).map((d, i) => {
       const key = `${i}:${d.text}`;
       return edits[key] ?? fromDraft(d, key, iou);
     });
-  }, [text, edits, qctx.value]);
+  }, [text, edits, qctx.value, selectedAccount.value, catalog.value]);
   const items = [...live, ...pending];
   const ready = items.filter(i => chipView(i).state === 'ready');
 

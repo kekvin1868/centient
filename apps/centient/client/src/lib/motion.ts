@@ -26,7 +26,9 @@ export const buzz = (ms = 12) => { try { navigator.vibrate?.(ms); } catch { /* n
 
 /** AutoAnimate in the retro style: new rows render in from a scanline, removed rows collapse to a line and flash,
  *  and the rest step (not glide) to their new place. */
-export const retroList = (el: Element, action: 'add' | 'remove' | 'remain', from?: DOMRect, to?: DOMRect) => {
+type Spot = { top: number; left: number };
+// AutoAnimate passes the new place first, then the old one.
+export const retroList = (el: Element, action: 'add' | 'remove' | 'remain', next?: Spot, prev?: Spot) => {
   if (action === 'add') return new KeyframeEffect(el, [
     { clipPath: 'inset(48% 100% 48% 0)', filter: 'brightness(3)' },
     { clipPath: 'inset(48% 0 48% 0)', filter: 'brightness(2.4)', offset: 0.35 },
@@ -39,6 +41,6 @@ export const retroList = (el: Element, action: 'add' | 'remove' | 'remain', from
     { clipPath: 'inset(48% 30% 48% 30%)', filter: 'brightness(4) invert(1)', offset: 0.7 },
     { clipPath: 'inset(50% 50% 50% 50%)', opacity: 0 },
   ], { duration: 320, easing: 'steps(4)' });
-  const dx = (from?.left ?? 0) - (to?.left ?? 0), dy = (from?.top ?? 0) - (to?.top ?? 0);
+  const dx = (prev?.left ?? 0) - (next?.left ?? 0), dy = (prev?.top ?? 0) - (next?.top ?? 0);
   return new KeyframeEffect(el, [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 220, easing: 'steps(4)' });
 };

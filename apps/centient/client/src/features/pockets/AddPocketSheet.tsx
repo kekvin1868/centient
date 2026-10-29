@@ -39,7 +39,7 @@ export function AddPocketSheet({ open, account, onClose }: { open: boolean; acco
   return (
     <Sheet open={open} onClose={onClose} title={account ? `New pocket in ${account.name}` : 'Add pocket'}>
       <Segmented label="Kind" value={kind} onChange={setKind} options={KINDS} />
-      <Group foot="It starts empty; move money into it from the account's Main pocket whenever you like.">
+      <Group foot="It starts empty; move money into it from the account's balance whenever you like.">
         {!account && <PickerRow label="Inside" value={accountId} options={holders.map(a => ({ value: a.id, label: a.name }))} onChange={setAccountId} />}
         <InputRow label="Name" value={name} placeholder={kind === 'GOAL' ? 'e.g. Japan trip' : 'e.g. Rent'} onInput={setName} />
         {kind === 'GOAL' && <><AmountField label="Goal" value={target} currency={inside?.currency_code ?? 'IDR'} onChange={setTarget} /><InputRow label="By" type="date" value={date} onInput={setDate} /></>}

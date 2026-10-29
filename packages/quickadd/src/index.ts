@@ -144,7 +144,7 @@ function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boo
   const history = ctx.merchantHistory?.[merchant.toLowerCase()];
   const hint = findHint([...hints, ...merchant.toLowerCase().split(/\s+/)], type);
   const categoryId = type === 'TRANSFER' ? null
-    : history?.categoryId ?? categoryFromAlias(merchantWords, ctx) ?? categoryId_(hint?.category ?? (type === 'INCOME' ? 'Other income' : null), ctx);
+    : history?.categoryId ?? categoryFromAlias(merchantWords, ctx) ?? categoryId_(hint?.category ?? (type === 'INCOME' ? 'Other income' : 'Other'), ctx);
   const range: [number, number] = history ? [history.min / 3, history.max * 3] : hint?.range ?? DEFAULT_RANGE;
 
   let value: number | null = null;

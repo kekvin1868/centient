@@ -13,13 +13,18 @@ const ctx: QAContext = {
   ],
   categories: [
     cat('food', 'Food & Drink'), cat('transport', 'Transport'),
-    cat('bills', 'Home & Bills'), cat('shopping', 'Shopping'), cat('giving', 'Family & Giving'),
+    cat('bills', 'Home & Bills'), cat('shopping', 'Shopping'), cat('giving', 'Family & Giving'), cat('other', 'Other'),
     cat('salary', 'Salary', 'INCOME'), cat('angpao', 'Angpao & THR', 'INCOME'), cat('other-in', 'Other income', 'INCOME'),
   ],
   lastAccountId: 'bca',
 };
 
 describe('parseQuickAdd', () => {
+  it('reads a line with no money words as spending: family words go to Family & Giving, the rest to Other', () => {
+    expect(parseQuickAdd('For mom 2,2jt', ctx)[0]).toMatchObject({ type: 'EXPENSE', amount: 2_200_000, categoryId: 'giving', merchant: 'Mom', accountId: 'bca' });
+    expect(parseQuickAdd('xyz 50rb', ctx)[0]).toMatchObject({ type: 'EXPENSE', amount: 50_000, categoryId: 'other' });
+  });
+
   it('splits a line into several entries with accounts and categories', () => {
     const d = parseQuickAdd('kopi susu 25rb pakai gopay dan parkir 5rb cash dan bayar listrik 300rb dari BCA', ctx);
     expect(d.map(x => [x.amount, x.accountId, x.categoryId, x.merchant])).toEqual([

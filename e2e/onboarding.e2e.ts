@@ -38,15 +38,15 @@ test('rename, retype, set balances, add a pocket, drop and undo', async () => {
   await page.getByRole('dialog', { name: 'Type of BCA' }).getByRole('option', { name: /DEBIT CARD/ }).tap();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
-  await page.getByRole('button', { name: /^Main/ }).tap();
-  const pad = page.getByRole('dialog', { name: 'Main in BCA' });
+  await page.getByRole('button', { name: /^Balance/ }).tap();
+  const pad = page.getByRole('dialog', { name: 'Balance in BCA' });
   for (const k of ['5', '000', '000']) await pad.getByRole('button', { name: k, exact: true }).tap();
   await expect(pad.locator('.k-amt')).toHaveText('Rp5.000.000');
   await pad.getByRole('button', { name: 'SET ▸' }).tap();
   await expect(pad).toBeHidden();
 
   // The title bar's close button leaves it as it was.
-  await page.getByRole('button', { name: /^Main/ }).tap();
+  await page.getByRole('button', { name: /^Balance/ }).tap();
   await pad.getByRole('button', { name: 'Close' }).tap();
   await expect(pad).toBeHidden();
 
@@ -57,6 +57,33 @@ test('rename, retype, set balances, add a pocket, drop and undo', async () => {
   await page.keyboard.type('2j'); // J adds 000000: Rp2.000.000
   await page.keyboard.press('Enter');
   await expect(pocket).toBeHidden();
+  await expect(menu().getByRole('option').first()).toContainText('Rp7.000.000');
+
+  // MOVE BALANCES (title bar of the balance) takes some to another account; a typed sum is worked out; undo puts it back.
+  await page.getByRole('button', { name: /^Balance/ }).tap();
+  await pad.getByRole('button', { name: 'MOVE BALANCES' }).tap();
+  const mv = page.getByRole('dialog', { name: 'Move balances from BCA' });
+  await expect(mv.getByRole('radio', { name: /Dailies/ })).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('ArrowDown'); // the arrows pick the target
+  await expect(mv.getByRole('radio', { name: /Dailies/ })).toHaveAttribute('aria-checked', 'false');
+  await page.keyboard.press('ArrowUp');
+  await expect(mv.getByRole('radio', { name: /Dailies/ })).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.type('6j'); // more than the Rp5.000.000 balance: refused
+  await mv.getByRole('button', { name: 'MOVE ▸' }).tap();
+  await expect(mv).toBeVisible();
+  await page.keyboard.press('Delete');
+  await page.keyboard.type('500000*2+(');
+  await expect(mv.locator('.k-amt')).toHaveText('Rp1.000.000'); // half-typed: what it comes to so far
+  await expect(mv.locator('.k-sum')).toHaveClass(/bad/);
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await expect(mv.locator('.k-amt')).toHaveText('Rp1.000.000');
+  await expect(mv.locator('.k-sum')).not.toHaveClass(/bad/);
+  await page.keyboard.press('Enter');
+  await expect(mv).toBeHidden();
+  await expect(menu().getByRole('option').first()).toContainText('Rp6.000.000');
+  await expect(menu().getByRole('option', { name: /Dailies/ })).toContainText('Rp1.000.000');
+  await page.getByRole('button', { name: 'UNDO' }).tap();
   await expect(menu().getByRole('option').first()).toContainText('Rp7.000.000');
 
   await menu().getByRole('option', { name: /Miscs/ }).tap();

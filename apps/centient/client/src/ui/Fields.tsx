@@ -1,7 +1,8 @@
 // Form rows for grouped lists. Pickers are native selects (the phone's own wheel) laid over the row.
 import { ListItem, Stepper, Toggle } from 'konsta/react';
 
-type Opt = { value: string; label: string };
+/** An option; ones with a `group` are listed under that heading, after the plain ones. */
+type Opt = { value: string; label: string; group?: string };
 
 export function PickerRow({ label, value, options, onChange, placeholder = 'Choose' }: {
   label: string; value: string | null; options: Opt[]; onChange: (v: string | null) => void; placeholder?: string;
@@ -13,7 +14,12 @@ export function PickerRow({ label, value, options, onChange, placeholder = 'Choo
       <select className="absolute inset-0 opacity-0 cursor-pointer w-full" aria-label={label} value={value ?? ''}
         onChange={e => onChange((e.target as HTMLSelectElement).value || null)}>
         <option value="">{placeholder}</option>
-        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        {options.filter(o => !o.group).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        {[...new Set(options.flatMap(o => (o.group ? [o.group] : [])))].map(g => (
+          <optgroup key={`group:${g}`} label={g}>
+            {options.filter(o => o.group === g).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </optgroup>
+        ))}
       </select>
     </ListItem>
   );

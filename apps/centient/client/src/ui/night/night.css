@@ -140,6 +140,10 @@
 .n-x { flex: none; width: 22px; height: 20px; padding: 0; margin: -3px -6px -3px 0; display: grid; place-items: center; border: 0; border-radius: 0; background: #c0c0c0; color: #000; box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf; }
 .n-x:active { box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080; }
 .n-x:active svg { transform: translate(1px, 1px); }
+.n-win { flex: none; height: 20px; padding: 0 8px; margin: -3px 0; border: 0; border-radius: 0; background: #c0c0c0; color: #000; font-size: 12px; line-height: 1; letter-spacing: .04em; text-shadow: none; box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px #808080, inset 2px 2px #dfdfdf; }
+.n-win:active:not(:disabled) { box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px #808080; }
+.n-win:disabled { color: #808080; text-shadow: 1px 1px #fff; cursor: default; }
+.n-win:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
 .n-x:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
 .n-ph span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .n-ph .unk { color: var(--n-unk-inv); text-shadow: none; }
@@ -159,6 +163,15 @@
 .n-pk:hover:not(:disabled), .n-pk:focus-visible { background: var(--n-ink); color: var(--n-bg); text-shadow: none; }
 .n-pk:hover .unk, .n-pk:focus-visible .unk { color: var(--n-unk-inv); text-shadow: none; }
 .n-pk:disabled { opacity: .4; cursor: default; }
+.n-pk[aria-checked="true"] { background: var(--n-ink); color: var(--n-bg); text-shadow: none; }
+.n-pk[aria-checked="true"] .unk { color: var(--n-unk-inv); text-shadow: none; }
+.k-to { margin: 12px 14px 0; }
+/* The account's balance (its Main pocket, never named) above its pockets. */
+.n-hero { display: block; width: 100%; border: 0; background: none; color: var(--n-ink); text-align: left; padding: 6px 0 10px; }
+.n-hero small { display: block; font-size: 12px; letter-spacing: .12em; color: var(--n-dim); }
+.n-hero .money { display: block; font-size: 40px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.n-hero:hover:not(:disabled) .money, .n-hero:focus-visible .money { color: var(--n-cyan); }
+.n-hero:disabled { opacity: .4; cursor: default; }
 .n-pk small { font-size: 12px; opacity: .65; letter-spacing: .06em; }
 .n-note { font-size: 14px; line-height: 1.45; color: var(--n-dim); }
 .n-foot { margin-top: auto; padding-top: 12px; border-top: 1px solid var(--n-line); display: flex; gap: 10px; }
@@ -208,6 +221,8 @@
 .k-kinds { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
 .k-kinds button { border: 1px solid var(--n-line); background: none; color: var(--n-dim); font-size: 13px; line-height: 1; letter-spacing: .1em; padding: 8px 10px; }
 .k-kinds button[aria-pressed="true"] { border-color: var(--n-cyan); color: var(--n-cyan); }
+.k-sum { text-align: center; padding-top: 14px; margin-bottom: -14px; font-size: 16px; color: var(--n-dim); letter-spacing: .04em; overflow-wrap: anywhere; }
+.k-sum.bad { color: var(--n-pink); }
 .k-amt { text-align: center; line-height: 1; padding: 22px 0 14px; white-space: nowrap; }
 .k-amt .cur { font-size: .36em; vertical-align: 1.1em; margin-right: 4px; color: var(--n-dim); }
 .k-amt.shake { animation: n-nope .3s; }
@@ -299,5 +314,5 @@ body:has(.night) .k-toast, body:has(.n-modal) .k-toast { top: calc(env(safe-area
 .n-modal.fixed .n-sheet { width: 100%; max-width: 640px; margin: 0 auto; max-height: 90dvh; }
 .n-modal.fixed.mid .n-sheet { max-width: 420px; }
 .app-sheet-body { overflow-y: auto; min-height: 0; padding-bottom: 16px; overscroll-behavior: contain; }
-.n-btn, .n-go, .n-x, .n-tabs button, .k-keys button, .k-kinds button { font-family: inherit; cursor: pointer; }
+.n-btn, .n-go, .n-x, .n-win, .n-tabs button, .k-keys button, .k-kinds button { font-family: inherit; cursor: pointer; }
 .c-msg { margin: 0; padding: 18px 16px 8px; font-size: 17px; line-height: 1.5; }

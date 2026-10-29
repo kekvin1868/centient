@@ -1,5 +1,5 @@
 // End to end: first run (the night menu) with the three starting accounts, categories (ten broad ones, deleting one), list
-// borders, the account hand, pockets inside an account and their deck, crypto accounts, pay later installments
+// borders, the account hand, pockets inside an account (a list; Move money between pockets and accounts), crypto accounts, pay later installments
 // with per-person payments and proof of payment, entry icons and swipe actions, and the receipt form.
 // One workspace (dev sign-in), so tests run in order.
 import { expect, test, type Page } from '@playwright/test';
@@ -29,7 +29,7 @@ test('first run: the night menu sets starting balances, then Home', async () => 
   const menu = page.getByRole('listbox', { name: 'Accounts' });
   await expect(menu).toBeVisible({ timeout: 10_000 });
   const setMain = async (digits: string) => {
-    await page.getByRole('button', { name: /^Main/ }).tap();
+    await page.getByRole('button', { name: /^Balance/ }).tap();
     await page.keyboard.type(digits);
     await page.keyboard.press('Enter');
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -93,13 +93,16 @@ test('accounts are a hand you turn: drag sideways and it settles on (and picks) 
   const mid = async (name: string) => { const b = (await cards().getByRole('button', { name: new RegExp(`^${name}`) }).boundingBox())!; return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
   const box = (await cards().boundingBox())!;
   const centre = box.x + box.width / 2;
+  // Money opens with one card picked already (Home's account, else the first).
+  const picked = cards().getByRole('button', { pressed: true });
+  await expect(picked).toHaveCount(1);
+  const first = (await picked.getAttribute('aria-label'))!.split(',')[0];
   // Turn the hand: drag left by about a card.
   await page.mouse.move(centre, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(centre - 110, box.y + box.height / 2, { steps: 12 });
   await page.mouse.up();
-  const picked = cards().getByRole('button', { pressed: true });
-  await expect(picked).toHaveCount(1);
+  await expect(picked).not.toHaveAttribute('aria-label', new RegExp(`^${first},`));
   const name = (await picked.getAttribute('aria-label'))!.split(',')[0];
   await expect(page.getByText(name, { exact: true }).last()).toBeVisible(); // its details opened below
   await expect.poll(async () => Math.abs((await mid(name)).x - centre)).toBeLessThan(4); // settled in the middle
@@ -107,6 +110,17 @@ test('accounts are a hand you turn: drag sideways and it settles on (and picks) 
   const others = await cards().getByRole('button', { pressed: false }).all();
   expect(others.length).toBe(5);
 });
+
+/** Home on "All accounts" (picking a card on Money picks that account on Home too). */
+async function showAll() {
+  const chip = page.getByRole('button', { name: /^Showing .*\. Change account$/ });
+  if ((await chip.getAttribute('aria-label'))!.startsWith('Showing all accounts')) return;
+  await chip.tap();
+  const all = page.getByRole('dialog', { name: 'Pick an account' }).getByRole('button', { name: /^All accounts/ });
+  await all.focus();
+  await all.press('Enter');
+  await expect(page.getByRole('button', { name: /^Showing all accounts/ })).toBeVisible();
+}
 
 /** Picks an account card the way a keyboard user would: focus turns the hand to it, Enter picks it. */
 async function pick(name: string) {
@@ -120,18 +134,27 @@ async function pick(name: string) {
 test('pockets live inside an account: add one, move money in, the account balance stays', async () => {
   await pick('Main Account');
   const pockets = page.getByRole('region', { name: 'Pockets in Main Account' });
-  await expect(pockets.getByRole('group', { name: /^Main,/ })).toBeVisible();
+  await expect(pockets).toContainText('No pockets yet'); // Main is the account's balance, not a pocket
   await pockets.getByRole('button', { name: '+ New pocket' }).tap();
   const add = page.getByRole('dialog', { name: 'New pocket in Main Account' });
   await add.getByRole('textbox', { name: 'Name' }).fill('Rent');
   await add.getByRole('radio', { name: 'Lilac' }).tap();
   await add.getByRole('button', { name: 'Add pocket' }).tap();
   await expect(add).toBeHidden();
-  // A new pocket is set on top of the deck, so its actions are the ones showing.
-  await expect(pockets.getByRole('toolbar', { name: 'Rent actions' })).toBeVisible();
-  await pockets.getByRole('button', { name: 'Add money' }).tap();
+  await expect(page.getByText('Rp5.000.000 in total')).toHaveCount(0); // an empty pocket doesn't split the balance
+  // A card opens the pocket's actions (by keyboard here: the closing sheet hands focus back to the card).
+  await pockets.getByRole('button', { name: /^Rent,/ }).focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('dialog', { name: /^Rent/ }).getByRole('button', { name: 'Add money' }).focus();
+  await page.keyboard.press('Enter');
   const move = page.getByRole('dialog', { name: 'Add money to Rent' });
-  await move.getByRole('textbox', { name: 'Amount' }).fill('1500000');
+  // It opens once the actions sheet is gone, so the focus handed back doesn't land behind it.
+  await page.waitForTimeout(500); // the actions sheet's exit is over by now
+  expect(await move.evaluate(d => d.contains(document.activeElement))).toBe(true);
+  await move.getByRole('textbox', { name: 'Amount' }).fill('(1000000+500000');
+  await expect(move.getByRole('button', { name: 'Check the amount' })).toBeDisabled();
+  await move.getByRole('textbox', { name: 'Amount' }).fill('(1000000+500000)*2/2'); // a sum, worked out
+  await expect(move).toContainText('= Rp1.500.000');
   await move.getByRole('button', { name: 'Move' }).tap();
   await expect(move).toBeHidden();
   const b = await balances();
@@ -140,19 +163,23 @@ test('pockets live inside an account: add one, move money in, the account balanc
   expect(inAccount.find(e => e.name === 'Rent')).toMatchObject({ balance: 1_500_000, color: '#c3b1ff' });
   expect(inAccount.find(e => e.name === 'Main')!.balance).toBe(3_500_000);
   expect(await balance('Main Account')).toBe(5_000_000);
-  // Set aside means it's no longer free to spend.
+  // The hero is the free balance, the total sits under it.
+  await expect(page.getByText('Rp5.000.000 in total')).toBeVisible();
+  // Set aside means it's no longer free to spend. Picking on Money picked Main Account on Home too; show them all.
   await tab('Home').tap();
+  await expect(page.getByRole('button', { name: 'Showing Main Account. Change account' })).toBeVisible();
+  await showAll();
   await expect(page.getByRole('region', { name: 'What you can spend' })).toContainText('3.750.000'); // Main 3.5jt + Dailies 300rb - the 50rb from the category test
 });
 
-test('a crypto account has its own Main pocket and keeps its balance', async () => {
+test('a crypto account has no pockets yet and keeps its balance', async () => {
   const r = await api('/accounts', { method: 'POST', data: { name: 'TokoCrypto', kind: 'EXCHANGE', currency: 'BTC', openingBalance: 250_000 } });
   expect(r.ok()).toBe(true);
   expect(await balance('TokoCrypto')).toBe(250_000);
   await page.reload();
   await tab('Money').tap();
   await pick('TokoCrypto');
-  await expect(page.getByRole('region', { name: 'Pockets in TokoCrypto' }).getByRole('group', { name: /^Main,.*BTC 0.0025/ })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Pockets in TokoCrypto' })).toContainText('No pockets yet');
 });
 
 test('pay later: add a shared plan, pay each share, attach proof', async () => {
@@ -216,6 +243,7 @@ test('an entry gets its own emoji, remembered for its merchant', async () => {
   await api('/transactions', { method: 'POST', data: { type: 'EXPENSE', accountId: await accountId('Dailies'), categoryId: cat[0].id, amount: 20_000, date: today, merchant: 'Arcade' } });
   await page.reload();
   await tab('Home').tap();
+  await showAll();
   const row = page.locator('.entry-row', { hasText: 'Arcade' });
   await row.getByRole('button', { name: /Change the icon/ }).tap();
   const sheet = page.getByRole('dialog', { name: 'Icon for Arcade' });
@@ -249,25 +277,21 @@ test('swiping a row left unlocks edit and delete; deleting can be undone, then g
   await expect(edit.getByRole('button', { name: 'Delete' })).toHaveCount(0);
 });
 
-test('the pocket deck: swipe the front card away and the next one comes forward; patterns differ', async () => {
+test('pockets are a list; Move money goes to another account too; patterns differ', async () => {
   await page.keyboard.press('Escape'); // the edit sheet from the test before
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await tab('Money').tap();
   await pick('Main Account');
   const pockets = page.getByRole('region', { name: 'Pockets in Main Account' });
-  await expect(pockets.getByRole('toolbar')).toHaveAttribute('aria-label', /actions$/);
-  const before = await pockets.getByRole('toolbar').getAttribute('aria-label');
-  const front = pockets.getByRole('group', { name: new RegExp(`^${before!.replace(' actions', '')},`) });
-  await pockets.getByRole('toolbar').scrollIntoViewIfNeeded();
-  await page.waitForTimeout(600); // the details panel finishes opening, so the card holds still
-  const b = (await front.boundingBox())!;
-  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(b.x + b.width / 2 + 170, b.y + b.height / 2, { steps: 10 });
-  await page.mouse.up();
-  await expect(pockets.getByRole('toolbar')).not.toHaveAttribute('aria-label', before!);
-  await pockets.getByRole('button', { name: 'Next pocket' }).tap(); // the arrows do the same
-  await expect(pockets.getByRole('toolbar')).toHaveAttribute('aria-label', before!);
+  await expect(pockets.getByRole('button', { name: /^Rent,/ })).toBeVisible();
+  const before = await balance('Jago');
+  await pockets.getByRole('button', { name: 'Move money' }).tap();
+  const move = page.getByRole('dialog', { name: 'Move money' });
+  await move.getByRole('combobox', { name: 'To' }).selectOption({ label: 'Jago' });
+  await move.getByRole('textbox', { name: 'Amount' }).fill('100000');
+  await move.getByRole('button', { name: 'Move' }).tap();
+  await expect(move).toBeHidden();
+  expect(await balance('Jago')).toBe(before + 100_000);
   const all = (await (await api('/catalog')).json()).envelopes as { account_id: string; pattern: number; archived_at: string | null }[];
   const main = await accountId('Main Account');
   const mine = all.filter(e => e.account_id === main && !e.archived_at).map(e => e.pattern);

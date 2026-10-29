@@ -38,7 +38,7 @@ export function Settings() {
         <Row title={<span className="text-primary">Add account</span>} onClick={() => setAdd('account')} />
       </Group>
 
-      <Group label="Pockets" foot="Pockets live inside an account and set some of its money aside. Each account has a Main pocket where new money lands; move money between pockets on the Money tab.">
+      <Group label="Pockets" foot="Pockets live inside an account and set some of its money aside. New money lands in the account's balance; move it into pockets, or to another account, on the Money tab.">
         {active(cat.envelopes).filter(e => !cat.accounts.some(a => a.default_envelope_id === e.id)).map(e => (
           <Row key={e.id} title={e.name} sub={`${nameOf(cat.accounts, e.account_id)} · ${POCKET_KINDS[e.kind]}`} chevron onClick={() => setPocket(e)} />
         ))}
