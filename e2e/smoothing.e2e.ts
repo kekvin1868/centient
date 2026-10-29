@@ -141,6 +141,7 @@ test('pockets live inside an account: add one, move money in, the account balanc
   await add.getByRole('radio', { name: 'Lilac' }).tap();
   await add.getByRole('button', { name: 'Add pocket' }).tap();
   await expect(add).toBeHidden();
+  await expect(page.getByText('Rp5.000.000 in total')).toHaveCount(0); // an empty pocket doesn't split the balance
   // A card opens the pocket's actions (by keyboard here: the closing sheet hands focus back to the card).
   await pockets.getByRole('button', { name: /^Rent,/ }).focus();
   await page.keyboard.press('Enter');
