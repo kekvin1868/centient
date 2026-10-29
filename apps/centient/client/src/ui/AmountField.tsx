@@ -3,7 +3,7 @@
 import { ListInput } from 'konsta/react';
 import { useSumInput } from './MathKeys';
 
-type Props = { value: number | null; currency?: string; onChange: (minor: number | null) => void; label?: string; autoFocus?: boolean };
+type Props = { value: number | null; currency?: string; onChange: (minor: number | null, invalid: boolean) => void; label?: string; autoFocus?: boolean };
 
 export function AmountField({ value, currency = 'IDR', onChange, label = 'Amount', autoFocus }: Props) {
   const { input, below } = useSumInput(value, currency, onChange);

@@ -8,8 +8,11 @@ import { formatMoney } from '../lib/format';
 
 const KEYS = ['+', '−', '×', '÷', '(', ')', '⌫'];
 
-/** Props for the <input>, and what goes under it (the result line and the operator row). */
-export function useSumInput(value: number | null, currency: string, onChange: (minor: number | null) => void) {
+/** Props for the <input>, and what goes under it (the result line and the operator row). onChange also says
+ * whether the text is a sum that can't be worked out (minor is null then too). */
+export function useSumInput(
+  value: number | null, currency: string, onChange: (minor: number | null, invalid: boolean) => void,
+) {
   const ref = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(showAmount(value, currency));
   const [focused, setFocused] = useState(false);
@@ -20,7 +23,7 @@ export function useSumInput(value: number | null, currency: string, onChange: (m
   const r = amountInput(text, currency);
   const input = {
     ref, value: text, inputMode: (DECIMALS[currency] ? 'decimal' : 'numeric') as 'decimal' | 'numeric',
-    onChange: (e: ChangeEvent<HTMLInputElement>) => { const n = amountInput(e.target.value, currency); setText(n.text); onChange(n.minor); },
+    onChange: (e: ChangeEvent<HTMLInputElement>) => { const n = amountInput(e.target.value, currency); setText(n.text); onChange(n.minor, n.invalid); },
     onFocus: () => { clearTimeout(leaving.current); setFocused(true); },
     // Blur comes before the click of the tap that caused it: collapsing the row at once would move what was tapped.
     onBlur: () => {

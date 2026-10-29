@@ -150,6 +150,8 @@ test('pockets live inside an account: add one, move money in, the account balanc
   // It opens once the actions sheet is gone, so the focus handed back doesn't land behind it.
   await page.waitForTimeout(500); // the actions sheet's exit is over by now
   expect(await move.evaluate(d => d.contains(document.activeElement))).toBe(true);
+  await move.getByRole('textbox', { name: 'Amount' }).fill('(1000000+500000');
+  await expect(move.getByRole('button', { name: 'Check the amount' })).toBeDisabled();
   await move.getByRole('textbox', { name: 'Amount' }).fill('(1000000+500000)*2/2'); // a sum, worked out
   await expect(move).toContainText('= Rp1.500.000');
   await move.getByRole('button', { name: 'Move' }).tap();

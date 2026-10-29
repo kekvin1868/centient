@@ -26,6 +26,7 @@ export function MoveSheet({ preset, account: a, pockets, accounts, onClose }: {
   const [from, setFrom] = useState<string | null>(preset?.from ?? null);
   const [to, setTo] = useState<string | null>(preset?.to ?? null);
   const [amount, setAmount] = useState<number | null>(null);
+  const [bad, setBad] = useState(false);
   if (!preset) return null;
   const name = (p: Pocket) => (p.id === a.default_envelope_id ? 'Balance' : p.name);
   const opts = pockets.map(p => ({ value: p.id, label: `${name(p)} · ${formatMoney(p.balance, p.currency_code)}` }));
@@ -33,7 +34,7 @@ export function MoveSheet({ preset, account: a, pockets, accounts, onClose }: {
     .map(x => ({ value: `account:${x.id}`, label: x.name, group: 'Other accounts' }));
   const toAccount = to?.startsWith('account:') ? to.slice('account:'.length) : null;
   const target = preset.to && !toAccount ? pockets.find(p => p.id === preset.to) : null;
-  const error = !from || !to ? 'Pick where from and where to' : from === to ? 'Pick two different places' : !amount ? 'Enter an amount' : null;
+  const error = !from || !to ? 'Pick where from and where to' : from === to ? 'Pick two different places' : bad ? 'Check the amount' : !amount ? 'Enter an amount' : null;
   const save = async () => {
     if (error) return;
     const date = me.value!.today;
@@ -49,7 +50,7 @@ export function MoveSheet({ preset, account: a, pockets, accounts, onClose }: {
       <Group foot={toAccount ? `Moves money from ${a.name} to ${accounts.find(x => x.id === toAccount)?.name}'s balance.` : `Moves money inside ${a.name}. Its total doesn't change.`}>
         <PickerRow label="From" value={from} options={opts} onChange={setFrom} />
         <PickerRow label="To" value={to} options={[...opts, ...others]} onChange={setTo} />
-        <AmountField value={amount} currency={a.currency_code} onChange={setAmount} />
+        <AmountField value={amount} currency={a.currency_code} onChange={(m, invalid) => { setAmount(m); setBad(invalid); }} />
       </Group>
       <Block><Button large rounded disabled={Boolean(error)} onClick={save}>{error ?? 'Move'}</Button></Block>
     </Sheet>
