@@ -166,6 +166,7 @@ test('pockets live inside an account: add one, move money in, the account balanc
   await expect(page.getByText('Rp5.000.000 in total')).toBeVisible();
   // Set aside means it's no longer free to spend. Picking on Money picked Main Account on Home too; show them all.
   await tab('Home').tap();
+  await expect(page.getByRole('button', { name: 'Showing Main Account. Change account' })).toBeVisible();
   await showAll();
   await expect(page.getByRole('region', { name: 'What you can spend' })).toContainText('3.750.000'); // Main 3.5jt + Dailies 300rb - the 50rb from the category test
 });

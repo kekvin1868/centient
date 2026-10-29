@@ -17,7 +17,7 @@ export function PickedAccount({ account: a, pockets, onShow, children }: {
 }) {
   const [updating, setUpdating] = useState<Bal | null>(null);
   const main = pockets.find(p => p.id === a?.default_envelope_id);
-  const split = Boolean(main && pockets.length > 1);
+  const split = Boolean(main && pockets.some(p => p !== main && p.balance));
   const free = split ? main!.balance : a?.balance ?? 0;
   return (
     <div className="mt-4 grid px-4" style={{ gridTemplateRows: a ? '1fr' : '0fr', transition: 'grid-template-rows 420ms cubic-bezier(.34,1.3,.64,1)' }}>
