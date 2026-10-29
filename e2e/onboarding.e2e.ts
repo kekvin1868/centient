@@ -64,6 +64,10 @@ test('rename, retype, set balances, add a pocket, drop and undo', async () => {
   await pad.getByRole('button', { name: 'MOVE BALANCES' }).tap();
   const mv = page.getByRole('dialog', { name: 'Move balances from BCA' });
   await expect(mv.getByRole('radio', { name: /Dailies/ })).toHaveAttribute('aria-checked', 'true');
+  await page.keyboard.press('ArrowDown'); // the arrows pick the target
+  await expect(mv.getByRole('radio', { name: /Dailies/ })).toHaveAttribute('aria-checked', 'false');
+  await page.keyboard.press('ArrowUp');
+  await expect(mv.getByRole('radio', { name: /Dailies/ })).toHaveAttribute('aria-checked', 'true');
   await page.keyboard.type('6j'); // more than the Rp5.000.000 balance: refused
   await mv.getByRole('button', { name: 'MOVE ▸' }).tap();
   await expect(mv).toBeVisible();

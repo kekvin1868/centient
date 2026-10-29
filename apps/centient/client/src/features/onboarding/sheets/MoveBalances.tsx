@@ -1,6 +1,6 @@
 // MOVE BALANCES: takes some of an account's balance (its Main pocket) to another account's balance or one of its
 // pockets. Opening balances only, so it just changes the draft (one undo step). Cards and pay later aren't offered:
-// their numbers are what's owed, not money held. More than the balance holds shakes the keypad.
+// their numbers are what's owed, not money held. More than the balance holds shakes the keypad. ↑ ↓ pick the target.
 import { useState } from 'react';
 import { formatMoney } from '../../../lib/format';
 import { Keypad, keypadKey, keypadValue, pressKey } from '../../../ui/night/Keypad';
@@ -29,6 +29,13 @@ export function MoveBalances({ draft, account, onMove, onClose }: {
     <NightSheet label={`Move balances from ${account.name}`} title="MOVE BALANCES" meta={formatMoney(have)} onClose={onClose}
       onKey={(e, close) => {
         if (e.key === 'Enter') { e.preventDefault(); go(close); return; }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          const i = targets.findIndex(t => t.pocket === to?.pocket), n = targets.length;
+          const t = targets[(i + (e.key === 'ArrowDown' ? 1 : n - 1)) % n];
+          if (t) setTo({ account: t.account, pocket: t.pocket });
+          return;
+        }
         const k = keypadKey(e);
         if (k) { e.preventDefault(); press(k); }
       }}>

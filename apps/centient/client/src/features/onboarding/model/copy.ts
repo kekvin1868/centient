@@ -34,6 +34,6 @@ export const GUIDE: [string, string][] = [
 export const CONTROLS: [string, [string, string][]][] = [
   ['TOUCH', [['TAP', 'Pick an account'], ['TAP AGAIN', 'Rename it'], ['HOLD', 'Pick its type'], ['SWIPE ←', 'Drop it (swipe → to keep)'], ['TAP OUTSIDE', 'Close any dialog']]],
   ['MENU', [['↑ ↓ · J K', 'Move'], ['⏎ · R', 'Rename (adds on the + row)'], ['N', 'New account'], ['T', 'Pick a type'], ['D · ⌫', 'Drop, keep or delete'], ['P', 'New pocket'], ['0 · 1–9', 'Set the balance · pocket 1–9'], ['C', 'Flow board'], ['⌘/CTRL Z', 'Undo'], ['⌘/CTRL ⏎', 'Confirm'], ['ESC', 'Close the top dialog']]],
-  ['KEYPAD', [['0–9 · ⌫', 'Type the amount'], ['K · J', 'Add 000 · 000000'], ['+ - * / ( )', 'Work out a sum'], ['DEL', 'Clear'], ['?', 'Leave it ???'], ['⏎', 'Set']]],
+  ['KEYPAD', [['0–9 · ⌫', 'Type the amount'], ['K · J', 'Add 000 · 000000'], ['+ - * / ( )', 'Work out a sum'], ['DEL', 'Clear'], ['?', 'Leave it ???'], ['⏎', 'Set'], ['↑ ↓', 'Move Balances: pick where it goes']]],
   ['BOARD', [['DRAG BOARD', 'Pan (or SPACE + drag)'], ['PINCH · ⌘/CTRL SCROLL', 'Zoom'], ['+ − · 0 · F', 'Zoom · 100% · Fit'], ['V · L · P · E', 'Move · Link · Pen · Erase'], ['⌘/CTRL Z', 'Undo'], ['C · ESC', 'Close']]],
 ];
