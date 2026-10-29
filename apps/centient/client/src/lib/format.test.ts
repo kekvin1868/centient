@@ -12,6 +12,9 @@ describe('formatMoney', () => {
   it('keeps decimals for other currencies', () => {
     expect(formatMoney(2050, 'USD')).toBe('USD 20.50');
     expect(formatMoney(100_000, 'BTC')).toBe('BTC 0.001');
+    expect(formatMoney(1500, 'JPY')).toBe('JPY 1,500');
+    expect(formatMoney(1250, 'KWD')).toBe('KWD 1.250');
+    expect(formatMoney(2000, 'EUR')).toBe('EUR 20.00');
   });
 });
 

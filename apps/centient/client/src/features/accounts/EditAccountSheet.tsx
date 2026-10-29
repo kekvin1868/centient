@@ -6,12 +6,13 @@ import type { Account } from '../../../../src/repos/accounts';
 import { call, client, patchRow } from '../../lib/api';
 import { ACCOUNT_KINDS } from '../../lib/format';
 import { attempt } from '../../lib/run';
-import { active, catalog, me, refresh } from '../../lib/state';
+import { active, catalog, refresh } from '../../lib/state';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { InputRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
+import { CurrencyPicker } from './CurrencyPicker';
 
 const DAYS = Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
 
@@ -62,7 +63,7 @@ export function EditAccountSheet({ account: a, onClose }: { account: Account | n
             <PickerRow label="New money goes to" value={defaultPocket} placeholder="Main"
               options={active(catalog.value.envelopes).filter(e => e.account_id === a.id).map(e => ({ value: e.id, label: e.name }))} onChange={v => v && setDefaultPocket(v)} />
           )}
-          <PickerRow label="Currency" value={currency} options={Object.keys(me.value?.currencies ?? {}).map(c => ({ value: c, label: c }))} onChange={v => v && setCurrency(v)} />
+          <CurrencyPicker value={currency} onChange={setCurrency} />
         </Group>
         <BlockFooter inset>Currency can change only before the account has entries.</BlockFooter>
         <Block className="flex flex-col gap-2.5">

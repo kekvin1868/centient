@@ -1,13 +1,13 @@
 // Display formatting and the plain words the UI uses instead of engineering terms.
-import { DECIMALS } from '@centient/money';
+import { CURRENCIES, DECIMALS } from '@centient/money';
 
-/** Rupiah the Indonesian way (Rp25.000); other currencies keep their decimals (USD 20.50, BTC 0.001). */
+/** Rupiah the Indonesian way (Rp25.000); other money keeps its decimals (USD 20.50, KWD 1.250, JPY 1,500), crypto only the ones in use (BTC 0.001). */
 export function formatMoney(minor: number, currency = 'IDR'): string {
   const sign = minor < 0 ? '-' : '';
   const d = DECIMALS[currency] ?? 0;
   const major = Math.abs(minor) / 10 ** d;
   if (currency === 'IDR') return `${sign}Rp${major.toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;
-  const s = major.toLocaleString('en-US', { minimumFractionDigits: currency === 'USD' ? 2 : 0, maximumFractionDigits: d });
+  const s = major.toLocaleString('en-US', { minimumFractionDigits: CURRENCIES.find(c => c.code === currency)?.kind === 'CRYPTO' ? 0 : d, maximumFractionDigits: d });
   return `${sign}${currency} ${s}`;
 }
 

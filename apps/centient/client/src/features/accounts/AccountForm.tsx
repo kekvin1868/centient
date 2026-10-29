@@ -4,10 +4,11 @@ import { useState } from 'react';
 import { call, client } from '../../lib/api';
 import { attempt } from '../../lib/run';
 import { ACCOUNT_KINDS } from '../../lib/format';
-import { me, refresh } from '../../lib/state';
+import { refresh } from '../../lib/state';
 import { AmountField } from '../../ui/AmountField';
 import { InputRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
+import { CurrencyPicker } from './CurrencyPicker';
 
 const KINDS = ['BANK', 'DEBIT_CARD', 'EWALLET', 'CASH', 'CREDIT_CARD', 'PAYLATER', 'EXCHANGE'] as const;
 type Kind = (typeof KINDS)[number];
@@ -19,7 +20,6 @@ export function AccountForm({ onDone, submitLabel = 'Add account' }: { onDone: (
   const [currency, setCurrency] = useState('IDR');
   const [otherCurrency, setOtherCurrency] = useState(false);
   const owes = kind === 'CREDIT_CARD' || kind === 'PAYLATER';
-  const currencies = Object.keys(me.value?.currencies ?? { IDR: 0 });
 
   const save = async () => {
     const ok = await attempt(() => call(client.api.accounts.$post({
@@ -34,7 +34,7 @@ export function AccountForm({ onDone, submitLabel = 'Add account' }: { onDone: (
         <InputRow label="Name" value={name} placeholder="e.g. BCA, GoPay" onInput={setName} />
         <PickerRow label="Type" value={kind} options={KINDS.map(k => ({ value: k, label: ACCOUNT_KINDS[k] }))} onChange={v => v && setKind(v as Kind)} />
         {(otherCurrency || kind === 'EXCHANGE') && (
-          <PickerRow label="Currency" value={currency} options={currencies.map(c => ({ value: c, label: c }))} onChange={v => v && setCurrency(v)} />
+          <CurrencyPicker value={currency} onChange={setCurrency} />
         )}
         <AmountField label={owes ? 'How much you owe now' : 'How much is in it now'} currency={currency} value={amount} onChange={setAmount} />
       </Group>

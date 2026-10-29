@@ -1,6 +1,6 @@
 // End to end: first run (the night menu) with the three starting accounts, categories (ten broad ones, deleting one), list
 // borders, the account hand, pockets inside an account (a list; Move money between pockets and accounts), crypto accounts, pay later installments
-// with per-person payments and proof of payment, entry icons and swipe actions, and the receipt form.
+// with per-person payments and proof of payment, entry icons and swipe actions, the receipt form, and accounts in any currency.
 // One workspace (dev sign-in), so tests run in order.
 import { expect, test, type Page } from '@playwright/test';
 
@@ -15,7 +15,7 @@ test.afterAll(async () => page.close());
 
 const api = (path: string, init?: { method?: string; data?: unknown }) =>
   page.request.fetch(`/api${path}`, { method: init?.method ?? 'GET', data: init?.data });
-type Acc = { id: string; name: string; kind: string; default_envelope_id: string };
+type Acc = { id: string; name: string; kind: string; default_envelope_id: string; currency_code: string };
 const accounts = async () => (await (await api('/catalog')).json()).accounts as Acc[];
 const accountId = async (name: string) => (await accounts()).find(a => a.name === name)!.id;
 const balances = async () => (await (await api('/balances')).json()) as { accounts: { name: string; balance: number }[]; envelopes: { id: string; name: string; account_id: string; balance: number; color: string | null }[] };
@@ -318,4 +318,27 @@ test('a manual entry is a receipt: type the title, pick a pocket stamp, enter th
   await expect(edit.getByRole('textbox', { name: 'What was it?' })).toHaveValue('Sewa');
   await expect(edit.getByRole('group', { name: 'From pocket' }).getByRole('button', { name: 'RENT' })).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Escape');
+});
+
+test('an account can be in any currency: search "yen", and its balance has no decimals', async () => {
+  await tab('Settings').tap();
+  await page.getByRole('button', { name: 'Add account' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Add account' });
+  await sheet.getByRole('textbox', { name: 'Name' }).fill('Yen');
+  await sheet.getByRole('button', { name: 'Different currency' }).tap();
+  await sheet.getByRole('button', { name: /^Currency/ }).tap();
+  await sheet.getByRole('textbox', { name: 'Search' }).fill('yen');
+  await sheet.getByRole('button', { name: 'JPY · Japanese Yen' }).tap();
+  await expect(sheet.getByRole('button', { name: /^Currency/ })).toContainText('JPY · Japanese Yen');
+  await sheet.getByRole('textbox', { name: /How much is in it now/ }).fill('1500');
+  await sheet.getByRole('button', { name: 'Add account' }).tap();
+  await expect(sheet).toBeHidden();
+  expect((await accounts()).find(a => a.name === 'Yen')).toMatchObject({ currency_code: 'JPY' });
+  expect(await balance('Yen')).toBe(1500);
+
+  // Money: the yen balance prints whole, and the total keeps it apart (no rate is guessed).
+  await tab('Money').tap();
+  await expect(page.getByText('+ JPY 1,500 (not in the total)')).toBeVisible();
+  await pick('Yen');
+  await expect(page.getByText('JPY 1,500', { exact: true }).first()).toBeVisible();
 });
