@@ -1,5 +1,5 @@
-// Under a lifted account card: Move money, then its pockets as a list (tap one for Add money / Back to balance /
-// Edit), and the sheets they open. Pockets live inside the account (like Jago's Kantong): its total is the sum of
+// Under a lifted account card: Move money, then its pockets as cards down the page (tap one for Add money / Back to
+// balance / Edit), and the sheets they open. Pockets live inside the account (like Jago's Kantong): its total is the sum of
 // its pockets; the Main pocket is the account's free balance and never shows as a pocket.
 import { ArrowsLeftRight, ArrowUUpLeft, PencilSimple, Plus } from '@phosphor-icons/react';
 import { Button } from 'konsta/react';
@@ -12,7 +12,7 @@ import { Sheet } from '../../ui/Sheet';
 import { AddPocketSheet } from './AddPocketSheet';
 import { EditPocketSheet } from './EditPocketSheet';
 import { MoveSheet, type Move } from './MoveSheet';
-import { PocketRows, type Pocket } from './PocketRows';
+import { PocketCards, type Pocket } from './PocketCards';
 
 type Bal = Account & { balance: number };
 
@@ -39,7 +39,7 @@ export function AccountPockets({ account: a, accounts, pockets }: { account: Bal
         <button type="button" onClick={() => setAdding(true)}
           className="shrink-0 rounded-full border border-dashed border-current/40 px-3 py-1.5 text-[14px] font-bold active:opacity-70">+ New pocket</button>
       </div>
-      <PocketRows pockets={rows} colorIndex={p => pockets.indexOf(p)} onOpen={p => { setActing(p); setActOpen(true); }} />
+      <PocketCards pockets={rows} colorIndex={p => pockets.indexOf(p)} onOpen={p => { setActing(p); setActOpen(true); }} />
       {/* Sheets are keyed by what they show, so each opening starts from fresh state set at mount. */}
       <Sheet open={actOpen} onClose={() => setActOpen(false)} title={acting ? `${acting.name} · ${formatMoney(acting.balance, acting.currency_code)}` : ''}>
         {acting && (

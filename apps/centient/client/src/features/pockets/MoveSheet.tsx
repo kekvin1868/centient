@@ -14,7 +14,7 @@ import { PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
-import type { Pocket } from './PocketRows';
+import type { Pocket } from './PocketCards';
 
 type Bal = Account & { balance: number };
 /** Pocket ids of this account; `to` may also be `account:<id>` (another account's balance). */
