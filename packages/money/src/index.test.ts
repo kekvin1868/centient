@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatMoney, parseAmount, parseNumber, toMinor } from './index';
+import { CURRENCIES, DECIMALS, formatMoney, parseAmount, parseNumber, toMinor } from './index';
 
 describe('parseNumber', () => {
   it.each([
@@ -43,5 +43,34 @@ describe('formatMoney', () => {
     expect(formatMoney(-1000)).toBe('-Rp1,000');
     expect(formatMoney(1050, 'USD')).toBe('USD 10.50');
     expect(toMinor(10.5, 'USD')).toBe(1050);
+  });
+});
+
+describe('currency list', () => {
+  it('lists the world currencies once each, with names and whole decimals', () => {
+    expect(CURRENCIES.length).toBeGreaterThanOrEqual(150);
+    expect(new Set(CURRENCIES.map(c => c.code)).size).toBe(CURRENCIES.length);
+    for (const c of CURRENCIES) {
+      expect(c.code).toMatch(/^[A-Z]{3,4}$/);
+      expect(c.name).not.toBe('');
+      expect(Number.isInteger(c.decimals) && c.decimals >= 0 && c.decimals <= 8).toBe(true);
+    }
+  });
+
+  it('keeps ISO decimals, rupiah whole and the old four unchanged', () =>
+    expect(['JPY', 'KRW', 'IDR', 'USD', 'EUR', 'KWD', 'USDT', 'BTC'].map(c => DECIMALS[c])).toEqual([0, 0, 0, 2, 2, 3, 6, 8]));
+
+  it('converts and prints any listed currency', () => {
+    expect(toMinor(1500, 'JPY')).toBe(1500);
+    expect(toMinor(1.25, 'KWD')).toBe(1250);
+    expect(formatMoney(1500, 'JPY')).toBe('JPY 1,500');
+    expect(formatMoney(1250, 'KWD')).toBe('KWD 1.250');
+  });
+
+  it('reads eur and jpy in quick add, and no other new codes', () => {
+    expect(parseAmount('20jpy')).toEqual({ kind: 'exact', value: 20, currency: 'JPY' });
+    expect(parseAmount('eur15')).toEqual({ kind: 'exact', value: 1500, currency: 'EUR' });
+    expect(parseAmount('20usd')).toEqual({ kind: 'exact', value: 2000, currency: 'USD' });
+    expect(parseAmount('20chf')).toBeNull();
   });
 });

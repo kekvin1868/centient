@@ -1,7 +1,11 @@
 // Money helpers shared by the Worker, the quick-add parser and (later) the receipt amount check.
 // Amounts are integers in the currency's minor units; IDR has 0 decimals.
+import { CURRENCIES } from './currencies';
 
-export const DECIMALS: Record<string, number> = { IDR: 0, USD: 2, USDT: 6, BTC: 8 };
+export { CURRENCIES, type Currency } from './currencies';
+
+/** Decimals per listed currency code (IDR 0, USD 2, JPY 0, KWD 3, USDT 6, BTC 8, ...). */
+export const DECIMALS: Record<string, number> = Object.fromEntries(CURRENCIES.map(c => [c.code, c.decimals]));
 
 /**
  * Parses a written number the way Indonesians and English dictation write it.
@@ -18,7 +22,7 @@ const SUFFIX: Record<string, number> = { rb: 1e3, ribu: 1e3, k: 1e3, jt: 1e6, ju
 
 /** Currency words accepted before or after a number. Rupiah words keep the rupiah rules below. */
 export const CURRENCY_WORDS: Record<string, string> = {
-  rp: 'IDR', 'rp.': 'IDR', idr: 'IDR', $: 'USD', us$: 'USD', usd: 'USD', usdt: 'USDT', btc: 'BTC',
+  rp: 'IDR', 'rp.': 'IDR', idr: 'IDR', $: 'USD', us$: 'USD', usd: 'USD', usdt: 'USDT', btc: 'BTC', eur: 'EUR', jpy: 'JPY',
 };
 
 export type Amount =
@@ -37,12 +41,12 @@ function parseForeignNumber(s: string): number | null {
 }
 
 /**
- * Parses one amount token: optional currency prefix (Rp, Rp., IDR, $, US$, USD, USDT, BTC), a number,
+ * Parses one amount token: optional currency prefix (Rp, Rp., IDR, $, US$, USD, USDT, BTC, EUR, JPY), a number,
  * optional suffix (rb, ribu, k, jt, juta, or a currency word), any case. Returns null when the token
  * is not an amount. With a prefix a small rupiah number is taken literally ("Rp100" is Rp100).
  */
 export function parseAmount(token: string): Amount | null {
-  const m = token.trim().toLowerCase().match(/^(rp\.?|idr|us\$|\$|usdt|usd|btc)?\s?(\d[\d.,]*)\s?(rb|ribu|k|jt|juta|m|usdt|usd|btc)?$/);
+  const m = token.trim().toLowerCase().match(/^(rp\.?|idr|us\$|\$|usdt|usd|btc|eur|jpy)?\s?(\d[\d.,]*)\s?(rb|ribu|k|jt|juta|m|usdt|usd|btc|eur|jpy)?$/);
   if (!m) return null;
   const [, prefix, digits, suffix] = m;
   const prefixCur = prefix ? CURRENCY_WORDS[prefix] : undefined;
