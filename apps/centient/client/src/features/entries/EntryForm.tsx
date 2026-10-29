@@ -8,7 +8,7 @@ import { formatMoney } from '../../lib/format';
 import { pocketColor } from '../../lib/pocketColors';
 import { active, catalog, everyday } from '../../lib/state';
 import { LineSelect, Receipt, ReceiptLine, Rule } from '../../ui/Receipt';
-import { useSumInput } from '../../ui/MathKeys';
+import { useSumInput } from '../../ui/useSumInput';
 import { Segmented } from '../../ui/Segmented';
 import { Typewriter } from '../../ui/Typewriter';
 import type { EntryType, Form } from './form';

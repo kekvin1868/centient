@@ -1,7 +1,7 @@
-// Amount input that shows grouping while typing (25.000) and reports minor units. Takes sums too (see MathKeys).
+// Amount input that shows grouping while typing (25.000) and reports minor units. Takes sums too (see useSumInput).
 // A Konsta list input with a large number; place it inside a Group (or any Konsta List).
 import { ListInput } from 'konsta/react';
-import { useSumInput } from './MathKeys';
+import { useSumInput } from './useSumInput';
 
 type Props = { value: number | null; currency?: string; onChange: (minor: number | null, invalid: boolean) => void; label?: string; autoFocus?: boolean };
 
