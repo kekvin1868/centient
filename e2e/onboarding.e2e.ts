@@ -68,8 +68,13 @@ test('rename, retype, set balances, add a pocket, drop and undo', async () => {
   await mv.getByRole('button', { name: 'MOVE ▸' }).tap();
   await expect(mv).toBeVisible();
   await page.keyboard.press('Delete');
-  await page.keyboard.type('500000*2');
+  await page.keyboard.type('500000*2+(');
+  await expect(mv.locator('.k-amt')).toHaveText('Rp1.000.000'); // half-typed: what it comes to so far
+  await expect(mv.locator('.k-sum')).toHaveClass(/bad/);
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
   await expect(mv.locator('.k-amt')).toHaveText('Rp1.000.000');
+  await expect(mv.locator('.k-sum')).not.toHaveClass(/bad/);
   await page.keyboard.press('Enter');
   await expect(mv).toBeHidden();
   await expect(menu().getByRole('option').first()).toContainText('Rp6.000.000');

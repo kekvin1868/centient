@@ -222,6 +222,7 @@
 .k-kinds button { border: 1px solid var(--n-line); background: none; color: var(--n-dim); font-size: 13px; line-height: 1; letter-spacing: .1em; padding: 8px 10px; }
 .k-kinds button[aria-pressed="true"] { border-color: var(--n-cyan); color: var(--n-cyan); }
 .k-sum { text-align: center; padding-top: 14px; margin-bottom: -14px; font-size: 16px; color: var(--n-dim); letter-spacing: .04em; overflow-wrap: anywhere; }
+.k-sum.bad { color: var(--n-pink); }
 .k-amt { text-align: center; line-height: 1; padding: 22px 0 14px; white-space: nowrap; }
 .k-amt .cur { font-size: .36em; vertical-align: 1.1em; margin-right: 4px; color: var(--n-dim); }
 .k-amt.shake { animation: n-nope .3s; }

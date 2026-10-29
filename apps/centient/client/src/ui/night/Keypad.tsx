@@ -35,14 +35,26 @@ export function keypadKey(e: KeyboardEvent): string | null {
   return null;
 }
 
+/** The longest start of a sum that works out, with its open brackets closed; 0 when none does. */
+function soFar(digits: string) {
+  for (let n = digits.length - 1; n > 0; n--) {
+    const t = digits.slice(0, n);
+    const open = t.split('(').length - t.split(')').length;
+    const v = open >= 0 ? evalAmount(t + ')'.repeat(open), 'IDR') : null;
+    if (v !== null) return v;
+  }
+  return 0;
+}
+
 export function Keypad({ digits, onPress, empty, refused = 0 }: { digits: string; onPress: (k: string) => void; empty: string; refused?: number }) {
   const sum = /\D/.test(digits);
   const v = keypadValue(digits);
-  const shown = !digits ? null : v === null ? '?' : formatMoney(v).replace(/^Rp/, '');
+  // A half-typed sum shows what it comes to so far (never "?": ??? means "not set" here); the sum line turns pink.
+  const shown = !digits ? null : formatMoney(v ?? soFar(digits)).replace(/^Rp/, '');
   const size = !shown ? 56 : shown.length > 9 ? 34 : shown.length > 6 ? 44 : 56;
   return (
     <>
-      {sum && <div className="k-sum">{digits.replace(/\*/g, '×').replace(/\//g, '÷')}</div>}
+      {sum && <div className={`k-sum ${v === null ? 'bad' : ''}`}>{digits.replace(/\*/g, '×').replace(/\//g, '÷')}</div>}
       <div key={refused} className={`k-amt money ${shown ? '' : 'unk'} ${refused ? 'shake' : ''}`} style={{ fontSize: size }} aria-live="polite">
         {shown ? <><span className="cur">Rp</span>{shown}</> : empty}
       </div>
