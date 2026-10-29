@@ -1,5 +1,5 @@
 // Amount inputs that take sums ("25.000 x 4"). The phone's number pad has no operators, so while the field is
-// focused a row of them shows under it; they type at the caret and never take focus, so the keyboard stays up.
+// focused on a touch screen a row of them shows under it; they type at the caret and never take focus, so the keyboard stays up.
 // A sum keeps its text as typed with "= Rp 100.000" under it, and becomes the grouped result on blur.
 import { DECIMALS } from '@centient/money';
 import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from 'react';
@@ -7,6 +7,8 @@ import { amountInput, showAmount } from '../lib/amount';
 import { formatMoney } from '../lib/format';
 
 const KEYS = ['+', '−', '×', '÷', '(', ')', '⌫'];
+// Touch screens only: a keyboard has the operators already.
+const touch = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 /** Props for the <input>, and what goes under it (the result line and the operator row). onChange also says
  * whether the text is a sum that can't be worked out (minor is null then too). */
@@ -37,7 +39,7 @@ export function useSumInput(
           {r.invalid ? 'Check the amount' : `= ${formatMoney(r.minor!, currency)}`}
         </span>
       )}
-      {focused && <MathKeys input={ref} />}
+      {focused && touch && <MathKeys input={ref} />}
     </>
   );
   return { input, below, text };
