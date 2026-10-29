@@ -1,5 +1,6 @@
 // The ledger: entries (what the user logged) -> transactions -> account lines (entries) + pocket lines (allocations).
 import type { NewTransaction } from '../domain/ledger';
+import { currencyRow } from './currencies';
 import { uid } from './sql';
 
 export type TxView = {
@@ -31,6 +32,7 @@ export function entriesRepo(db: D1Database) {
   function txStatements(ws: string, groupId: string, t: NewTransaction): D1PreparedStatement[] {
     const id = uid();
     return [
+      ...(t.originalCurrency ? [currencyRow(db, t.originalCurrency)] : []),
       db.prepare('INSERT INTO transactions (id, workspace_id, group_id, type, occurred_at, category_id, merchant, note, original_amount, original_currency, spread_cycles) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(id, ws, groupId, t.type, t.occurredAt, t.categoryId, t.merchant, t.note, t.originalAmount ?? null, t.originalCurrency ?? null, t.spreadCycles ?? 1),
       ...t.entries.map(e => db.prepare('INSERT INTO entries (transaction_id, account_id, amount) VALUES (?, ?, ?)').bind(id, e.accountId, e.amount)),

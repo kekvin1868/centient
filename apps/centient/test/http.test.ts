@@ -28,6 +28,17 @@ describe('http', () => {
     expect(await call('PATCH', '/api/budgets/x', { name: 'n' })).toMatchObject({ status: 404, body: { code: 'NOT_FOUND' } });
   });
 
+  it('refuses an unlisted currency without writing, and lets the client format every listed one', async () => {
+    for (const currency of ['XXX', 'ABC', '']) {
+      expect(await call('POST', '/api/accounts', { name: `Bad ${currency}`, kind: 'BANK', currency })).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    }
+    const { body: catalog } = await call('GET', '/api/catalog');
+    expect(catalog.accounts.some((a: { name: string }) => a.name.startsWith('Bad'))).toBe(false);
+    expect((await env.DB.prepare("SELECT code FROM currencies WHERE code IN ('XXX', 'ABC')").all()).results).toEqual([]);
+    const { body: me } = await call('GET', '/api/me');
+    expect(me.currencies).toMatchObject({ JPY: 0, KWD: 3, IDR: 0, USD: 2, USDT: 6, BTC: 8 });
+  });
+
   it('logs, edits, updates a balance and deletes through the API', async () => {
     const { body: catalog } = await call('GET', '/api/catalog');
     const { body: { today } } = await call('GET', '/api/me');

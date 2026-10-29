@@ -18,7 +18,7 @@ export const command = z.discriminatedUnion('type', [
     type: z.literal('EXPENSE'), accountId: id, envelopeId: id.optional(), categoryId: id, amount: money, date: day,
     merchant: text(120).optional(), note: text(500).optional(),
     split: z.object({ people: z.number().int().min(2).max(50), iouAccountId: id.optional() }).optional(),
-    originalAmount: money.optional(), originalCurrency: z.string().max(8).optional(),
+    originalAmount: money.optional(), originalCurrency: currency.optional(),
   }),
   z.object({
     type: z.literal('INCOME'), accountId: id, envelopeId: id.optional(), categoryId: id, amount: money, date: day,
