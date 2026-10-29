@@ -35,7 +35,7 @@ export const HOKKIEN_DIGITS: Record<string, number> = {
 };
 export const HOKKIEN_UNITS: Record<string, number> = { ceng: 1_000, ban: 10_000, tiao: 1_000_000 };
 
-export const FILLER = new Set(['yg', 'yang', 'dgn', 'dengan', 'utk', 'untuk', 'di', 'sm', 'sama', 'buat', 'bwt', 'aku', 'saya', 'gw', 'gue', 'orang', 'org', 'tadi', 'hari', 'ini']);
+export const FILLER = new Set(['for', 'yg', 'yang', 'dgn', 'dengan', 'utk', 'untuk', 'di', 'sm', 'sama', 'buat', 'bwt', 'aku', 'saya', 'gw', 'gue', 'orang', 'org', 'tadi', 'hari', 'ini']);
 export const VERBS = new Set(['makan', 'minum', 'bayar', 'beli', 'belanja', 'jajan', 'patungan']);
 export const INCOME_WORDS = new Set(['gaji', 'terima', 'dapat', 'masuk', 'cashback', 'angpao', 'thr', 'bonus', 'refund']);
 // Lending and borrowing are transfers to or from a person's IOU account.
@@ -61,6 +61,7 @@ add('baju,sepatu,shopee,tokopedia,uniqlo', 'Shopping', [20_000, 5_000_000]);
 add('hp,iphone,laptop', 'Shopping', [500_000, 50_000_000]);
 add('perpuluhan,persembahan,kolekte,zakat,sedekah,infaq,donasi', 'Family & Giving', [1_000, 100_000_000]);
 add('kondangan,nikahan,amplop', 'Family & Giving', [50_000, 10_000_000]);
+add('mom,mama,mamah,mami,papa,papi,ayah,dad,ortu', 'Family & Giving', [10_000, 100_000_000]);
 add('buku,kursus,les,sekolah,kuliah', 'Education', [10_000, 50_000_000]);
 add('admin', 'Fees', [500, 100_000]);
 add('gaji,bonus', 'Salary', [100_000, 1_000_000_000]);
