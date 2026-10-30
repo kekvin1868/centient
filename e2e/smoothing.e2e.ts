@@ -342,3 +342,65 @@ test('an account can be in any currency: search "yen", and its balance has no de
   await pick('Yen');
   await expect(page.getByText('JPY 1,500', { exact: true }).first()).toBeVisible();
 });
+
+// The server's clock can't be faked from the browser, so "day 2 of the cycle" comes from starting the month yesterday.
+const jakartaDay = (offset = 0) => new Date(Date.now() + 7 * 3600e3 + offset * 864e5).toISOString().slice(0, 10);
+const categoryId = async (name: string) => ((await (await api('/catalog')).json()).categories as { id: string; name: string }[]).find(c => c.name === name)!.id;
+const settingsCombos = async () => page.getByRole('combobox').evaluateAll(els => els.map(e => e.getAttribute('aria-label')));
+
+test('the Budget forecast stays hidden until its start day, which is set on this device', async () => {
+  await api('/workspace', { method: 'PATCH', data: { cycle_start_day: Number(jakartaDay(-1).slice(8)) } });
+  await api('/budgets', { method: 'PUT', data: { categoryId: await categoryId('Food & Drink'), limit: 50_000_000 } });
+  await page.reload();
+  await tab('Money').tap();
+  await expect(page.getByText('Forecast starts on day 3 · 1 day to go')).toBeVisible();
+
+  // Settings: the row sits directly below "Month starts on day", with its footnote.
+  await tab('Settings').tap();
+  const names = await settingsCombos();
+  expect(names[names.indexOf('Month starts on day') + 1]).toBe('Forecast starts on day');
+  await expect(page.getByText('Early in the month, a few purchases can make the forecast jump. It stays hidden until this day, every month.')).toBeVisible();
+  await page.getByRole('combobox', { name: 'Forecast starts on day' }).selectOption('5');
+  await page.reload();
+  await tab('Settings').tap();
+  await expect(page.getByRole('combobox', { name: 'Forecast starts on day' })).toHaveValue('5');
+  await tab('Money').tap();
+  await expect(page.getByText('Forecast starts on day 5 · 3 days to go')).toBeVisible();
+});
+
+test('budgets are grouped per currency, and the ? beside the heading explains the words', async () => {
+  await api('/budgets', { method: 'PUT', data: { categoryId: await categoryId('Food & Drink'), currency: 'USD', limit: 5_000 } });
+  await page.reload();
+  await tab('Money').tap();
+  const idr = page.getByText(/^Budgets in IDR · \d+ days? left$/);
+  await expect(idr).toBeVisible();
+  await expect(page.getByText('Budgets in USD', { exact: true })).toBeVisible();
+  await expect(page.getByText('USD 0.00 of USD 50.00')).toBeVisible();
+
+  const help = page.getByRole('button', { name: 'What the budget words mean' });
+  const [title, button] = [(await idr.boundingBox())!, (await help.boundingBox())!];
+  expect(Math.abs(title.y + title.height / 2 - (button.y + button.height / 2))).toBeLessThan(8); // same row
+  expect(button.x).toBeGreaterThan(title.x + title.width); // title left, button right
+  expect(page.viewportSize()!.width - (button.x + button.width)).toBeLessThan(40); // at the far right
+  await help.tap();
+  const guide = page.getByRole('dialog', { name: 'Budget words' });
+  for (const word of ['On track', 'Likely over', 'Over']) await expect(guide.getByText(word, { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(guide).toBeHidden();
+  await expect(help).toBeFocused();
+});
+
+test('a pocket budget takes the pocket currency; a category budget picks one, rupiah first', async () => {
+  await page.getByRole('button', { name: 'Set a budget' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Set a budget' });
+  await sheet.getByRole('combobox', { name: 'Pocket' }).selectOption(`${await accountId('Yen')}:main`);
+  await expect(sheet.getByText('Currency').locator('..').locator('..')).toContainText('JPY');
+  await expect(sheet.getByRole('textbox', { name: 'Search' })).toHaveCount(0);
+  await sheet.getByRole('combobox', { name: 'Pocket' }).selectOption('');
+  await expect(sheet.getByRole('button', { name: /^Currency/ })).toContainText('IDR · Indonesian Rupiah');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  // Leave the workspace on a 1st-of-the-month cycle and the default start day for later specs.
+  await api('/workspace', { method: 'PATCH', data: { cycle_start_day: 1 } });
+  await page.evaluate(() => localStorage.removeItem('centient:forecastStartDay'));
+});

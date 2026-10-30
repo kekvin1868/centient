@@ -6,6 +6,7 @@ import { ACCOUNT_KINDS, formatMoney } from '../../lib/format';
 import { attempt } from '../../lib/run';
 import { everyday, me, selectedAccount, version } from '../../lib/state';
 import { BigMoney } from '../../ui/BigMoney';
+import { rupiahLeft } from './forecast';
 
 type Head = { label: string; minor: number; currency: string; note: string; tag?: string; hurt: boolean; cta: string };
 // Last data shown, per account, so coming back to Home shows it at once instead of rebuilding the screen.
@@ -25,9 +26,9 @@ export function Headline({ onGoMoney }: { onGoMoney: () => void }) {
       }
       const b = await call(client.api.budgets.$get({ query: {} }));
       const startDay = me.value?.workspace.cycle_start_day ?? 1;
-      if (b.budgets.length) {
-        const left = b.budgets.reduce((s, x) => s + Math.max(0, x.remaining), 0);
-        const perDay = b.budgets.reduce((s, x) => s + (x.safePerDay ?? 0), 0);
+      // Rupiah budgets only: budgets in other currencies are never added in.
+      const { count, left, perDay } = rupiahLeft(b.budgets);
+      if (count) {
         const d = b.cycle.daysLeft;
         return setHead({
           label: left > 0 ? (startDay === 1 ? 'Left this month' : `Left until ${b.cycle.to}`) : 'Budget spent',

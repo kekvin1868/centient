@@ -1,9 +1,9 @@
-// Currency rows for the account forms: the chosen one, and on tap a search over the world list ("yen", "SGD",
+// Currency rows for forms (accounts, budgets): the chosen one, and on tap a search over the world list ("yen", "SGD",
 // "dollar"). Inline in the form's list rather than its own sheet, so no dialog opens on top of a dialog.
 import { CURRENCIES } from '@centient/money';
 import { useState } from 'react';
-import { InputRow } from '../../ui/Fields';
-import { Row } from '../../ui/List';
+import { InputRow } from './Fields';
+import { Row } from './List';
 
 const MAX_SHOWN = 8;
 

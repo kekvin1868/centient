@@ -12,7 +12,7 @@ import { InputRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
-import { CurrencyPicker } from './CurrencyPicker';
+import { CurrencyPicker } from '../../ui/CurrencyPicker';
 
 const DAYS = Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
 

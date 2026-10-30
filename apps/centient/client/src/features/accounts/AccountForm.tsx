@@ -8,7 +8,7 @@ import { refresh } from '../../lib/state';
 import { AmountField } from '../../ui/AmountField';
 import { InputRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
-import { CurrencyPicker } from './CurrencyPicker';
+import { CurrencyPicker } from '../../ui/CurrencyPicker';
 
 const KINDS = ['BANK', 'DEBIT_CARD', 'EWALLET', 'CASH', 'CREDIT_CARD', 'PAYLATER', 'EXCHANGE'] as const;
 type Kind = (typeof KINDS)[number];

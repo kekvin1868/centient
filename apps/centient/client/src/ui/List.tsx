@@ -1,11 +1,16 @@
-// Grouped inset lists (Konsta List on flat gray cards). Group = optional bold heading + list + footnote.
+// Grouped inset lists (Konsta List on flat gray cards). Group = optional bold heading (with an optional button at its
+// far right) + list + footnote.
 import { BlockFooter, BlockTitle, List, ListItem } from 'konsta/react';
 import type { ReactNode } from 'react';
 
-export function Group({ label, foot, children }: { label?: string; foot?: string; children: ReactNode }) {
+export function Group({ label, aside, foot, children }: { label?: string; aside?: ReactNode; foot?: string; children: ReactNode }) {
   return (
     <>
-      {label && <BlockTitle medium className="!pl-4 !text-[22px] !font-extrabold !leading-none !tracking-[-0.03em]">{label}</BlockTitle>}
+      {label && (
+        <BlockTitle medium className={`!pl-4 !text-[22px] !font-extrabold !leading-none !tracking-[-0.03em] ${aside ? '!flex items-center justify-between gap-3 !pr-4' : ''}`}>
+          {aside ? <><span>{label}</span>{aside}</> : label}
+        </BlockTitle>
+      )}
       <List strong inset dividers>{children}</List>
       {foot && <BlockFooter inset>{foot}</BlockFooter>}
     </>
