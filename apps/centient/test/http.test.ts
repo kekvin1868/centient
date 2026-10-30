@@ -35,6 +35,8 @@ describe('http', () => {
     const { body: catalog } = await call('GET', '/api/catalog');
     expect(catalog.accounts.some((a: { name: string }) => a.name.startsWith('Bad'))).toBe(false);
     expect((await env.DB.prepare("SELECT code FROM currencies WHERE code IN ('XXX', 'ABC')").all()).results).toEqual([]);
+    const food = catalog.categories.find((c: { name: string }) => c.name === 'Food & Drink').id;
+    expect(await call('PUT', '/api/budgets', { categoryId: food, currency: 'XXX', limit: 500 })).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
     const { body: me } = await call('GET', '/api/me');
     expect(me.currencies).toMatchObject({ JPY: 0, KWD: 3, IDR: 0, USD: 2, USDT: 6, BTC: 8 });
   });

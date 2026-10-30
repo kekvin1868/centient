@@ -176,15 +176,15 @@ export function entriesRepo(db: D1Database) {
       return { accounts: map(acc.results), envelopes: map(env.results) };
     },
 
-    /** IDR spent in [from, to) on EXPENSE allocations matching the category and/or envelope. */
-    async spent(ws: string, q: { categoryId: string | null; envelopeId: string | null; from: string; to: string }) {
+    /** Spent in one currency in [from, to) on EXPENSE allocations matching the category and/or envelope. */
+    async spent(ws: string, q: { categoryId: string | null; envelopeId: string | null; currency: string; from: string; to: string }) {
       // ponytail: spread_cycles (0% instalments) not applied yet; the full amount counts in the purchase cycle.
       const r = await db.prepare(`SELECT COALESCE(SUM(-a.amount), 0) AS spent
-        FROM transactions t JOIN allocations a ON a.transaction_id = t.id JOIN envelopes e ON e.id = a.envelope_id AND e.currency_code = 'IDR'
+        FROM transactions t JOIN allocations a ON a.transaction_id = t.id JOIN envelopes e ON e.id = a.envelope_id AND e.currency_code = ?
         WHERE t.workspace_id = ? AND t.deleted_at IS NULL AND t.type = 'EXPENSE'
           AND substr(t.occurred_at, 1, 10) >= ? AND substr(t.occurred_at, 1, 10) < ?
           AND (? IS NULL OR t.category_id = ?) AND (? IS NULL OR a.envelope_id = ?)`)
-        .bind(ws, q.from, q.to, q.categoryId, q.categoryId, q.envelopeId, q.envelopeId).first<{ spent: number }>();
+        .bind(q.currency, ws, q.from, q.to, q.categoryId, q.categoryId, q.envelopeId, q.envelopeId).first<{ spent: number }>();
       return r?.spent ?? 0;
     },
 
