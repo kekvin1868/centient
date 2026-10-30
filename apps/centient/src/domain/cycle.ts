@@ -40,3 +40,5 @@ export function toOccurredAt(input: string, now = Date.now()): string {
   }
   return new Date(Date.parse(input) + 7 * 3600e3).toISOString().slice(0, 19) + '+07:00';
 }
+
+export const addDays = (day: string, n: number) => new Date(Date.parse(day) + n * 864e5).toISOString().slice(0, 10);

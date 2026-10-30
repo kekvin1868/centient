@@ -41,6 +41,20 @@ describe('http', () => {
     expect(me.currencies).toMatchObject({ JPY: 0, KWD: 3, IDR: 0, USD: 2, USDT: 6, BTC: 8 });
   });
 
+  it('checks temporary budget input', async () => {
+    expect((await app.request('https://example.com/api/budgets/history', {}, env)).status).toBe(401);
+    const { body: catalog } = await call('GET', '/api/catalog');
+    const food = catalog.categories.find((c: { name: string }) => c.name === 'Food & Drink').id;
+    for (const startsOn of ['2099-02-31', '2099-13-01', '1/12/2099']) {
+      expect(await call('PUT', '/api/budgets', { categoryId: food, limit: 500, startsOn, days: 14 })).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    }
+    for (const days of [1, 91, 2.5, '14']) {
+      expect(await call('PUT', '/api/budgets', { categoryId: food, limit: 500, startsOn: '2099-01-01', days })).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    }
+    expect(await call('DELETE', '/api/budgets/nope')).toMatchObject({ status: 404, body: { code: 'NOT_FOUND' } });
+    expect(await call('GET', '/api/budgets/history')).toMatchObject({ status: 200, body: [] });
+  });
+
   it('logs, edits, updates a balance and deletes through the API', async () => {
     const { body: catalog } = await call('GET', '/api/catalog');
     const { body: { today } } = await call('GET', '/api/me');

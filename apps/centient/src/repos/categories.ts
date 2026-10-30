@@ -33,8 +33,8 @@ export function categoriesRepo(db: D1Database) {
         db.prepare("UPDATE aliases SET value = ? WHERE workspace_id = ? AND kind = 'CATEGORY' AND value = ?").bind(moveTo, ws, id),
         db.prepare('UPDATE recurring SET category_id = ? WHERE workspace_id = ? AND category_id = ?').bind(moveTo, ws, id),
         db.prepare('UPDATE inbox_items SET category_id = ? WHERE workspace_id = ? AND category_id = ?').bind(moveTo, ws, id),
-        // A budget on the deleted category goes if the target already has one, else follows it.
-        db.prepare(`UPDATE budgets SET deleted_at = ? WHERE workspace_id = ? AND category_id = ? AND deleted_at IS NULL AND EXISTS (SELECT 1 FROM budgets t WHERE t.workspace_id = budgets.workspace_id AND t.category_id = ? AND IFNULL(t.envelope_id, '') = IFNULL(budgets.envelope_id, '') AND t.deleted_at IS NULL)`).bind(now, ws, id, moveTo),
+        // A budget on the deleted category goes if the target already has one (same pocket, currency and start), else follows it.
+        db.prepare(`UPDATE budgets SET deleted_at = ? WHERE workspace_id = ? AND category_id = ? AND deleted_at IS NULL AND EXISTS (SELECT 1 FROM budgets t WHERE t.workspace_id = budgets.workspace_id AND t.category_id = ? AND IFNULL(t.envelope_id, '') = IFNULL(budgets.envelope_id, '') AND t.currency_code = budgets.currency_code AND IFNULL(t.starts_on, '') = IFNULL(budgets.starts_on, '') AND t.deleted_at IS NULL)`).bind(now, ws, id, moveTo),
         db.prepare('UPDATE budgets SET category_id = ? WHERE workspace_id = ? AND category_id = ? AND deleted_at IS NULL').bind(moveTo, ws, id),
         db.prepare("UPDATE categories SET deleted_at = ?, name = name || ' (deleted ' || ? || ')' WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL").bind(now, now, id, ws),
       ]);

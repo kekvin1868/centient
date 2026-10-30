@@ -8,7 +8,10 @@ export const budgetsRoutes = new Hono<AppEnv>()
   .get('/', query(z.object({ day: day.optional() })), async c =>
     c.json(await c.var.services.budgets.status(c.req.valid('query').day)))
 
-  .put('/', json(z.object({ categoryId: id.nullish(), envelopeId: id.nullish(), currency: currency.optional(), limit: money })), async c =>
+  .get('/history', async c => c.json(await c.var.services.budgets.history()))
+
+  // `startsOn` + `days` make it a temporary budget; the service checks the range and the dates.
+  .put('/', json(z.object({ categoryId: id.nullish(), envelopeId: id.nullish(), currency: currency.optional(), limit: money, startsOn: day.optional(), days: z.number().optional() })), async c =>
     c.json({ id: await c.var.services.budgets.set(c.req.valid('json')) }))
 
   .delete('/:id', async c => {
