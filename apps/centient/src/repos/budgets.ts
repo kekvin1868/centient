@@ -34,19 +34,13 @@ export function budgetsRepo(db: D1Database) {
       return id;
     },
 
-    /** The live temporary budget on this target starting on `startsOn`, if any. */
-    temporaryAt(ws: string, t: Target, startsOn: string) {
-      return db.prepare(`SELECT id, starts_on, ends_on FROM budgets WHERE ${SAME_TARGET} AND starts_on = ?`).bind(...target(ws, t), startsOn)
-        .first<{ id: string; starts_on: string; ends_on: string }>();
-    },
-
     /** Another temporary budget on this target whose dates meet [startsOn, endsOn); back to back does not. */
     overlapping(ws: string, t: Target, startsOn: string, endsOn: string, except = '') {
       return db.prepare(`SELECT starts_on, ends_on FROM budgets WHERE ${SAME_TARGET} AND starts_on < ? AND ends_on > ? AND id <> ?`)
         .bind(...target(ws, t), endsOn, startsOn, except).first<{ starts_on: string; ends_on: string }>();
     },
 
-    /** Creates a temporary budget, or changes the one starting that day (its limit and length). */
+    /** Creates a temporary budget, or (given its id) changes its limit and length. */
     async setTemporary(ws: string, t: Target, amount: number, startsOn: string, endsOn: string, id: string = uid()) {
       await db.batch([
         db.prepare(`INSERT INTO budgets (id, workspace_id, category_id, envelope_id, currency_code, starts_on, ends_on) VALUES (?, ?, ?, ?, ?, ?, ?)

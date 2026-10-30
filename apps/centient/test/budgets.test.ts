@@ -203,6 +203,7 @@ describe('temporary budgets', () => {
       code: 'BUDGET_OVERLAP', message: 'You already have a temporary Food & Drink budget from Nov 10 to Nov 23.',
     });
     await expect(t.temp('2026-11-11', 2)).rejects.toMatchObject({ code: 'BUDGET_OVERLAP' });
+    await expect(t.temp('2026-11-10', 3)).rejects.toMatchObject({ code: 'BUDGET_OVERLAP' });
     await t.temp('2026-11-24', 7);
     await t.temp('2026-11-12', 7, { currency: 'USD', limit: 50 });
     await t.temp('2026-11-12', 7, { categoryId: await t.cat('Shopping') });
@@ -216,12 +217,13 @@ describe('temporary budgets', () => {
     expect((await t.rows()).map(b => [b.startsOn, b.limit, b.spent])).toEqual([[null, 3_000_000, 400_000], ['2026-11-10', 250_000, 0]]);
   });
 
-  it('changes its limit when set again with the same start, even once running', async () => {
+  it('changes its limit by id, even once running', async () => {
     const t = await setup('2026-11-07');
     const id = await t.temp('2026-11-07', 14);
     t.clock.now = at('2026-11-10');
-    expect(await t.temp('2026-11-07', 14, { limit: 400_000 })).toBe(id);
-    expect(await t.row(id)).toMatchObject({ limit: 400_000 });
+    expect(await t.svc.budgets.set({ id, categoryId: t.food, limit: 400_000, startsOn: '2026-11-07', days: 14 })).toBe(id);
+    expect(await t.row(id)).toMatchObject({ limit: 400_000, endsOn: '2026-11-21' });
+    await expect(t.svc.budgets.set({ id: 'nope', categoryId: t.food, limit: 1, startsOn: '2026-11-10', days: 2 })).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('is gone, not in the history, when removed midway', async () => {

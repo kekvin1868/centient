@@ -6,7 +6,7 @@ import { daysBetween, forecast } from '../../domain/forecast';
 import { DomainError } from '../../domain/ledger';
 import type { Budget } from '../../repos/budgets';
 
-type SetBudget = { categoryId?: string | null; envelopeId?: string | null; currency?: string; limit: number; startsOn?: string; days?: number };
+type SetBudget = { categoryId?: string | null; envelopeId?: string | null; currency?: string; limit: number; startsOn?: string; days?: number; id?: string };
 
 // "Nov 10" in messages, as the screens write dates.
 const short = (day: string) => new Date(Date.parse(day)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
@@ -20,7 +20,7 @@ export function createBudgetsService({ ws, now, repos, catalog }: ServiceDeps) {
     /**
      * A pocket budget is in the pocket's currency; a category-only one in the one asked for (rupiah by default).
      * With `startsOn` and `days` it is a temporary budget: today or later, 2 to 90 days, not overlapping another
-     * temporary one on the same target. Sending the same start again changes that one's limit and length.
+     * temporary one on the same target. With `id` it changes that temporary budget's limit and length (its start stays).
      */
     async set(i: SetBudget) {
       if (!i.categoryId && !i.envelopeId) throw new DomainError('BUDGET_TARGET', 'Pick a category, an envelope, or both');
@@ -38,12 +38,13 @@ export function createBudgetsService({ ws, now, repos, catalog }: ServiceDeps) {
         const w = await repos.workspaces.get(ws);
         return repos.budgets.set(ws, t, i.limit, cycleStart(today, w.cycle_start_day));
       }
-      const startsOn = i.startsOn ?? '', days = i.days ?? 0;
+      const same = i.id ? (await repos.budgets.list(ws)).find(b => b.id === i.id && temporary(b)) : undefined;
+      if (i.id && !same) throw new DomainError('NOT_FOUND', 'Budget not found');
+      const startsOn = same?.starts_on ?? i.startsOn ?? '', days = i.days ?? 0;
       // A real calendar day survives a round trip (Feb 31 comes back as Mar 3; month 13 throws).
       const real = (d: string) => { try { return addDays(d, 0) === d; } catch { return false; } };
       if (!real(startsOn) || !Number.isInteger(days) || days < 2 || days > 90) throw new DomainError('VALIDATION', 'A temporary budget lasts 2 to 90 days from its start day');
       const endsOn = addDays(startsOn, days);
-      const same = await repos.budgets.temporaryAt(ws, t, startsOn);
       if (!same && startsOn < today) throw new DomainError('BUDGET_START_PAST', 'A temporary budget starts today or later');
       const clash = await repos.budgets.overlapping(ws, t, startsOn, endsOn, same?.id);
       if (clash) {
