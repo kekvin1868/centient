@@ -1,8 +1,11 @@
 // End to end: first run (the night menu) with the three starting accounts, categories (ten broad ones, deleting one), list
 // borders, the account hand, pockets inside an account (a list; Move money between pockets and accounts), crypto accounts, pay later installments
-// with per-person payments and proof of payment, entry icons and swipe actions, the receipt form, and accounts in any currency.
+// with per-person payments and proof of payment, entry icons and swipe actions, the receipt form, accounts in any currency,
+// the Budget forecast, budgets per currency, and temporary budgets with their history.
 // One workspace (dev sign-in), so tests run in order.
 import { expect, test, type Page } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -403,4 +406,95 @@ test('a pocket budget takes the pocket currency; a category budget picks one, ru
   // Leave the workspace on a 1st-of-the-month cycle and the default start day for later specs.
   await api('/workspace', { method: 'PATCH', data: { cycle_start_day: 1 } });
   await page.evaluate(() => localStorage.removeItem('centient:forecastStartDay'));
+});
+
+// "Nov 24", as temporary budgets write their dates.
+const monthDay = (day: string) => new Date(Date.parse(day)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+test('a temporary budget: the switch asks for a start and a length, and its row says when it ends', async () => {
+  await page.reload();
+  await tab('Money').tap();
+  // Title left; History, then ?, on the right of the same row.
+  const title = (await page.getByText(/^Budgets in IDR/).boundingBox())!;
+  const history = page.getByRole('button', { name: 'Temporary budgets that ended' });
+  const [h, q] = [(await history.boundingBox())!, (await page.getByRole('button', { name: 'What the budget words mean' }).boundingBox())!];
+  expect(Math.abs(h.y - q.y)).toBeLessThan(2);
+  expect(h.x).toBeGreaterThan(title.x + title.width);
+  expect(q.x).toBeGreaterThan(h.x + h.width);
+  await expect(history).toHaveText('History');
+  await history.tap();
+  const sheet = page.getByRole('dialog', { name: 'Temporary budgets' });
+  await expect(sheet.getByText('Nothing here yet. Temporary budgets move here when they end.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await page.getByRole('button', { name: 'Set a budget' }).tap();
+  const form = page.getByRole('dialog', { name: 'Set a budget' });
+  await form.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Food & Drink' });
+  await form.getByText('Temporary', { exact: true }).tap();
+  await expect(form.getByLabel('Starts')).toHaveValue(jakartaDay());
+  await expect(form.getByRole('combobox', { name: 'Lasts' })).toHaveValue('14');
+  await expect(form.getByText(`Ends ${monthDay(jakartaDay(14))} at 00:00`)).toBeVisible();
+  await expect(form.getByRole('textbox', { name: 'Limit for these 14 days' })).toBeVisible();
+  await form.getByRole('combobox', { name: 'Lasts' }).selectOption('7');
+  await expect(form.getByText(`Ends ${monthDay(jakartaDay(7))} at 00:00`)).toBeVisible();
+  await form.getByRole('textbox', { name: 'Limit for these 7 days' }).fill('500000');
+  await form.getByRole('button', { name: 'Save' }).tap();
+  await expect(form).toBeHidden();
+
+  // Under the cycle budget, tagged; the cycle one has no tag. An upcoming one says when it starts.
+  await api('/budgets', { method: 'PUT', data: { categoryId: await categoryId('Food & Drink'), limit: 300_000, startsOn: jakartaDay(30), days: 3 } });
+  await page.reload();
+  await tab('Money').tap();
+  // Rupiah cycle, its temporary ones, then the dollar budget.
+  const rows = page.getByRole('listitem').filter({ hasText: 'Food & Drink' });
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(0)).not.toContainText('Temporary');
+  await expect(rows.nth(1)).toContainText(`Temporary Ends ${monthDay(jakartaDay(7))}`);
+  await expect(rows.nth(2)).toContainText(`Temporary Starts ${monthDay(jakartaDay(30))}`);
+});
+
+test('an overlapping temporary budget is refused in a warning popup; back to back saves', async () => {
+  await page.getByRole('button', { name: 'Set a budget' }).tap();
+  const form = page.getByRole('dialog', { name: 'Set a budget' });
+  await form.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Food & Drink' });
+  await form.getByText('Temporary', { exact: true }).tap();
+  await form.getByRole('textbox', { name: 'Limit for these 14 days' }).fill('400000');
+  await form.getByRole('button', { name: 'Save' }).tap();
+  const message = `You already have a temporary Food & Drink budget from ${monthDay(jakartaDay())} to ${monthDay(jakartaDay(6))}.`;
+  const popup = page.getByRole('dialog').filter({ hasText: message });
+  await expect(popup).toBeVisible();
+  await expect(popup.getByRole('button').filter({ hasText: /\w/ })).toHaveText(['OK']); // one button, beside the title bar's close
+  await expect(page.getByRole('status')).not.toContainText(message);
+  await popup.getByRole('button', { name: 'OK' }).tap();
+  await expect(popup).toBeHidden();
+  // The form is as it was.
+  await expect(form.getByRole('combobox', { name: 'Category' })).toHaveValue(await categoryId('Food & Drink'));
+  await expect(form.getByRole('textbox', { name: 'Limit for these 14 days' })).toHaveValue(/400/);
+  await form.getByLabel('Starts').fill(jakartaDay(7));
+  await form.getByRole('button', { name: 'Save' }).tap();
+  await expect(form).toBeHidden();
+  expect((await (await api('/budgets')).json()).budgets.filter((b: { startsOn: string | null }) => b.startsOn).length).toBe(3);
+});
+
+test('ended temporary budgets move to History with what was saved', async () => {
+  const shopping = await categoryId('Shopping');
+  for (const days of [2, 3]) await api('/budgets', { method: 'PUT', data: { categoryId: shopping, limit: 100_000 * days, startsOn: jakartaDay(40 + days * 5), days } });
+  // The server's clock can't move, so their dates move back instead: two runs that ended 10 and 5 days ago.
+  const state = resolve(import.meta.dirname, '..', '.e2e-state');
+  const shift = (from: number, to: number) => `UPDATE budgets SET starts_on = date(starts_on, '${to - from} days'), ends_on = date(ends_on, '${to - from} days') WHERE category_id = '${shopping}' AND starts_on = '${jakartaDay(from)}';`;
+  execFileSync('npx', ['wrangler', 'd1', 'execute', 'DB', '--local', '--persist-to', state, '--command', shift(50, -12) + shift(55, -8)], { cwd: resolve(import.meta.dirname, '..', 'apps/centient'), stdio: 'ignore' });
+  await api('/transactions', { method: 'POST', data: { type: 'EXPENSE', accountId: await accountId('Dailies'), categoryId: shopping, amount: 350_000, date: jakartaDay(-7) } });
+
+  await page.getByRole('button', { name: 'Temporary budgets that ended' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Temporary budgets' });
+  const rows = sheet.locator('li');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText(`Shopping · ${monthDay(jakartaDay(-8))}–`);
+  await expect(rows.nth(0)).toContainText('Rp350.000 of Rp300.000');
+  await expect(rows.nth(0)).toContainText('Rp50.000 over');
+  await expect(rows.nth(1)).toContainText(`Shopping · ${monthDay(jakartaDay(-12))}–`);
+  await expect(rows.nth(1)).toContainText('Rp0 of Rp200.000');
+  await expect(rows.nth(1)).toContainText('Rp200.000 saved');
+  await page.keyboard.press('Escape');
 });

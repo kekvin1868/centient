@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { forecastLine, forecastView, loadStartDay, rupiahLeft, STATUS_LABEL } from './forecast';
+import { forecastLine, forecastView, loadStartDay, period, rupiahLeft, startDayFor, STATUS_LABEL } from './forecast';
 
 // November 2026, a 30-day cycle, limit Rp3.000.000.
 const row = (daysGone: number, spent: number, status: 'ON_TRACK' | 'LIKELY_OVER' | 'OVER' = 'LIKELY_OVER') =>
@@ -57,10 +57,21 @@ describe('forecast start day setting', () => {
 });
 
 describe('rupiahLeft', () => {
-  it('adds up rupiah budgets only', () =>
+  it('adds up rupiah cycle budgets only', () =>
     expect(rupiahLeft([
-      { currency: 'IDR', remaining: 1_000_000, safePerDay: 50_000 },
-      { currency: 'IDR', remaining: -200_000, safePerDay: 0 },
-      { currency: 'USD', remaining: 30_000, safePerDay: 1_000 },
+      { currency: 'IDR', remaining: 1_000_000, safePerDay: 50_000, startsOn: null },
+      { currency: 'IDR', remaining: -200_000, safePerDay: 0, startsOn: null },
+      { currency: 'USD', remaining: 30_000, safePerDay: 1_000, startsOn: null },
+      { currency: 'IDR', remaining: 250_000, safePerDay: 17_000, startsOn: '2026-11-10' },
     ])).toEqual({ count: 2, left: 1_000_000, perDay: 50_000 }));
+});
+
+describe('temporary budgets', () => {
+  it('wait at most half their length for the forecast', () =>
+    expect([[3, 14], [3, 5], [3, 3], [3, 2], [7, 14], [7, 10]].map(([n, d]) => startDayFor(n, d))).toEqual([3, 2, 1, 1, 7, 5]));
+
+  it('write their days with the last one included', () => {
+    expect(period('2026-11-10', '2026-11-24')).toBe('Nov 10–23');
+    expect(period('2026-11-28', '2026-12-05')).toBe('Nov 28–Dec 4');
+  });
 });

@@ -1,5 +1,5 @@
 // What a budget row says about its Budget forecast, the device setting for when the forecast starts showing,
-// and the Home headline's sum. The server always sends the projection; this decides what the screen shows.
+// the Home headline's sum, and how temporary budgets write their dates. The server always sends the projection; this decides what the screen shows.
 import { shortMoney } from '../../lib/format';
 import { load, save } from '../../lib/storage';
 
@@ -15,6 +15,16 @@ const DEFAULT_START = 3;
 export const readStartDay = (v: unknown) => (typeof v === 'number' && Number.isInteger(v) ? Math.min(7, Math.max(1, v)) : DEFAULT_START);
 export const loadStartDay = () => readStartDay(load(KEY, DEFAULT_START));
 export const saveStartDay = (day: number) => save(KEY, readStartDay(day));
+/** A temporary budget waits at most half its length: max(1, min(N, floor(days / 2))). */
+export const startDayFor = (n: number, days: number) => Math.max(1, Math.min(n, Math.floor(days / 2)));
+
+/** "Nov 24". */
+export const monthDay = (day: string) => new Date(Date.parse(day)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+/** A temporary budget's days, last one included: "Nov 10–23", or "Nov 28–Dec 4" across months. */
+export function period(startsOn: string, endsOn: string) {
+  const last = monthDay(new Date(Date.parse(endsOn) - 864e5).toISOString().slice(0, 10));
+  return `${monthDay(startsOn)}–${last.slice(0, 3) === monthDay(startsOn).slice(0, 3) ? last.slice(4) : last}`;
+}
 
 /**
  * Over shows from day 1 (it needs no projection). Before the start day only a countdown hint; another cycle
@@ -38,9 +48,9 @@ export function forecastLine(r: Row, to: string): string {
   return `${line} · runs out around day ${Math.ceil((r.limit * r.daysGone) / r.spent)}`;
 }
 
-/** Home's "left this month": rupiah budgets only; budgets in other currencies are never added in. */
-export function rupiahLeft(rows: { currency: string; remaining: number; safePerDay: number | null }[]) {
-  const idr = rows.filter(b => b.currency === 'IDR');
+/** Home's "left this month": rupiah cycle budgets only; other currencies and temporary budgets are never added in. */
+export function rupiahLeft(rows: { currency: string; remaining: number; safePerDay: number | null; startsOn: string | null }[]) {
+  const idr = rows.filter(b => b.currency === 'IDR' && !b.startsOn);
   return {
     count: idr.length,
     left: idr.reduce((s, b) => s + Math.max(0, b.remaining), 0),
