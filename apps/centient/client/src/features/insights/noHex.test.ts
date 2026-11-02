@@ -7,9 +7,13 @@ import screen from '../../screens/Insights.tsx?raw';
 import chips from './CurrencyChips.tsx?raw';
 import headline from './InsightsHeadline.tsx?raw';
 import period from './PeriodBar.tsx?raw';
+import chart from '../../ui/BarChart.tsx?raw';
+import savings from './SavingsBars.tsx?raw';
+import list from './EntriesSheet.tsx?raw';
+import biggest from './BiggestExpenses.tsx?raw';
 
 describe('Insights colours', () => {
   it('has no #rrggbb literals', () => {
-    for (const src of [bars, scale, sign, screen, chips, headline, period]) expect(src).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    for (const src of [bars, scale, sign, screen, chips, headline, period, chart, savings, list, biggest]) expect(src).not.toMatch(/#[0-9a-f]{3,8}\b/i);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { comparisonLine, periodLabel, savingsView, shareLabel } from './insights';
+import { comparisonLine, periodLabel, savingsView, shareLabel, trendBars, weekdayBars, weekdayReadout, counted, merchantKey } from './insights';
 
 const oct = (spending: number, basis: 'SAME_DAYS' | 'FULL' = 'SAME_DAYS') => ({ year: 2026, month: 10, spending, basis });
 
@@ -31,4 +31,61 @@ describe('labels', () => {
     expect(savingsView(85.975)).toEqual({ kind: 'ok', text: '86%' });
     expect(savingsView(-50)).toEqual({ kind: 'negative', text: '−50%' });
   });
+});
+
+describe('trend bars (T5.20)', () => {
+  it('labels day 1 and every 5th day of a 30-day cycle, and names each day for the readout', () => {
+    const trend = Array.from({ length: 30 }, (_, n) => ({ from: `2026-11-${String(n + 1).padStart(2, '0')}`, amount: n < 10 ? 1_000 : null }));
+    const bars = trendBars(trend, 2026, 'IDR');
+    expect(bars.filter(b => b.axis).map(b => b.axis)).toEqual(['1', '5', '10', '15', '20', '25', '30']);
+    expect(bars[7].name).toBe('Sun, Nov 8');
+    expect(bars[12].value).toBeNull();
+  });
+  it('names the cycles of a year by month', () => {
+    const bars = trendBars([{ from: '2025-12-25', month: 1, amount: 0 }], 2026, 'IDR');
+    expect(bars[0]).toMatchObject({ axis: 'Jan', name: 'Jan 2026' });
+  });
+});
+
+describe('Daily Wallet Spending readout (Q28)', () => {
+  it('reads the average with the count and the total', () => {
+    const [, , , , , , sun] = weekdayBars(Array.from({ length: 7 }, () => ({ total: 800_000, occurrences: 2, average: 400_000 })), 'IDR');
+    expect(weekdayReadout(sun, 'IDR')).toBe('Sundays · Rp400.000 on average (2 Sundays, Rp800.000 in total)');
+    const one = weekdayBars([{ total: 5, occurrences: 1, average: 5 }], 'IDR')[0];
+    expect(weekdayReadout(one, 'IDR')).toContain('(1 Monday,');
+  });
+});
+
+describe('counted amounts (T5.32)', () => {
+  const idr = () => true;
+  const food = (t: { category_id: string | null }) => t.category_id === 'food';
+  it('a split bill counts my share and lists every share', () => {
+    const e = {
+      command: { type: 'EXPENSE', amount: 300_000, split: { people: 3 } },
+      transactions: [
+        { type: 'EXPENSE', category_id: 'food', merchant: 'warung', allocations: [{ envelope_id: 'm', amount: -100_000 }] },
+        { type: 'TRANSFER', category_id: null, merchant: 'warung', allocations: [{ envelope_id: 'm', amount: -200_000 }, { envelope_id: 'f', amount: 200_000 }] },
+      ],
+    };
+    expect(counted(e, food, idr)).toEqual({ amount: 100_000, lines: [
+      { label: 'bill, split with 3', amount: 300_000 }, { label: 'You', amount: 100_000, counted: true },
+      { label: 'Person 2', amount: 100_000 }, { label: 'Person 3', amount: 100_000 },
+    ] });
+  });
+  it('a transfer counts only its fee', () => {
+    const e = {
+      command: { type: 'TRANSFER', amount: 1_000_000, fee: 2_500 },
+      transactions: [
+        { type: 'TRANSFER', category_id: null, merchant: null, allocations: [{ envelope_id: 'm', amount: -1_000_000 }, { envelope_id: 'd', amount: 1_000_000 }] },
+        { type: 'EXPENSE', category_id: 'fees', merchant: null, allocations: [{ envelope_id: 'm', amount: -2_500 }] },
+      ],
+    };
+    expect(counted(e, t => t.category_id === 'fees', idr)).toEqual({ amount: 2_500, lines: [{ label: 'transfer', amount: 1_000_000 }, { label: 'fee', amount: 2_500, counted: true }] });
+  });
+  it('a plain expense is its amount, in the currency asked only', () => {
+    const e = { command: { type: 'EXPENSE', amount: 50_000 }, transactions: [{ type: 'EXPENSE', category_id: 'food', merchant: null, allocations: [{ envelope_id: 'usd', amount: -50_000 }] }] };
+    expect(counted(e, food, idr)).toEqual({ amount: 50_000, lines: [] });
+    expect(counted(e, food, id => id !== 'usd').amount).toBe(0);
+  });
+  it('groups merchant names like the server', () => expect(merchantKey(' Indomaret ')).toBe('indomaret'));
 });

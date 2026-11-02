@@ -39,3 +39,68 @@ export function savingsView(rate: number | null): { kind: 'none' } | { kind: 'ok
   const pct = Math.round(Math.abs(rate));
   return rate < 0 ? { kind: 'negative', text: `−${pct}%` } : { kind: 'ok', text: `${pct}%` };
 }
+
+// ---- Step 5: the trend, Daily Wallet Spending, Budgets over time and the counted amounts in a list ----
+
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const dayName = (day: string) => new Date(Date.parse(day)).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+const short = (month: number) => MONTHS[month - 1].slice(0, 3);
+
+type Bar = { key: string; axis: string; name: string; value: number | null; shown: string };
+
+/** One bar per day (labelled on the 1st and every 5th) or per cycle of the year (labelled Jan to Dec). */
+export function trendBars(trend: { from: string; month?: number; amount: number | null }[], year: number, currency: string): Bar[] {
+  return trend.map((t, n) => {
+    const shown = t.amount === null ? '' : formatMoney(t.amount, currency);
+    if (t.month) return { key: t.from, axis: short(t.month), name: `${short(t.month)} ${year}`, value: t.amount, shown };
+    const d = n + 1;
+    return { key: t.from, axis: d === 1 || d % 5 === 0 ? String(d) : '', name: dayName(t.from), value: t.amount, shown };
+  });
+}
+
+type Weekday = { total: number; occurrences: number; average: number | null };
+
+/** Monday to Sunday by the average; a weekday that has not come round yet is an empty slot. */
+export const weekdayBars = (rows: Weekday[], currency: string): (Bar & Weekday)[] => rows.map((r, n) => ({
+  ...r, key: WEEKDAYS[n], axis: WEEKDAYS[n].slice(0, 3), name: `${WEEKDAYS[n]}s`, value: r.average,
+  shown: r.average === null ? '' : formatMoney(r.average, currency),
+}));
+
+/** "Sundays · Rp400.000 on average (2 Sundays, Rp800.000 in total)". */
+export const weekdayReadout = (b: Bar & Weekday, currency: string) =>
+  `${b.name} · ${b.shown} on average (${b.occurrences} ${b.occurrences === 1 ? b.name.slice(0, -1) : b.name}, ${formatMoney(b.total, currency)} in total)`;
+
+/** A cycle's short name under a savings bar ("Aug"). */
+export const cycleShort = (month: number) => short(month);
+
+// ---- Counted amounts (R5.12) ----
+
+type Tx = { type: string; category_id: string | null; merchant: string | null; allocations: { envelope_id: string; amount: number }[] };
+type Cmd = { type: string; amount: number; split?: { people: number }; fee?: number } | null;
+export type Line = { label: string; amount: number; counted?: boolean };
+
+/** The merchant key Insights groups by: lower case, outer spaces trimmed. */
+export const merchantKey = (m: string | null) => (m ?? '').trim().toLowerCase();
+
+/**
+ * What of this entry counted as spending in the list it sits in (the category or merchant tapped, one currency),
+ * and the lines that explain it: a split bill's shares (You counted, Person 2...), a transfer and its fee.
+ */
+export function counted(e: { transactions: Tx[]; command: Cmd }, match: (t: Tx) => boolean, inCurrency: (envelopeId: string) => boolean): { amount: number; lines: Line[] } {
+  const amount = e.transactions.filter(t => t.type === 'EXPENSE' && match(t))
+    .reduce((s, t) => s + t.allocations.filter(a => inCurrency(a.envelope_id)).reduce((x, a) => x - a.amount, 0), 0);
+  const c = e.command;
+  if (c?.type === 'EXPENSE' && c.split) {
+    const each = Math.floor(c.amount / c.split.people);
+    const mine = c.amount - each * (c.split.people - 1);
+    return { amount, lines: [
+      { label: `bill, split with ${c.split.people}`, amount: c.amount },
+      { label: 'You', amount: mine, counted: true },
+      ...Array.from({ length: c.split.people - 1 }, (_, n) => ({ label: `Person ${n + 2}`, amount: each })),
+    ] };
+  }
+  if (c?.type === 'TRANSFER' && c.fee) {
+    return { amount, lines: [{ label: 'transfer', amount: c.amount }, { label: 'fee', amount: c.fee, counted: true }] };
+  }
+  return { amount, lines: [] };
+}
