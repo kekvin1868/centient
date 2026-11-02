@@ -55,6 +55,15 @@ describe('http', () => {
     expect(await call('GET', '/api/budgets/history')).toMatchObject({ status: 200, body: [] });
   });
 
+  it('T4.24 checks Insights input', async () => {
+    expect(await call('GET', '/api/insights?period=month')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect(await call('GET', '/api/insights?date=2026-13-45')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect(await call('GET', '/api/insights?date=nov')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect(await call('GET', '/api/insights?currency=XXX')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect((await app.request('https://example.com/api/insights', {}, env)).status).toBe(401);
+    expect(await call('GET', '/api/insights?period=year&currency=USD')).toMatchObject({ status: 200, body: { currency: 'USD', period: { kind: 'year' } } });
+  });
+
   it('logs, edits, updates a balance and deletes through the API', async () => {
     const { body: catalog } = await call('GET', '/api/catalog');
     const { body: { today } } = await call('GET', '/api/me');

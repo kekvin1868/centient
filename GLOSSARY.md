@@ -27,7 +27,7 @@ A budget for a fixed stretch of days instead of a cycle, such as 14 days from to
 _Avoid_: Trip budget, short budget
 
 **Cycle**:
-The stretch of time from your month start day to the day before the next one. It is the app's only meaning of "month".
+The stretch of time from your month start day to the day before the next one. It is the app's only meaning of "month". A cycle is named by the month that holds most of its days: start day 1–15 takes the month it starts in, 16–31 the month it ends in.
 _Avoid_: Month, billing period
 
 ### Insights

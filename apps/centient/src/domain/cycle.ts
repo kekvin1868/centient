@@ -42,3 +42,18 @@ export function toOccurredAt(input: string, now = Date.now()): string {
 }
 
 export const addDays = (day: string, n: number) => new Date(Date.parse(day) + n * 864e5).toISOString().slice(0, 10);
+
+/**
+ * A cycle's name: the month holding most of its days, with a fixed cut-off so it never jumps between months.
+ * Start day 1-15 takes the month the cycle starts in, 16-31 the month it ends in (Oct 25 - Nov 24 is "Nov").
+ */
+export function cycleName(from: string, startDay: number): { year: number; month: number } {
+  const [y, m] = from.split('-').map(Number);
+  if (startDay <= 15) return { year: y, month: m };
+  return m === 12 ? { year: y + 1, month: 1 } : { year: y, month: m + 1 };
+}
+
+/** First day of the cycle named January of `year` (start day 25: Dec 25 of the year before). */
+export function yearStart(year: number, startDay: number): string {
+  return startDay <= 15 ? startIn(year, 1, startDay) : startIn(year - 1, 12, startDay);
+}
