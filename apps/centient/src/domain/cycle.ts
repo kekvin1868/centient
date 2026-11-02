@@ -57,3 +57,35 @@ export function cycleName(from: string, startDay: number): { year: number; month
 export function yearStart(year: number, startDay: number): string {
   return startDay <= 15 ? startIn(year, 1, startDay) : startIn(year - 1, 12, startDay);
 }
+
+export type PeriodKind = 'cycle' | 'year';
+export type Span = { from: string; to: string; year: number; month: number | null };
+
+/** The cycle (or the year of cycles named Jan to Dec) holding `day`, and the one before it. */
+export function periodOf(kind: PeriodKind, day: string, startDay: number): { span: Span; before: Span } {
+  const from = cycleStart(day, startDay);
+  if (kind === 'cycle') {
+    const prev = cycleStart(addDays(from, -1), startDay);
+    return {
+      span: { from, to: nextCycleStart(from, startDay), ...cycleName(from, startDay) },
+      before: { from: prev, to: from, ...cycleName(prev, startDay) },
+    };
+  }
+  const { year } = cycleName(from, startDay);
+  return {
+    span: { from: yearStart(year, startDay), to: yearStart(year + 1, startDay), year, month: null },
+    before: { from: yearStart(year - 1, startDay), to: yearStart(year, startDay), year: year - 1, month: null },
+  };
+}
+
+/** The cycles inside [from, to), in order: each `{ from, to }` plus its name. */
+export function cyclesIn(from: string, to: string, startDay: number): Span[] {
+  const out: Span[] = [];
+  for (let c = cycleStart(from, startDay); c < to; c = nextCycleStart(c, startDay)) out.push({ from: c, to: nextCycleStart(c, startDay), ...cycleName(c, startDay) });
+  return out;
+}
+
+/** A YYYY-MM-DD that is a real calendar day (Feb 31 comes back as Mar 3; month 13 throws). */
+export function realDay(day: string): boolean {
+  try { return addDays(day, 0) === day; } catch { return false; }
+}

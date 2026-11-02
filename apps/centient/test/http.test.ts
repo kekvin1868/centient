@@ -64,6 +64,13 @@ describe('http', () => {
     expect(await call('GET', '/api/insights?period=year&currency=USD')).toMatchObject({ status: 200, body: { currency: 'USD', period: { kind: 'year' } } });
   });
 
+  it('T5.19 checks the savings history input', async () => {
+    expect(await call('GET', '/api/budgets/savings?currency=IDR&period=year&date=2026-11-10')).toMatchObject({ status: 200, body: [] });
+    expect(await call('GET', '/api/budgets/savings?currency=XXX')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect(await call('GET', '/api/budgets/savings?date=2026-02-31')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect((await app.request('https://example.com/api/budgets/savings', {}, env)).status).toBe(401);
+  });
+
   it('logs, edits, updates a balance and deletes through the API', async () => {
     const { body: catalog } = await call('GET', '/api/catalog');
     const { body: { today } } = await call('GET', '/api/me');

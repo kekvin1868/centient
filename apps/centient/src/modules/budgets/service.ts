@@ -1,7 +1,7 @@
 // Budget use cases: set a limit for this cycle (or for a fixed run of days) in one currency, see how much is left
 // and where it is heading, and look back at temporary budgets that ended.
 import type { ServiceDeps } from '../../context';
-import { addDays, cycleStart, daysLeft, jakartaToday, nextCycleStart } from '../../domain/cycle';
+import { addDays, cycleName, cycleStart, daysLeft, jakartaToday, nextCycleStart, periodOf, realDay, type PeriodKind, type Span } from '../../domain/cycle';
 import { daysBetween, forecast } from '../../domain/forecast';
 import { DomainError } from '../../domain/ledger';
 import type { Budget } from '../../repos/budgets';
@@ -41,9 +41,7 @@ export function createBudgetsService({ ws, now, repos, catalog }: ServiceDeps) {
       const same = i.id ? (await repos.budgets.list(ws)).find(b => b.id === i.id && temporary(b)) : undefined;
       if (i.id && !same) throw new DomainError('NOT_FOUND', 'Budget not found');
       const startsOn = same?.starts_on ?? i.startsOn ?? '', days = i.days ?? 0;
-      // A real calendar day survives a round trip (Feb 31 comes back as Mar 3; month 13 throws).
-      const real = (d: string) => { try { return addDays(d, 0) === d; } catch { return false; } };
-      if (!real(startsOn) || !Number.isInteger(days) || days < 2 || days > 90) throw new DomainError('VALIDATION', 'A temporary budget lasts 2 to 90 days from its start day');
+      if (!realDay(startsOn) || !Number.isInteger(days) || days < 2 || days > 90) throw new DomainError('VALIDATION', 'A temporary budget lasts 2 to 90 days from its start day');
       const endsOn = addDays(startsOn, days);
       if (!same && startsOn < today) throw new DomainError('BUDGET_START_PAST', 'A temporary budget starts today or later');
       const clash = await repos.budgets.overlapping(ws, t, startsOn, endsOn, same?.id);
@@ -97,6 +95,36 @@ export function createBudgetsService({ ws, now, repos, catalog }: ServiceDeps) {
         const spent = await spentIn(b, b.starts_on, b.ends_on);
         return { id: b.id, categoryId: b.category_id, envelopeId: b.envelope_id, currency: b.currency_code, startsOn: b.starts_on, endsOn: b.ends_on, limit, spent, saved: limit - spent };
       }));
+    },
+
+    /**
+     * Budgets over time: for each cycle budget in `currency`, up to 6 finished cycles ending at the period holding
+     * `date` (a running period: the cycles before it; a year: only that year's), oldest first. Cycles before the
+     * budget's first limit are skipped; each uses the limit that applied then. Temporary budgets are not in it.
+     */
+    async savings(i: { period?: PeriodKind; date?: string; currency?: string } = {}) {
+      const today = jakartaToday(now());
+      const day = i.date ?? today;
+      if (!realDay(day)) throw new DomainError('VALIDATION', 'Use a real date (YYYY-MM-DD)');
+      const currency = i.currency ?? 'IDR';
+      const w = await repos.workspaces.get(ws);
+      const { span } = periodOf(i.period ?? 'cycle', day, w.cycle_start_day);
+      const thisCycle = cycleStart(today, w.cycle_start_day);
+      const cycles: Span[] = [];
+      for (let to = span.to < thisCycle ? span.to : thisCycle; cycles.length < 6;) {
+        const from = cycleStart(addDays(to, -1), w.cycle_start_day);
+        if (i.period === 'year' && from < span.from) break;
+        cycles.unshift({ from, to, ...cycleName(from, w.cycle_start_day) });
+        to = from;
+      }
+      const budgets = (await repos.budgets.list(ws)).filter(b => !temporary(b) && b.currency_code === currency);
+      return Promise.all(budgets.map(async b => ({
+        id: b.id, categoryId: b.category_id, envelopeId: b.envelope_id, currency: b.currency_code,
+        cycles: await Promise.all(cycles.flatMap(c => {
+          const limit = b.limits.filter(l => l.effective_from <= c.from).sort((x, y) => y.effective_from.localeCompare(x.effective_from))[0]?.amount;
+          return limit === undefined ? [] : [spentIn(b, c.from, c.to).then(spent => ({ from: c.from, year: c.year, month: c.month, limit, spent, saved: limit - spent }))];
+        })),
+      })));
     },
 
     async remove(id: string) {

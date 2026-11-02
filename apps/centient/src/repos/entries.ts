@@ -23,6 +23,10 @@ export type NewEntry = { kind: EntryKind; command: unknown | null; txs: NewTrans
 
 export type TxFilter = {
   from?: string; to?: string; accountId?: string; envelopeId?: string; categoryId?: string; type?: string;
+  /** Merchant name, matched ignoring case and outer spaces (as Insights groups them). */
+  merchant?: string;
+  /** Only transactions with a pocket line in this currency. */
+  currency?: string;
   cursor?: string; limit: number;
 };
 
@@ -228,5 +232,7 @@ function txWhere(ws: string, f: TxFilter) {
   if (f.categoryId) { where.push('t.category_id = ?'); args.push(f.categoryId); }
   if (f.accountId) { where.push('EXISTS (SELECT 1 FROM entries e WHERE e.transaction_id = t.id AND e.account_id = ?)'); args.push(f.accountId); }
   if (f.envelopeId) { where.push('EXISTS (SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.envelope_id = ?)'); args.push(f.envelopeId); }
+  if (f.merchant) { where.push('lower(trim(t.merchant)) = lower(trim(?))'); args.push(f.merchant); }
+  if (f.currency) { where.push('EXISTS (SELECT 1 FROM allocations a JOIN envelopes e ON e.id = a.envelope_id WHERE a.transaction_id = t.id AND e.currency_code = ?)'); args.push(f.currency); }
   return { where, args };
 }

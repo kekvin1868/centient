@@ -235,3 +235,177 @@ describe('insights currencies and empty data (R4.7, R4.8, R4.13)', () => {
     expect((await t.insights()).savingsRate).toBe(-50);
   });
 });
+
+// ---- Step 5: trend, Daily Wallet Spending, top merchants, biggest expenses, savings history ----
+
+const values = (trend: { amount: number | null }[]) => trend.map(t => t.amount);
+
+describe('trend (R5.1, R5.2)', () => {
+  it('T5.1 daily series: every day of the cycle, values through today, nothing after', async () => {
+    const r = await (await november()).insights();
+    expect(r.trend).toHaveLength(30);
+    expect(values(r.trend).slice(0, 10)).toEqual([0, 100_000, 150_000, 0, 50_000, 100_000, 0, 800_000, 200_000, 2_500]);
+    expect(values(r.trend).slice(10).every(v => v === null)).toBe(true);
+    expect(values(r.trend).reduce<number>((s, v) => s + (v ?? 0), 0)).toBe(1_402_500);
+  });
+
+  it('T5.2 a finished cycle has a value for every day', async () => {
+    const r = await (await november()).insights({ date: '2026-10-15' });
+    expect(r.trend).toHaveLength(31);
+    expect(r.trend.every(t => t.amount !== null)).toBe(true);
+    expect(r.trend[0].from).toBe('2026-10-01');
+  });
+
+  it('T5.3 year view: one slot per cycle, 11 values, December empty', async () => {
+    const r = await (await november()).insights({ period: 'year' });
+    expect(values(r.trend)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 3_000_000, 1_402_500, null]);
+  });
+
+  it('T5.4 start day 25: the year trend starts with the cycle named January', async () => {
+    const t = await workspace('2026-11-10', { startDay: 25 });
+    const r = await t.insights({ period: 'year' });
+    expect(r.trend[0]).toMatchObject({ from: '2025-12-25', month: 1 });
+    expect(r.trend).toHaveLength(12);
+  });
+
+  it('T5.5 USD trend has the one coffee', async () => {
+    const r = await (await november()).insights({ currency: 'USD' });
+    expect(values(r.trend).filter(v => v)).toEqual([2_000]);
+    expect(r.trend[3]).toEqual({ from: '2026-11-04', amount: 2_000 });
+  });
+});
+
+describe('Daily Wallet Spending (R5.3)', () => {
+  const show = (rows: { total: number; occurrences: number; average: number | null }[]) => rows.map(r => [r.total, r.occurrences, r.average]);
+
+  it('T5.6 / T5.7 per weekday total, occurrences and average; the USD coffee is not in IDR', async () => {
+    const r = await (await november()).insights();
+    expect(show(r.weekdays)).toEqual([
+      [300_000, 2, 150_000], [152_500, 2, 76_250], [0, 1, 0], [50_000, 1, 50_000], [100_000, 1, 100_000], [0, 1, 0], [800_000, 2, 400_000],
+    ]);
+    expect(r.weekdays.reduce((s, w) => s + w.total, 0)).toBe(1_402_500);
+  });
+
+  it('T5.7a a weekday that has not come round yet has no value', async () => {
+    const t = await workspace('2026-11-02');
+    await t.spend('2026-11-01', 10_000);
+    const r = await t.insights();
+    expect(r.weekdays.map(w => w.average)).toEqual([0, null, null, null, null, null, 10_000]);
+  });
+
+  it('T5.7b the average rounds to the nearest rupiah', async () => {
+    const t = await workspace('2026-11-10');
+    await t.spend('2026-11-02', 100_001);
+    expect((await t.insights()).weekdays[0]).toEqual({ total: 100_001, occurrences: 2, average: 50_001 });
+  });
+
+  it('T5.7c a finished October: 5 Thursdays, Fridays and Saturdays, 4 of the rest', async () => {
+    const r = await (await november()).insights({ date: '2026-10-15' });
+    expect(r.weekdays.map(w => w.occurrences)).toEqual([4, 4, 4, 5, 5, 5, 4]);
+  });
+
+  it('T5.7d year view counts every weekday from the start of the year to today', async () => {
+    const r = await (await november()).insights({ period: 'year' });
+    // Jan 1 to Nov 10, 2026 = 314 days.
+    expect(r.weekdays.reduce((s, w) => s + w.occurrences, 0)).toBe(314);
+  });
+});
+
+describe('top merchants (R5.4)', () => {
+  it('T5.8 total and visits; no merchant and the fee are left out', async () => {
+    const r = await (await november()).insights();
+    expect(r.merchants.map(m => [m.name, m.total, m.visits])).toEqual([
+      ['tokopedia', 800_000, 1], ['indomaret', 250_000, 2], ['warung', 100_000, 1], ['gojek', 50_000, 1],
+    ]);
+  });
+
+  it('T5.9 / T5.10 capped at 5, equal totals ordered by name', async () => {
+    const t = await november();
+    for (const m of ['zara', 'alfamart', 'kfc']) await t.spend('2026-11-09', 40_000, 'Food & Drink', { merchant: m });
+    const r = await t.insights();
+    expect(r.merchants.map(m => m.name)).toEqual(['tokopedia', 'indomaret', 'warung', 'gojek', 'alfamart']);
+  });
+
+  it('T5.27 names are grouped ignoring case and spaces, with the latest spelling', async () => {
+    const t = await workspace('2026-11-10');
+    await t.spend('2026-11-02', 100_000, 'Food & Drink', { merchant: 'Indomaret' });
+    await t.spend('2026-11-03', 150_000, 'Food & Drink', { merchant: 'indomaret ' });
+    expect((await t.insights()).merchants).toEqual([{ key: 'indomaret', name: 'indomaret', total: 250_000, visits: 2 }]);
+  });
+});
+
+describe('biggest expenses (R5.5)', () => {
+  it('T5.11 - T5.13 my share of a split, ties newest first, the whole entry attached', async () => {
+    const t = await november();
+    const r = await t.insights();
+    expect(r.biggest.map(b => b.amount)).toEqual([800_000, 200_000, 150_000, 100_000, 100_000]);
+    expect(r.biggest[0].entry.id).toBe(t.shopping);
+    expect(r.biggest[3].entry.id).toBe(t.split); // Nov 6 warung share before the Nov 2 indomaret
+    expect(r.biggest[3].entry.command).toMatchObject({ type: 'EXPENSE', amount: 300_000, split: { people: 3 } });
+    const { items } = await t.svc.ledger.listEntries({ limit: 50 });
+    for (const b of r.biggest) expect(items.some(e => e.id === b.entry.id)).toBe(true);
+  });
+});
+
+describe('entries filters for the Insights sheets (R5.11)', () => {
+  it('T5.31 merchant ignoring case, and currency', async () => {
+    const t = await workspace('2026-11-10');
+    await t.spend('2026-11-02', 100_000, 'Food & Drink', { merchant: 'Indomaret' });
+    await t.spend('2026-11-03', 150_000, 'Food & Drink', { merchant: 'indomaret ' });
+    await t.spend('2026-11-04', 1_000, 'Food & Drink', { merchant: 'kfc' });
+    const page = (q: object) => t.svc.ledger.listEntries({ limit: 50, from: '2026-11-01', to: '2026-11-30', ...q });
+    expect((await page({ merchant: 'indomaret', currency: 'IDR' })).items).toHaveLength(2);
+    expect((await page({ merchant: 'indomaret', currency: 'USD' })).items).toHaveLength(0);
+  });
+});
+
+describe('savings history (R5.6, R5.7)', () => {
+  async function food() {
+    const t = await workspace('2026-11-10');
+    const target = { categoryId: t.cat('Food & Drink'), envelopeId: null, currency: 'IDR' };
+    await t.w.repos.budgets.set(t.ws, target, 1_000_000, '2026-08-01');
+    await t.w.repos.budgets.set(t.ws, target, 800_000, '2026-10-01');
+    await t.spend('2026-08-05', 900_000);
+    await t.spend('2026-09-05', 1_100_000);
+    await t.spend('2026-10-05', 600_000);
+    await t.spend('2026-11-05', 50_000);
+    return t;
+  }
+  const rows = (cycles: { from: string; limit: number; spent: number; saved: number }[]) => cycles.map(c => [c.from, c.limit, c.spent, c.saved]);
+
+  it('T5.14 / T5.18 finished cycles oldest first, each with the limit that applied then', async () => {
+    const [b] = await (await food()).svc.budgets.savings({ currency: 'IDR' });
+    expect(rows(b.cycles)).toEqual([
+      ['2026-08-01', 1_000_000, 900_000, 100_000], ['2026-09-01', 1_000_000, 1_100_000, -100_000], ['2026-10-01', 800_000, 600_000, 200_000],
+    ]);
+    expect(b.cycles[2]).toMatchObject({ year: 2026, month: 10 });
+  });
+
+  it('T5.28 follows the period on screen', async () => {
+    const [b] = await (await food()).svc.budgets.savings({ currency: 'IDR', date: '2026-09-15' });
+    expect(b.cycles.map(c => c.from)).toEqual(['2026-08-01', '2026-09-01']);
+  });
+
+  it('T5.15 / T5.29 at most 6; the year view keeps to that year', async () => {
+    const t = await workspace('2026-11-10');
+    await t.w.repos.budgets.set(t.ws, { categoryId: t.cat('Food & Drink'), envelopeId: null, currency: 'IDR' }, 1_000_000, '2025-11-01');
+    const [cycle] = await t.svc.budgets.savings({});
+    expect(cycle.cycles.map(c => c.from)).toEqual(['2026-05-01', '2026-06-01', '2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01']);
+    const [last] = await t.svc.budgets.savings({ period: 'year', date: '2025-06-01' });
+    expect(last.cycles.map(c => c.from)).toEqual(['2025-11-01', '2025-12-01']);
+  });
+
+  it('T5.16 a budget made this cycle has no history yet', async () => {
+    const t = await workspace('2026-11-10');
+    await t.svc.budgets.set({ categoryId: t.cat('Food & Drink'), limit: 500_000 });
+    expect((await t.svc.budgets.savings({}))[0].cycles).toEqual([]);
+  });
+
+  it('T5.17 / T5.30 one currency only; temporary budgets never appear', async () => {
+    const t = await food();
+    await t.svc.budgets.set({ categoryId: t.cat('Food & Drink'), currency: 'USD', limit: 5_000 });
+    await t.svc.budgets.set({ categoryId: t.cat('Transport'), limit: 100_000, startsOn: '2026-11-10', days: 7 });
+    expect((await t.svc.budgets.savings({ currency: 'USD' })).map(b => b.currency)).toEqual(['USD']);
+    expect(await t.svc.budgets.savings({ currency: 'IDR' })).toHaveLength(1);
+  });
+});
