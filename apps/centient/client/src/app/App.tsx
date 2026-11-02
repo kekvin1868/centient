@@ -1,4 +1,4 @@
-// App shell: first run, then three screens behind a tab bar, inside Konsta's iOS theme. A tab change redraws
+// App shell: first run, then four screens behind a tab bar, inside Konsta's iOS theme. A tab change redraws
 // the screen with a random retro effect (TV, glitch or render).
 import { App as KonstaApp } from 'konsta/react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
@@ -6,6 +6,7 @@ import { BottomNav, type Screen } from '../layouts/BottomNav';
 import { Toast } from '../ui/Toast';
 import { attempt } from '../lib/run';
 import { Home } from '../screens/Home';
+import { Insights } from '../screens/Insights';
 import { Money } from '../screens/Money';
 import { Settings } from '../screens/Settings';
 import { loadBasics, me } from '../lib/state';
@@ -36,6 +37,7 @@ export function App() {
           <div key={screen} className={fx ? `fx-in-${fx}` : ''}>
             {screen === 'home' && <Home onGoMoney={() => setScreen('money')} />}
             {screen === 'money' && <Money onShowAccount={() => setScreen('home')} />}
+            {screen === 'insights' && <Insights />}
             {screen === 'settings' && <Settings />}
           </div>
           <BottomNav current={screen} onGo={setScreen} />
