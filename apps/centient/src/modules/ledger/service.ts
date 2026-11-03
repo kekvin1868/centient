@@ -15,40 +15,66 @@ import {
   type NewTransaction,
 } from '../../domain/ledger';
 import { commandOf } from '../../lib/entryCommand';
+import { findOrCreateTab } from './tabs';
 import type { NewEntry, TxFilter } from '../../repos/entries';
 
 export type LedgerService = ReturnType<typeof createLedgerService>;
 
 export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
   /**
-   * A split bill needs an IOU account for what the others owe. New workspaces start without one, so the
-   * first split creates "Friends owe you" (named Friends) and later splits reuse the first IOU account.
+   * Gets a split bill's IOU accounts ready. Named people get their own tab (found by name in the bill's currency,
+   * or made); a split with unnamed people, or an old one without `parties`, goes to a lump account: the one given,
+   * else the IOU account named "Friends" (made if missing; never a person's tab). The saved command keeps ids only, so a rename follows.
    */
   async function withIou(c: Snapshot, cmds: Command[]): Promise<{ c: Snapshot; cmds: Command[] }> {
-    if (!cmds.some(x => x.type === 'EXPENSE' && x.split && !x.split.iouAccountId))
-      return { c, cmds };
-    let iou = c.accounts.find(a => a.kind === 'IOU' && !a.archived_at);
-    if (!iou) {
-      await repos.accounts.create(ws, {
-        name: 'Friends',
-        kind: 'IOU',
-        provider: null,
-        currency_code: 'IDR',
-        due_day: null,
-      });
-      catalog.invalidate();
-      c = await catalog.load();
-      iou = c.accounts.find(a => a.kind === 'IOU')!;
+    const out: Command[] = [];
+    for (const x of cmds) {
+      if (x.type !== 'EXPENSE' || !x.split) {
+        out.push(x);
+        continue;
+      }
+      const split = { ...x.split };
+      const parties = split.parties;
+      if (parties) {
+        if (parties.length + 1 !== split.people)
+          throw new DomainError('INVALID_SPLIT', 'Split people and shares do not match');
+        const currency = c.account(x.accountId).row.currency_code;
+        const resolved: NonNullable<typeof parties> = [];
+        for (const p of parties) {
+          let iouAccountId = p.iouAccountId;
+          if (!iouAccountId && p.name) {
+            iouAccountId = await findOrCreateTab(repos, ws, c.accounts, p.name, currency);
+            catalog.invalidate();
+            c = await catalog.load();
+          }
+          resolved.push({ iouAccountId, share: p.share });
+        }
+        const ids = resolved.flatMap(p => (p.iouAccountId ? [p.iouAccountId] : []));
+        if (new Set(ids).size !== ids.length)
+          throw new DomainError('DUPLICATE_PARTY', 'Each person once');
+        split.parties = resolved;
+      }
+      if (!split.iouAccountId && (!split.parties || split.parties.some(p => !p.iouAccountId))) {
+        let iou = c.accounts.find(
+          a => a.kind === 'IOU' && !a.archived_at && a.name.toLowerCase() === 'friends',
+        );
+        if (!iou) {
+          await repos.accounts.create(ws, {
+            name: 'Friends',
+            kind: 'IOU',
+            provider: null,
+            currency_code: 'IDR',
+            due_day: null,
+          });
+          catalog.invalidate();
+          c = await catalog.load();
+          iou = c.accounts.find(a => a.kind === 'IOU' && a.name.toLowerCase() === 'friends')!;
+        }
+        split.iouAccountId = iou.id;
+      }
+      out.push({ ...x, split });
     }
-    const id = iou.id;
-    return {
-      c,
-      cmds: cmds.map(x =>
-        x.type === 'EXPENSE' && x.split && !x.split.iouAccountId
-          ? { ...x, split: { ...x.split, iouAccountId: id } }
-          : x,
-      ),
-    };
+    return { c, cmds: out };
   }
 
   /** Checks each command against the catalog and builds its entry (a split or a fee adds a second transaction). */
@@ -160,23 +186,42 @@ function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] {
       };
       if (!cmd.split) return [expense({ ...base, amount: cmd.amount })];
       // Split bill: my share is spending; the rest is money the others owe me.
-      const { mine, others } = splitShares(cmd.amount, cmd.split.people);
-      const iou = c.account(cmd.split.iouAccountId);
-      if (iou.row.kind !== 'IOU')
-        throw new DomainError('NOT_IOU', 'Split must go to an IOU account');
-      const note = `Split ${cmd.split.people} ways${cmd.note ? ` · ${cmd.note}` : ''}`;
-      return [
-        expense({ ...base, amount: mine, note }),
-        transfer({
+      const ps = cmd.split.parties;
+      const owed = (iouId: string, amount: number, note: string) => {
+        const iou = c.account(iouId);
+        if (iou.row.kind !== 'IOU')
+          throw new DomainError('NOT_IOU', 'Split must go to an IOU account');
+        return transfer({
           occurredAt,
           from: account,
           to: iou,
-          amount: others,
+          amount,
           merchant: cmd.merchant,
           note,
           fromEnvelope: envelope,
           toEnvelope: c.defaultEnvelope(iou.row),
-        }),
+        });
+      };
+      const tail = cmd.note ? ` · ${cmd.note}` : '';
+      if (!ps) {
+        const { mine, others } = splitShares(cmd.amount, cmd.split.people);
+        const note = `Split ${cmd.split.people} ways${tail}`;
+        return [
+          expense({ ...base, amount: mine, note }),
+          owed(cmd.split.iouAccountId!, others, note),
+        ];
+      }
+      const mine = cmd.amount - ps.reduce((s, p) => s + p.share, 0);
+      if (mine <= 0) throw new DomainError('INVALID_SHARE', 'Your share must be more than zero');
+      const named = ps.filter(p => p.iouAccountId);
+      const lump = ps.filter(p => !p.iouAccountId).reduce((s, p) => s + p.share, 0);
+      const names = named.map(p => c.account(p.iouAccountId!).row.name);
+      const unnamed = ps.length - named.length;
+      const note = `Split with ${[...names, ...(unnamed ? [`${unnamed} more`] : [])].join(', ')}${tail}`;
+      return [
+        expense({ ...base, amount: mine, note }),
+        ...named.filter(p => p.share > 0).map(p => owed(p.iouAccountId!, p.share, note)),
+        ...(lump > 0 ? [owed(cmd.split.iouAccountId!, lump, note)] : []),
       ];
     }
     case 'INCOME': {

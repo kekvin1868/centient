@@ -8,6 +8,7 @@ import { jakartaToday, toOccurredAt } from '../../domain/cycle';
 import { DomainError } from '../../domain/ledger';
 import type { PartyRow, PaymentRow, PlanRow } from '../../repos/installments';
 import type { LedgerService } from '../ledger/service';
+import { findOrCreateTab } from '../ledger/tabs';
 
 const MAX_PROOF_BYTES = 10 * 1024 * 1024;
 const PROOF_TYPES = /^(image\/(png|jpeg|webp|heic|heif|gif)|application\/pdf)$/;
@@ -92,19 +93,7 @@ export function createInstallmentsService({
           if (c.account(id).row.kind !== 'IOU')
             throw new DomainError('NOT_IOU', 'A person must be an IOU account');
         } else {
-          id =
-            c.accounts.find(
-              a => a.kind === 'IOU' && a.name.toLowerCase() === o.name.trim().toLowerCase(),
-            )?.id ??
-            (
-              await repos.accounts.create(ws, {
-                name: o.name.trim(),
-                kind: 'IOU',
-                provider: null,
-                currency_code: account.currency_code,
-                due_day: null,
-              })
-            ).id;
+          id = await findOrCreateTab(repos, ws, c.accounts, o.name, account.currency_code);
         }
         ious.push({ name: o.name.trim(), id, share: o.share });
       }
