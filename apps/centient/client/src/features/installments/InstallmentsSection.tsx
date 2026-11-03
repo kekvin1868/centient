@@ -19,7 +19,7 @@ export function InstallmentsSection({ account }: { account: Account }) {
   return (
     <section className="mt-5" aria-label="Installments">
       <div className="mb-2 flex items-baseline justify-between">
-        <h3 className="text-[17px] font-extrabold tracking-[-0.02em]">Installments</h3>
+        <h3 className="section-title text-[17px] tracking-[-0.02em]">Installments</h3>
         {plans && plans.length > 0 && <span className="text-[13px] font-semibold text-muted">{formatMoney(plans.reduce((s, p) => s + p.remaining, 0), account.currency_code)} to go</span>}
       </div>
       <div className="flex flex-col gap-2.5">

@@ -245,3 +245,8 @@ body::after { content: ""; position: fixed; inset: 0; z-index: 9999; pointer-eve
 
 /* Insights report sections (step 7) hold their headings' margins, so each one's picture has its whole content. */
 [data-report] { display: flow-root; }
+
+/* Section titles (Q46). The pixel face has one weight and fake bold is off (it smears), so these titles draw each
+   letter twice 1px apart (a crisp pixel bold), with NieR's pink ◆ in front and a staff line under them. */
+.section-title { text-shadow: 1px 0 0 currentColor; border-bottom: 2px solid currentColor; padding-bottom: 6px; }
+.section-title::before { content: "◆ " / ""; color: var(--n-pink); }

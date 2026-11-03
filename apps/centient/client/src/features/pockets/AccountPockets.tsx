@@ -42,7 +42,7 @@ export function AccountPockets({ account: a, accounts, pockets }: { account: Bal
       </Button>
       <div className="mb-3 mt-6 flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-[17px] font-extrabold tracking-[-0.02em]">Pockets</h3>
+          <h3 className="section-title text-[17px] tracking-[-0.02em]">Pockets</h3>
           <p className="text-[13px] font-semibold text-muted">Inside {a.name}</p>
         </div>
         <button type="button" onClick={() => setAdding(true)}
