@@ -133,8 +133,16 @@ type Tx = {
   merchant: string | null;
   allocations: { envelope_id: string; amount: number }[];
 };
-type Cmd = { type: string; amount: number; split?: { people: number }; fee?: number } | null;
-export type Line = { label: string; amount: number; counted?: boolean };
+type Cmd = {
+  type: string;
+  amount: number;
+  split?: { people: number; parties?: { iouAccountId?: string; share: number }[] };
+  pot?: { total: number; people: number; manager?: string };
+  fee?: number;
+} | null;
+export type Line = { label: string; amount: number; counted?: boolean; stickers?: string[] };
+/** A person's tab by id: the name it has now, and its "was Abang" / "archived" stickers. */
+export type TabOf = (id: string) => { name: string; stickers: string[] } | undefined;
 
 /** The merchant key Insights groups by: lower case, outer spaces trimmed. */
 export const merchantKey = (m: string | null) => (m ?? '').trim().toLowerCase();
@@ -147,6 +155,7 @@ export function counted(
   e: { transactions: Tx[]; command: Cmd },
   match: (t: Tx) => boolean,
   inCurrency: (envelopeId: string) => boolean,
+  tab: TabOf = () => undefined,
 ): { amount: number; lines: Line[] } {
   const amount = e.transactions
     .filter(t => t.type === 'EXPENSE' && match(t))
@@ -156,18 +165,34 @@ export function counted(
       0,
     );
   const c = e.command;
-  if (c?.type === 'EXPENSE' && c.split) {
-    const each = Math.floor(c.amount / c.split.people);
-    const mine = c.amount - each * (c.split.people - 1);
+  if (c?.type === 'EXPENSE' && c.pot) {
+    const run = c.pot.manager ? `, run by ${c.pot.manager}` : '';
     return {
       amount,
       lines: [
-        { label: `bill, split with ${c.split.people}`, amount: c.amount },
+        { label: `pot, ${c.pot.people} people${run}`, amount: c.pot.total },
+        { label: 'You', amount: c.amount, counted: true },
+      ],
+    };
+  }
+  if (c?.type === 'EXPENSE' && c.split) {
+    const { people, parties } = c.split;
+    const each = Math.floor(c.amount / people);
+    const others: Line[] = parties
+      ? parties.map((p, n) => {
+          const t = p.iouAccountId ? tab(p.iouAccountId) : undefined;
+          return { label: t?.name ?? `Person ${n + 2}`, amount: p.share, stickers: t?.stickers };
+        })
+      : Array.from({ length: people - 1 }, (_, n) => ({ label: `Person ${n + 2}`, amount: each }));
+    const mine = parties
+      ? c.amount - parties.reduce((sum, p) => sum + p.share, 0)
+      : c.amount - each * (people - 1);
+    return {
+      amount,
+      lines: [
+        { label: `bill, split with ${people}`, amount: c.amount },
         { label: 'You', amount: mine, counted: true },
-        ...Array.from({ length: c.split.people - 1 }, (_, n) => ({
-          label: `Person ${n + 2}`,
-          amount: each,
-        })),
+        ...others,
       ],
     };
   }

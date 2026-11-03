@@ -209,3 +209,31 @@ describe('a person who hands money over now (T8)', () => {
     ).rejects.toMatchObject({ code: 'INVALID_PAYMENT' });
   });
 });
+
+describe('joining a pot someone else runs (T9)', () => {
+  it('is one expense of my share, with the pot kept on the entry', async () => {
+    const t = await setup('p1@test');
+    const [id] = await svc(t.ws).ledger.record([
+      {
+        ...t.bill(undefined as never, 25_000),
+        split: undefined,
+        pot: { total: 100_000, people: 4, manager: 'Andi' },
+      },
+    ]);
+    expect(await t.balance('BCA')).toBe(9_975_000);
+    const e = (await svc(t.ws).ledger.listEntries({ limit: 5 })).items.find(x => x.id === id)!;
+    expect(e.command).toMatchObject({ pot: { total: 100_000, people: 4, manager: 'Andi' } });
+    expect(e.transactions[0].note).toBe('Pot of 4 people, run by Andi');
+  });
+
+  it('refuses a share above the pot, and a pot that is also a split', async () => {
+    const t = await setup('p2@test');
+    const pot = { total: 100_000, people: 4 };
+    await expect(
+      svc(t.ws).ledger.record([{ ...t.bill(undefined as never, 150_000), split: undefined, pot }]),
+    ).rejects.toMatchObject({ code: 'INVALID_SHARE' });
+    await expect(
+      svc(t.ws).ledger.record([{ ...t.bill({ people: 2 }, 50_000), pot }]),
+    ).rejects.toMatchObject({ code: 'INVALID_SPLIT' });
+  });
+});

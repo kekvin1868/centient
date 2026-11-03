@@ -54,6 +54,14 @@ export const command = z.discriminatedUnion('type', [
           .optional(),
       })
       .optional(),
+    /** Joining a pot someone else runs: `amount` is my share of `total`. No ledger effect beyond the expense. */
+    pot: z
+      .object({
+        total: money,
+        people: z.number().int().min(2).max(50),
+        manager: text(60).optional(),
+      })
+      .optional(),
     originalAmount: money.optional(),
     originalCurrency: currency.optional(),
   }),

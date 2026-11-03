@@ -1,6 +1,6 @@
 import { parseQuickAdd, type QAContext } from '@centient/quickadd';
 import { describe, expect, it } from 'vitest';
-import { chipView, fromCommand, fromDraft, toCommand } from './form';
+import { chipView, fromCommand, fromDraft, toCommand, withMyPotShare, withPot } from './form';
 
 const ctx: QAContext = {
   today: '2026-10-20',
@@ -273,6 +273,56 @@ describe('cover the rest / pays later (T6-T8)', () => {
     });
     expect(toCommand(withAndi({ mode: 'LATER', name: '' }))).toEqual({
       error: 'Name the person who pays later',
+    });
+  });
+});
+
+describe('joining a pot (T9)', () => {
+  const start = () =>
+    withPot(
+      {
+        ...fromCommand({
+          type: 'EXPENSE',
+          accountId: 'bca',
+          categoryId: 'food',
+          amount: 1,
+          date: '2026-10-20',
+          merchant: 'Kado',
+        }),
+        amount: null,
+      },
+      { total: 100_000, people: 4, manager: 'Andi' },
+    );
+
+  it('my share follows total / people until I type my own, and saves as an expense with the pot', () => {
+    const f = start();
+    expect(f.amount).toBe(25_000);
+    expect(withPot(f, { people: 3 }).amount).toBe(33_334);
+    expect(toCommand(f)).toEqual({
+      command: expect.objectContaining({
+        type: 'EXPENSE',
+        amount: 25_000,
+        pot: { total: 100_000, people: 4, manager: 'Andi' },
+      }),
+    });
+    const mine = withMyPotShare(f, 10_000);
+    expect(withPot(mine, { people: 5 }).amount).toBe(10_000);
+    expect(withMyPotShare(mine, null).amount).toBe(25_000);
+  });
+
+  it('needs the total, refuses a share above it, and reloads as the same pot', () => {
+    expect(toCommand({ ...start(), pot: { ...start().pot!, total: null } })).toEqual({
+      error: 'Enter the pot total',
+    });
+    expect(toCommand({ ...start(), amount: 120_000 })).toEqual({
+      error: 'Your share cannot be more than the pot',
+    });
+    const r = toCommand(start()) as { command: Parameters<typeof fromCommand>[0] };
+    expect(fromCommand(r.command).pot).toEqual({
+      total: 100_000,
+      people: 4,
+      manager: 'Andi',
+      typed: false,
     });
   });
 });

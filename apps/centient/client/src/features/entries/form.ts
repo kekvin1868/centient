@@ -6,6 +6,9 @@ import { formatMoney } from '../../lib/format';
 import { blankParty, shareMath, splitView, withPeople, type Party } from './shares';
 
 export type EntryType = Command['type'];
+/** Joining a pot someone else runs: `amount` on the form is my share of `total`. `typed` = I typed my share over the equal one. */
+export type Pot = { total: number | null; people: number; manager: string; typed: boolean };
+
 export type Form = {
   type: EntryType;
   amount: number | null;
@@ -25,6 +28,7 @@ export type Form = {
   myShare: number | null;
   /** Where unnamed people's shares go; null = the server's "Friends". */
   iouAccountId: string | null;
+  pot: Pot | null;
   fee: number | null;
   originalAmount: number | null;
   originalCurrency: string | null;
@@ -58,6 +62,7 @@ export const blankForm = (date: string, type: EntryType = 'EXPENSE'): Form => ({
   parties: [],
   myShare: null,
   iouAccountId: null,
+  pot: null,
   fee: null,
   originalAmount: null,
   originalCurrency: null,
@@ -128,6 +133,14 @@ export function fromCommand(c: Command, tabName: (id: string) => string = () => 
         envelopeId: c.envelopeId ?? null,
         merchant: c.merchant ?? '',
         ...splitOf(c, tabName),
+        pot: c.pot
+          ? {
+              total: c.pot.total,
+              people: c.pot.people,
+              manager: c.pot.manager ?? '',
+              typed: c.amount !== Math.ceil(c.pot.total / c.pot.people),
+            }
+          : null,
         iouAccountId: c.split?.iouAccountId ?? null,
         originalAmount: c.originalAmount ?? null,
         originalCurrency: c.originalCurrency ?? null,
@@ -206,6 +219,19 @@ export function toCommand(f: Form): { command: Command; extra?: Command[] } | { 
         merchant: opt(f.merchant),
       };
       if (f.type === 'INCOME') return { command: { type: 'INCOME', ...common } };
+      if (f.pot) {
+        if (!f.pot.total) return { error: 'Enter the pot total' };
+        if (f.amount > f.pot.total) return { error: 'Your share cannot be more than the pot' };
+        return {
+          command: {
+            type: 'EXPENSE',
+            ...common,
+            pot: { total: f.pot.total, people: f.pot.people, manager: opt(f.pot.manager) },
+            originalAmount: f.originalAmount ?? undefined,
+            originalCurrency: f.originalCurrency ?? undefined,
+          },
+        };
+      }
       const split = splitCommand(f);
       if ('error' in split) return split;
       const extra: Command[] = [...split.covers].map(([accountId, names]) => ({
@@ -280,3 +306,15 @@ export function chipView(i: LogItem): ChipView {
   const r = toCommand(f);
   return 'error' in r ? { state: 'incomplete', missing: r.error } : { state: 'ready' };
 }
+
+/** The form with the pot changed; my share follows total / people (rounded up) until I type my own. */
+export function withPot(f: Form, patch: Partial<Pot>): Form {
+  const pot = { ...(f.pot ?? { total: null, people: 2, manager: '', typed: false }), ...patch };
+  pot.people = Math.min(50, Math.max(2, pot.people));
+  const amount = pot.typed ? f.amount : pot.total ? Math.ceil(pot.total / pot.people) : null;
+  return { ...f, pot, amount, split: null, parties: [], myShare: null };
+}
+
+/** Typing my share in pot mode fixes it; clearing it goes back to the equal share. */
+export const withMyPotShare = (f: Form, amount: number | null): Form =>
+  f.pot ? withPot({ ...f, amount }, { typed: amount !== null }) : { ...f, amount };

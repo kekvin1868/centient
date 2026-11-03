@@ -44,6 +44,10 @@ _Avoid_: IOU account (in the UI), debt
 The part of a bill that belongs to one person. Shares start equal; you can type over one, and the people you have not edited split the rest.
 _Avoid_: Portion, cut
 
+**Pot**:
+A gift or cost several people pay into, run by one of them. When you join someone else's pot you log only your share, with the pot's total, headcount and who runs it.
+_Avoid_: Patungan (in the UI)
+
 ### Insights
 
 **Insights**:

@@ -281,6 +281,70 @@ test('T5.35 a category row lists its entries with counted amounts that add up', 
   await expect(sheet).toBeHidden();
 });
 
+test('T5.37 a split with named people lists them by their current name, with a sticker after a rename', async () => {
+  const cat = (await (await api('/catalog')).json()) as {
+    accounts: { id: string; name: string }[];
+    categories: { id: string; name: string }[];
+  };
+  const main = cat.accounts.find(a => a.name === 'Main Account')!.id;
+  const food = cat.categories.find(x => x.name === 'Food & Drink')!.id;
+  expect(
+    (
+      await api('/transactions', {
+        commands: [
+          {
+            type: 'EXPENSE',
+            accountId: main,
+            categoryId: food,
+            amount: 60_000,
+            date: today,
+            merchant: 'Kado',
+            split: {
+              people: 3,
+              parties: [
+                { name: 'Andi', share: 10_000 },
+                { name: 'Budi', share: 20_000 },
+              ],
+            },
+          },
+        ],
+      })
+    ).ok(),
+  ).toBe(true);
+  const andi = (
+    (await (await api('/catalog')).json()) as { accounts: { id: string; name: string }[] }
+  ).accounts.find(a => a.name === 'Andi')!;
+  expect(
+    (await page.request.patch(`/api/accounts/${andi.id}`, { data: { name: 'Obang' } })).ok(),
+  ).toBe(true);
+  await page.reload();
+  await tab('Insights').tap();
+  await page
+    .getByRole('figure', { name: 'Spending by category' })
+    .getByRole('button', { name: /Food & Drink/ })
+    .tap();
+  const sheet = page.getByRole('dialog', { name: /^Food & Drink · / });
+  const kado = sheet
+    .getByTestId('insights-entries')
+    .getByRole('button')
+    .filter({ hasText: 'Kado' });
+  await expect(kado).toContainText('You · counted');
+  await expect(kado).toContainText('Obang');
+  await expect(kado).toContainText('was Andi');
+  await expect(kado).toContainText('Budi');
+  await expect(kado).not.toContainText('Person 2');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  // Deleting the tabs removes the split again, so the totals the next tests expect hold.
+  for (const name of ['Obang', 'Budi'])
+    await api(
+      `/accounts/${((await (await api('/catalog')).json()) as { accounts: { id: string; name: string }[] }).accounts.find(a => a.name === name)!.id}`,
+      { method: 'DELETE' },
+    );
+  await page.reload();
+  await tab('Insights').tap();
+});
+
 test('T5.36 a merchant row lists that merchant whatever the spelling; an entry opens', async () => {
   await page
     .getByRole('figure', { name: 'Top merchants' })

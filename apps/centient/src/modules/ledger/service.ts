@@ -186,6 +186,14 @@ function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] {
         originalAmount: cmd.originalAmount,
         originalCurrency: cmd.originalCurrency,
       };
+      if (cmd.pot) {
+        if (cmd.split) throw new DomainError('INVALID_SPLIT', 'A pot is not a split bill');
+        if (cmd.amount > cmd.pot.total)
+          throw new DomainError('INVALID_SHARE', 'Your share cannot be more than the pot');
+        const who = cmd.pot.manager ? `, run by ${cmd.pot.manager}` : '';
+        const note = `Pot of ${cmd.pot.people} people${who}${cmd.note ? ` · ${cmd.note}` : ''}`;
+        return [expense({ ...base, amount: cmd.amount, note })];
+      }
       if (!cmd.split) return [expense({ ...base, amount: cmd.amount })];
       // Split bill: my share is spending; the rest is money the others owe me.
       const ps = cmd.split.parties;

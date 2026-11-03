@@ -498,6 +498,37 @@ test('a split bill names people, re-divides live, and Equal resets it (Phase 1b)
   await api(`/accounts/${await accountId('Andi')}`, { method: 'DELETE' });
 });
 
+test('joining a pot someone else runs saves just my share (Phase 1b)', async () => {
+  await tab('Home').tap();
+  await page.getByRole('button', { name: 'Add without typing' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'New entry' });
+  await sheet
+    .getByRole('textbox', { name: 'What was it?' })
+    .pressSequentially('Pot kado', { delay: 20 });
+  await sheet.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Home & Bills' });
+  await sheet.getByRole('combobox', { name: 'Paid with' }).selectOption({ label: 'Main Account' });
+  await sheet.getByRole('button', { name: '+ Split or note' }).tap();
+  await sheet.getByRole('button', { name: /joining a pot/i }).tap();
+  const pot = sheet.getByRole('group', { name: 'The pot' });
+  await pot.getByRole('textbox', { name: 'Pot total' }).fill('100000');
+  for (let n = 0; n < 2; n++)
+    await pot.getByRole('button', { name: 'One person more in the pot' }).tap();
+  await pot.getByRole('combobox', { name: 'Run by' }).fill('Andi');
+  await expect(sheet.getByRole('textbox', { name: 'Amount' })).toHaveValue('25.000');
+  const before = await balance('Main Account');
+  await sheet.getByRole('button', { name: 'Log it' }).tap();
+  await expect(sheet).toBeHidden();
+  expect(await balance('Main Account')).toBe(before - 25_000);
+  const entry = (
+    (await (await api('/entries?limit=5')).json()).items as {
+      id: string;
+      command: { pot?: { total: number; people: number; manager: string } };
+    }[]
+  ).find(e => e.command?.pot)!;
+  expect(entry.command.pot).toEqual({ total: 100_000, people: 4, manager: 'Andi' });
+  await api(`/entries/${entry.id}`, { method: 'DELETE' });
+});
+
 test('a short person: I cover the rest from another account, or they pay the rest later (Phase 1b)', async () => {
   const fill = async (title: string) => {
     await tab('Home').tap();
