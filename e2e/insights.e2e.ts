@@ -1,4 +1,4 @@
-// End to end: the Insights tab (steps 4 and 5). Four tabs, the empty state, totals and the comparison line, category bars
+// End to end: the Insights tab (steps 4, 5 and 7). Four tabs, the empty state, totals and the comparison line, category bars
 // with shares, the currency chips, previous / next / year, the savings rate's 404 and its nuclear alarm, and the `?`;
 // then step 5: the trend and its readout, Daily Wallet Spending, merchants, biggest expenses, the entries sheet with
 // counted amounts, and Budgets over time.
@@ -221,5 +221,80 @@ test('T5.26 the year view: 12 month slots', async () => {
   const months = page.getByRole('figure', { name: 'Spending each month' });
   await expect(months.getByRole('button')).toHaveCount(m); // Jan to this month have a value; the rest are empty slots
   await page.getByRole('radio', { name: 'Cycle' }).tap();
+  expect(errors).toEqual([]);
+});
+
+// Step 7: the export row. The share sheet is stubbed: each shared file is kept on `window.__shared`; `__refuse` makes the
+// next shares fail the way iOS does when the tap has expired.
+type Shared = { name: string; type: string; text: string };
+const shared = () => page.evaluate(() => (window as unknown as { __shared: Shared[] }).__shared);
+const exportRow = () => page.getByRole('button', { name: 'Report PDF' }).locator('..');
+const mm = String(m).padStart(2, '0');
+
+test('T7.10, T7.11 CSV for this currency, then all currencies, through the share sheet', async () => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __shared: unknown[]; __refuse: number };
+    w.__shared = [];
+    w.__refuse = 0;
+    navigator.canShare = () => true;
+    navigator.share = async (d?: ShareData) => {
+      if (w.__refuse > 0) { w.__refuse--; throw new DOMException('The tap has expired', 'NotAllowedError'); }
+      const f = d!.files![0];
+      w.__shared.push({ name: f.name, type: f.type, text: (await f.text()).slice(0, 4000) });
+    };
+  });
+  await page.reload();
+  await tab('Insights').tap();
+  await page.getByRole('button', { name: 'CSV', exact: true }).tap();
+  const sheet = page.getByRole('dialog', { name: `Export CSV · ${monthOf(0).label.replace(/ cycle$/, '')}` });
+  await sheet.getByRole('button', { name: 'IDR only' }).tap();
+  await expect.poll(async () => (await shared()).length).toBe(1);
+  const [idr] = await shared();
+  expect(idr.name).toBe(`centient-${y}-${mm}-IDR.csv`);
+  const rows = idr.text.split('\n').slice(1);
+  expect(rows.length).toBeGreaterThan(0);
+  expect(rows.every(r => r.includes(',IDR,') && r.startsWith(`${y}-${mm}`))).toBe(true);
+
+  await page.getByRole('button', { name: 'CSV', exact: true }).tap();
+  await sheet.getByRole('button', { name: 'All currencies' }).tap();
+  await expect.poll(async () => (await shared()).length).toBe(2);
+  const all = (await shared())[1];
+  expect(all.name).toBe(`centient-${y}-${mm}-all.csv`);
+  expect(all.text).toContain(',IDR,');
+  expect(all.text).toContain(',USD,');
+});
+
+test('T7.14 Report PDF: one A4 PDF named by period and currency; dark mode comes back', async () => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  await page.getByRole('button', { name: 'Report PDF' }).tap();
+  await expect.poll(async () => (await shared()).length, { timeout: 20_000 }).toBe(3);
+  const pdf = (await shared())[2];
+  expect(pdf).toMatchObject({ name: `centient-${y}-${mm}-IDR.pdf`, type: 'application/pdf' });
+  expect(pdf.text.startsWith('%PDF-1.4')).toBe(true);
+  expect(pdf.text).toMatch(/\/Type \/Pages \/Count [1-9]/);
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  await expect(page.getByRole('status').filter({ hasText: 'Making PDF…' })).toHaveCount(0); // the cover is gone
+  await expect(page.getByRole('button', { name: 'Report PDF' })).toBeEnabled();
+  await page.emulateMedia({ colorScheme: 'light' });
+});
+
+test('T7.15 when the share is refused, the button offers a second tap with the file ready', async () => {
+  await page.evaluate(() => { (window as unknown as { __refuse: number }).__refuse = 1; });
+  await page.getByRole('button', { name: 'Report PDF' }).tap();
+  await expect(page.getByRole('button', { name: 'Share PDF' })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Share PDF' }).tap();
+  await expect.poll(async () => (await shared()).length).toBe(4);
+  expect((await shared())[3].name).toBe(`centient-${y}-${mm}-IDR.pdf`);
+  await expect(page.getByRole('button', { name: 'Report PDF' })).toBeVisible();
+});
+
+test('T7.16 without file sharing the CSV downloads', async () => {
+  await page.evaluate(() => { (navigator as { canShare?: unknown }).canShare = undefined; });
+  await page.getByRole('button', { name: 'CSV', exact: true }).tap();
+  const download = page.waitForEvent('download');
+  await page.getByRole('dialog', { name: /^Export CSV/ }).getByRole('button', { name: 'IDR only' }).tap();
+  expect((await download).suggestedFilename()).toBe(`centient-${y}-${mm}-IDR.csv`);
+  await expect(exportRow()).toBeVisible();
   expect(errors).toEqual([]);
 });
