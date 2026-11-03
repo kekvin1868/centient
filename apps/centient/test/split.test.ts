@@ -167,3 +167,45 @@ describe('split bill with named people', () => {
     expect(await t.balance('BCA')).toBe(9_900_000);
   });
 });
+
+describe('a person who hands money over now (T8)', () => {
+  it('keeps the full share on their tab, then moves what they paid into my account', async () => {
+    const t = await setup('s8@test');
+    const cash = await svc(t.ws).accounts.create({ name: 'Cash', kind: 'CASH' });
+    const [id] = await svc(t.ws).ledger.record([
+      t.bill({
+        people: 4,
+        parties: [
+          { name: 'Andi', share: 25_000, paid: { amount: 10_000, accountId: cash.id } },
+          { name: 'Budi', share: 25_000 },
+          { name: 'Cici', share: 25_000 },
+        ],
+      }),
+    ]);
+    expect(await t.balance('BCA')).toBe(9_900_000);
+    expect(await t.balance('Andi')).toBe(15_000);
+    expect(await t.balance('Budi')).toBe(25_000);
+    expect(await t.balance('Cash')).toBe(10_000);
+    // One entry: deleting it takes the payment with it.
+    await svc(t.ws).ledger.remove(id);
+    expect(await t.balance('Cash')).toBe(0);
+    expect(await t.balance('Andi')).toBe(0);
+  });
+
+  it('refuses more than the share, an unnamed payer and an IOU as the receiving account', async () => {
+    const t = await setup('s9@test');
+    const cash = await svc(t.ws).accounts.create({ name: 'Cash', kind: 'CASH' });
+    const rec = (parties: object[]) =>
+      svc(t.ws).ledger.record([t.bill({ people: parties.length + 1, parties })]);
+    await expect(
+      rec([{ name: 'Andi', share: 5_000, paid: { amount: 6_000, accountId: cash.id } }]),
+    ).rejects.toMatchObject({ code: 'INVALID_PAYMENT' });
+    await expect(
+      rec([{ share: 5_000, paid: { amount: 1_000, accountId: cash.id } }]),
+    ).rejects.toMatchObject({ code: 'PAID_NEEDS_NAME' });
+    const friends = await svc(t.ws).accounts.create({ name: 'Friends', kind: 'IOU' });
+    await expect(
+      rec([{ name: 'Andi', share: 5_000, paid: { amount: 1_000, accountId: friends.id } }]),
+    ).rejects.toMatchObject({ code: 'INVALID_PAYMENT' });
+  });
+});

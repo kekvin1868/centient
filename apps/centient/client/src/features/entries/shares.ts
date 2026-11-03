@@ -2,15 +2,28 @@
 // not fixed (me included) share what is left equally, I take the rounding. Pure, so the form and tests share it.
 
 /** One other person on the bill. `share` null = not typed over (it follows the equal split). */
+export type Mode = 'SPLIT' | 'COVER' | 'LATER';
+
 export type Party = {
   name: string;
   share: number | null;
+  /** When a typed amount is short of the equal share: others pay the gap (SPLIT), I cover it, or it stays on their tab. */
+  mode: Mode;
+  /** COVER: the account that pays the gap; LATER: the account that got what they handed over. null = the bill's account. */
+  accountId: string | null;
   /** The tab this person was loaded from (editing), and the name it had then. */
   tab: string | null;
   tabName: string;
 };
 
-export const blankParty = (): Party => ({ name: '', share: null, tab: null, tabName: '' });
+export const blankParty = (): Party => ({
+  name: '',
+  share: null,
+  mode: 'SPLIT',
+  accountId: null,
+  tab: null,
+  tabName: '',
+});
 
 export type Shares = {
   mine: number;
@@ -69,4 +82,54 @@ export function withPeople<T extends { split: number | null; parties: Party[] }>
   const parties = f.parties.slice(0, people - 1);
   while (parties.length < people - 1) parties.push(blankParty());
   return { ...f, split: people > 1 ? people : null, parties };
+}
+
+export type SplitView = Omit<Shares, 'problem'> & {
+  /** What each other person is put down for (their tab gets this). */
+  owes: number[];
+  /** COVER: what I cover for each person; LATER: what each handed over now (0 when neither). */
+  covered: number[];
+  paidNow: number[];
+  /** The first person whose typed amount leaves nothing to cover, or who must be named. */
+  badIndex: number;
+  problem: Shares['problem'] | 'nothing' | 'name';
+};
+
+/** shareMath plus the "short" modes: a covered or paying-later person counts at their equal share for everyone else. */
+export function splitView(
+  amount: number | null,
+  parties: Party[],
+  myFixed: number | null,
+): SplitView {
+  const active = (p: Party) => p.mode !== 'SPLIT' && p.share !== null;
+  const base = shareMath(
+    amount,
+    parties.map(p => (active(p) ? null : p.share)),
+    myFixed,
+  );
+  const covered = parties.map(() => 0);
+  const paidNow = parties.map(() => 0);
+  let badIndex = -1;
+  let problem = base.problem as SplitView['problem'];
+  const owes = base.others.map((full, i) => {
+    const p = parties[i];
+    if (!active(p)) return full;
+    if (p.share! >= full) {
+      if (badIndex < 0) badIndex = i;
+      problem ??= 'nothing';
+      return full;
+    }
+    if (p.mode === 'COVER') {
+      covered[i] = full - p.share!;
+      return p.share!;
+    }
+    if (!p.name.trim() && !p.tab && badIndex < 0) {
+      badIndex = i;
+      problem ??= 'name';
+    }
+    paidNow[i] = p.share!;
+    return full;
+  });
+  const cover = covered.reduce((s, x) => s + x, 0);
+  return { ...base, mine: base.mine + cover, owes, covered, paidNow, badIndex, problem };
 }

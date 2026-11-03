@@ -196,3 +196,83 @@ describe('split bills in the form (T1-T6)', () => {
     });
   });
 });
+
+describe('cover the rest / pays later (T6-T8)', () => {
+  const base = fromCommand({
+    type: 'EXPENSE',
+    accountId: 'bca',
+    categoryId: 'food',
+    amount: 100_000,
+    date: '2026-10-20',
+    merchant: 'Kado',
+    split: { people: 4, parties: [{ share: 25_000 }, { share: 25_000 }, { share: 25_000 }] },
+  });
+  const withAndi = (o: object) => ({
+    ...base,
+    parties: [
+      { ...base.parties[0], name: 'Andi', share: 10_000, ...o },
+      base.parties[1],
+      base.parties[2],
+    ],
+  });
+
+  it('T6: covering from the bill account is one entry where Andi pays 10.000 and the rest stay 25.000', () => {
+    const r = toCommand(withAndi({ mode: 'COVER' }));
+    expect(r).toEqual({
+      command: expect.objectContaining({
+        amount: 100_000,
+        split: expect.objectContaining({
+          parties: [{ name: 'Andi', share: 10_000 }, { share: 25_000 }, { share: 25_000 }],
+        }),
+      }),
+    });
+  });
+
+  it('T7: covering from Cash is two entries: the bill shrinks to 85.000 and Cash pays 15.000', () => {
+    const r = toCommand(withAndi({ mode: 'COVER', accountId: 'cash' }));
+    expect(r).toEqual({
+      command: expect.objectContaining({ amount: 85_000 }),
+      extra: [
+        expect.objectContaining({
+          type: 'EXPENSE',
+          accountId: 'cash',
+          amount: 15_000,
+          merchant: 'Kado',
+          note: "Covering Andi's part of Kado",
+        }),
+      ],
+    });
+  });
+
+  it('T8: pays the rest later keeps 25.000 on the tab and sends what was handed over', () => {
+    const r = toCommand(withAndi({ mode: 'LATER', accountId: 'cash' }));
+    expect(r).toEqual({
+      command: expect.objectContaining({
+        amount: 100_000,
+        split: expect.objectContaining({
+          parties: [
+            { name: 'Andi', share: 25_000, paid: { amount: 10_000, accountId: 'cash' } },
+            { share: 25_000 },
+            { share: 25_000 },
+          ],
+        }),
+      }),
+    });
+    // The handed-over account defaults to the bill's account, and reloads as a pay-later person.
+    const back = fromCommand(
+      (r as { command: Parameters<typeof fromCommand>[0] }).command,
+      () => 'Andi',
+    );
+    expect(back.parties[0]).toMatchObject({ mode: 'LATER', share: 10_000, accountId: 'cash' });
+    expect(back.parties[1].share).toBeNull();
+  });
+
+  it('refuses to cover someone who pays their full share, or a nameless payer-later', () => {
+    expect(toCommand(withAndi({ mode: 'COVER', share: 25_000 }))).toEqual({
+      error: 'Nothing to cover: they pay their full share',
+    });
+    expect(toCommand(withAndi({ mode: 'LATER', name: '' }))).toEqual({
+      error: 'Name the person who pays later',
+    });
+  });
+});

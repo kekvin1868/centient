@@ -46,6 +46,8 @@ export const command = z.discriminatedUnion('type', [
               name: text(60).min(1).optional(),
               iouAccountId: id.optional(),
               share: z.number().int().min(0),
+              /** Handed over now: moves `amount` from this person's tab into `accountId` (a named person only). */
+              paid: z.object({ amount: money, accountId: id }).optional(),
             }),
           )
           .max(49)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shareMath, withPeople, blankParty } from './shares';
+import { shareMath, splitView, withPeople, blankParty } from './shares';
 
 const none = (n: number) => Array<number | null>(n).fill(null);
 
@@ -67,5 +67,45 @@ describe('withPeople', () => {
   });
   it('one person means no split', () => {
     expect(withPeople(f, 1)).toMatchObject({ split: null, parties: [] });
+  });
+});
+
+describe('splitView: a person who is short (T6-T8)', () => {
+  const party = (o: object) => ({ ...blankParty(), name: 'Andi', ...o });
+  const three = [blankParty(), blankParty()];
+
+  it('T6: I cover the rest: others keep 25.000, Andi pays 10.000, I pay 40.000 in all', () => {
+    const v = splitView(100_000, [party({ share: 10_000, mode: 'COVER' }), ...three], null);
+    expect(v.owes).toEqual([10_000, 25_000, 25_000]);
+    expect(v.covered).toEqual([15_000, 0, 0]);
+    expect(v.mine).toBe(40_000);
+    expect(v.problem).toBeNull();
+  });
+
+  it('T8: pays the rest later: Andi is put down for 25.000 and handed over 10.000', () => {
+    const v = splitView(100_000, [party({ share: 10_000, mode: 'LATER' }), ...three], null);
+    expect(v.owes).toEqual([25_000, 25_000, 25_000]);
+    expect(v.paidNow).toEqual([10_000, 0, 0]);
+    expect(v.mine).toBe(25_000);
+  });
+
+  it('others pay the rest by default (T2) and a short person with no mode re-divides', () => {
+    const v = splitView(100_000, [party({ share: 10_000 }), ...three], null);
+    expect(v.owes).toEqual([10_000, 30_000, 30_000]);
+    expect(v.mine).toBe(30_000);
+  });
+
+  it('flags a person who already pays their full share, and an unnamed payer-later', () => {
+    expect(
+      splitView(100_000, [party({ share: 25_000, mode: 'COVER' }), ...three], null),
+    ).toMatchObject({
+      problem: 'nothing',
+      badIndex: 0,
+    });
+    expect(
+      splitView(100_000, [party({ name: '', share: 5_000, mode: 'LATER' }), ...three], null),
+    ).toMatchObject({
+      problem: 'name',
+    });
   });
 });

@@ -65,14 +65,17 @@ export function LogBox() {
     const ok = await persist(
       () =>
         entryApi.quickSave({
-          items: ready.map(i => {
+          items: ready.flatMap(i => {
             const r = toCommand(i.form);
             if ('error' in r) throw new Error(r.error);
-            return {
-              command: r.command,
-              rawMerchant: i.rawMerchant || undefined,
-              suggestedMerchant: i.rawMerchant ? i.suggestedMerchant : undefined,
-            };
+            return [
+              {
+                command: r.command,
+                rawMerchant: i.rawMerchant || undefined,
+                suggestedMerchant: i.rawMerchant ? i.suggestedMerchant : undefined,
+              },
+              ...(r.extra ?? []).map(command => ({ command })),
+            ];
           }),
         }),
       undefined,
@@ -115,6 +118,7 @@ export function LogBox() {
             rawMerchant: item.rawMerchant || undefined,
             suggestedMerchant: item.rawMerchant ? item.suggestedMerchant : undefined,
           },
+          ...(r.extra ?? []).map(command => ({ command })),
         ],
       }),
     );

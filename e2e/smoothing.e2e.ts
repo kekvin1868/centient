@@ -498,6 +498,66 @@ test('a split bill names people, re-divides live, and Equal resets it (Phase 1b)
   await api(`/accounts/${await accountId('Andi')}`, { method: 'DELETE' });
 });
 
+test('a short person: I cover the rest from another account, or they pay the rest later (Phase 1b)', async () => {
+  const fill = async (title: string) => {
+    await tab('Home').tap();
+    await page.getByRole('button', { name: 'Add without typing' }).tap();
+    const sheet = page.getByRole('dialog', { name: 'New entry' });
+    await sheet
+      .getByRole('textbox', { name: 'What was it?' })
+      .pressSequentially(title, { delay: 20 });
+    await sheet.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Home & Bills' });
+    await sheet
+      .getByRole('combobox', { name: 'Paid with' })
+      .selectOption({ label: 'Main Account' });
+    await sheet.getByRole('textbox', { name: 'Amount' }).fill('100000');
+    await sheet.getByRole('button', { name: '+ Split or note' }).tap();
+    for (let n = 0; n < 3; n++) await sheet.getByRole('button', { name: 'One person more' }).tap();
+    const who = sheet.getByRole('group', { name: 'Who pays what' });
+    await who.getByRole('combobox', { name: 'Person 2 name' }).fill('Andi');
+    await who.getByRole('textbox', { name: "Andi's share" }).fill('10000');
+    return { sheet, who };
+  };
+  const main0 = await balance('Main Account');
+  const daily0 = await balance('Dailies');
+
+  // Cover the rest from Dailies: the bill on Main Account is 85.000, Dailies pays 15.000, Andi's tab holds 10.000.
+  let { sheet, who } = await fill('Kado');
+  await who
+    .getByRole('combobox', { name: 'Andi is short' })
+    .selectOption({ label: 'I cover the rest' });
+  await who.getByRole('combobox', { name: 'I cover it with' }).selectOption({ label: 'Dailies' });
+  await expect(who.getByText('You cover Rp15.000')).toBeVisible();
+  await sheet.getByRole('button', { name: 'Log it' }).tap();
+  await expect(sheet).toBeHidden();
+  expect(await balance('Main Account')).toBe(main0 - 85_000);
+  expect(await balance('Dailies')).toBe(daily0 - 15_000);
+  expect(await balance('Andi')).toBe(10_000);
+  const covering = (
+    (await (await api('/entries?limit=10')).json()).items as {
+      id: string;
+      transactions: { note: string | null }[];
+    }[]
+  ).find(e => e.transactions.some(t => t.note?.startsWith("Covering Andi's part")))!;
+  await api(`/entries/${covering.id}`, { method: 'DELETE' });
+  await api(`/accounts/${await accountId('Andi')}`, { method: 'DELETE' });
+  expect(await balance('Main Account')).toBe(main0);
+
+  // Pays the rest later: Main Account pays all 100.000, Andi is put down for 25.000 and gave 10.000 into Dailies.
+  ({ sheet, who } = await fill('Kado 2'));
+  await who
+    .getByRole('combobox', { name: 'Andi is short' })
+    .selectOption({ label: 'Pays the rest later' });
+  await who.getByRole('combobox', { name: 'They paid into' }).selectOption({ label: 'Dailies' });
+  await sheet.getByRole('button', { name: 'Log it' }).tap();
+  await expect(sheet).toBeHidden();
+  expect(await balance('Main Account')).toBe(main0 - 100_000);
+  expect(await balance('Dailies')).toBe(daily0 + 10_000);
+  expect(await balance('Andi')).toBe(15_000);
+  await api(`/accounts/${await accountId('Andi')}`, { method: 'DELETE' });
+  expect(await balance('Dailies')).toBe(daily0); // the entry went with the tab, and its payment with it
+});
+
 test('an account can be in any currency: search "yen", and its balance has no decimals', async () => {
   await tab('Settings').tap();
   await page.getByRole('button', { name: 'Add account' }).tap();

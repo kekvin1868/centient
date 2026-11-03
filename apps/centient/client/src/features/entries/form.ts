@@ -3,7 +3,7 @@
 import type { Draft } from '@centient/quickadd';
 import type { Command } from '../../../../src/lib/schemas';
 import { formatMoney } from '../../lib/format';
-import { blankParty, shareMath, withPeople, type Party } from './shares';
+import { blankParty, shareMath, splitView, withPeople, type Party } from './shares';
 
 export type EntryType = Command['type'];
 export type Form = {
@@ -100,13 +100,17 @@ function splitOf(c: Extract<Command, { type: 'EXPENSE' }>, tabName: (id: string)
     split.parties.map(() => null),
     null,
   ).others;
-  const same = split.parties.every((p, i) => p.share === auto[i]);
+  const same = split.parties.every((p, i) => p.paid || p.share === auto[i]);
   return {
     split: split.people,
     myShare: null,
     parties: split.parties.map((p, i) => ({
+      ...blankParty(),
       name: p.iouAccountId ? tabName(p.iouAccountId) : '',
-      share: same ? null : p.share,
+      // What a "pays the rest later" person handed over now is their typed amount.
+      share: p.paid ? p.paid.amount : same ? null : p.share,
+      mode: p.paid ? ('LATER' as const) : ('SPLIT' as const),
+      accountId: p.paid?.accountId ?? null,
       tab: p.iouAccountId ?? null,
       tabName: p.iouAccountId ? tabName(p.iouAccountId) : '',
     })),
@@ -148,36 +152,45 @@ const opt = (s: string) => s.trim() || undefined;
 /**
  * The split part of an expense. Everyone unnamed and equal is the plain head count (what quick add makes);
  * otherwise each other person is sent with their share, by tab when the name is unchanged, else by name.
+ * "I cover the rest" from another account takes that gap off this entry (`cut`) and makes `extra` entries;
+ * "pays the rest later" keeps the full share and sends what was handed over as `paid`.
  * No IOU account yet: the server creates "Friends" for unnamed shares.
  */
-function splitCommand(f: Form): { split: SplitCmd | undefined } | { error: string } {
-  if (!f.split || f.split < 2) return { split: undefined };
-  const m = shareMath(
-    f.amount,
-    f.parties.map(p => p.share),
-    f.myShare,
-  );
-  if (m.problem === 'mine') return { error: 'Your share must be more than zero' };
-  if (m.problem) return { error: "The shares don't add up to the total" };
+function splitCommand(
+  f: Form,
+): { split: SplitCmd | undefined; cut: number; covers: Map<string, string[]> } | { error: string } {
+  const none = { cut: 0, covers: new Map<string, string[]>() };
+  if (!f.split || f.split < 2) return { split: undefined, ...none };
+  const v = splitView(f.amount, f.parties, f.myShare);
+  if (v.problem === 'mine') return { error: 'Your share must be more than zero' };
+  if (v.problem === 'nothing') return { error: 'Nothing to cover: they pay their full share' };
+  if (v.problem === 'name') return { error: 'Name the person who pays later' };
+  if (v.problem) return { error: "The shares don't add up to the total" };
   const lump = f.iouAccountId ?? undefined;
   const plain = f.myShare === null && f.parties.every(p => !p.name.trim() && p.share === null);
-  if (plain) return { split: { people: f.split, iouAccountId: lump } };
-  return {
-    split: {
-      people: f.split,
-      iouAccountId: lump,
-      parties: f.parties.map((p, i) => {
-        const name = p.name.trim();
-        const who = p.tab && name === p.tabName ? { iouAccountId: p.tab } : name ? { name } : {};
-        return { ...who, share: m.others[i] };
-      }),
-    },
-  };
+  if (plain) return { split: { people: f.split, iouAccountId: lump }, ...none };
+  let cut = 0;
+  const covers = new Map<string, string[]>();
+  const parties = f.parties.map((p, i) => {
+    const name = p.name.trim();
+    const who = p.tab && name === p.tabName ? { iouAccountId: p.tab } : name ? { name } : {};
+    if (v.covered[i] && p.accountId && p.accountId !== f.accountId) {
+      cut += v.covered[i];
+      covers.set(p.accountId, [...(covers.get(p.accountId) ?? []), name || `Person ${i + 2}`]);
+    }
+    const paid = v.paidNow[i]
+      ? { paid: { amount: v.paidNow[i], accountId: p.accountId ?? f.accountId! } }
+      : {};
+    return { ...who, share: v.owes[i], ...paid };
+  });
+  return { split: { people: f.split, iouAccountId: lump, parties }, cut, covers };
 }
+const coveredOf = (f: Form) => splitView(f.amount, f.parties, f.myShare).covered;
 type SplitCmd = NonNullable<Extract<Command, { type: 'EXPENSE' }>['split']>;
 
 /** The API command, or the first thing missing, in plain words. */
-export function toCommand(f: Form): { command: Command } | { error: string } {
+/** `extra`: more entries to save with it (a gap covered from another account). Editing never has any. */
+export function toCommand(f: Form): { command: Command; extra?: Command[] } | { error: string } {
   if (!f.amount || f.amount <= 0) return { error: 'Enter an amount' };
   const base = { amount: f.amount, date: f.date, note: opt(f.note) };
   switch (f.type) {
@@ -195,14 +208,28 @@ export function toCommand(f: Form): { command: Command } | { error: string } {
       if (f.type === 'INCOME') return { command: { type: 'INCOME', ...common } };
       const split = splitCommand(f);
       if ('error' in split) return split;
+      const extra: Command[] = [...split.covers].map(([accountId, names]) => ({
+        type: 'EXPENSE' as const,
+        accountId,
+        categoryId: f.categoryId!,
+        amount: f.parties.reduce(
+          (sum, p, i) => sum + (p.accountId === accountId ? coveredOf(f)[i] : 0),
+          0,
+        ),
+        date: f.date,
+        merchant: opt(f.merchant),
+        note: `Covering ${names.join(', ')}'s part of ${opt(f.merchant) ?? 'the bill'}`,
+      }));
       return {
         command: {
           type: 'EXPENSE',
           ...common,
+          amount: f.amount - split.cut,
           split: split.split,
           originalAmount: f.originalAmount ?? undefined,
           originalCurrency: f.originalCurrency ?? undefined,
         },
+        ...(extra.length ? { extra } : {}),
       };
     }
     case 'TRANSFER':

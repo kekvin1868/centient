@@ -2,7 +2,7 @@
 // The title (where / from whom) is typed like a typewriter; every other detail is a receipt line you tap to
 // change; the pocket is picked up front as stamps (Main pressed by default); the amount is the TOTAL.
 import { Minus, Plus, X } from '@phosphor-icons/react';
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useState, type CSSProperties, type ReactNode } from 'react';
 import { amountInput, showAmount } from '../../lib/amount';
 import { formatMoney } from '../../lib/format';
 import { pocketColor } from '../../lib/pocketColors';
@@ -12,7 +12,7 @@ import { useSumInput } from '../../ui/useSumInput';
 import { Segmented } from '../../ui/Segmented';
 import { Typewriter } from '../../ui/Typewriter';
 import type { EntryType, Form } from './form';
-import { shareMath, withPeople } from './shares';
+import { splitView, withPeople, type Mode } from './shares';
 
 const TYPES: { value: EntryType; label: string }[] = [
   { value: 'EXPENSE', label: 'Spent' },
@@ -25,6 +25,11 @@ const HEAD: Record<EntryType, string> = {
   TRANSFER: 'MOVED',
   ALLOCATE: 'MOVED',
 };
+const MODES: { value: Mode; label: string }[] = [
+  { value: 'SPLIT', label: 'Others pay the rest' },
+  { value: 'COVER', label: 'I cover the rest' },
+  { value: 'LATER', label: 'Pays the rest later' },
+];
 const dateLabel = (d: string) =>
   d
     ? new Date(`${d}T00:00:00Z`)
@@ -72,11 +77,8 @@ export function EntryForm({
         .map(a => a.name.replace(/ \([A-Z]{3,}\)$/, '')),
     ),
   ];
-  const shares = shareMath(
-    form.amount,
-    form.parties.map(p => p.share),
-    form.myShare,
-  );
+  const shares = splitView(form.amount, form.parties, form.myShare);
+  const equalShare = form.amount && form.split ? Math.floor(form.amount / form.split) : 0;
   const anyFixed = form.myShare !== null || form.parties.some(p => p.share !== null);
   const money = form.type === 'EXPENSE' || form.type === 'INCOME';
 
@@ -292,38 +294,96 @@ export function EntryForm({
                       onChange={myShare => set({ myShare })}
                     />
                     {form.parties.map((p, i) => (
-                      <ShareRow
-                        key={i}
-                        who={
-                          <input
-                            aria-label={`Person ${i + 2} name`}
-                            list="split-people"
-                            value={p.name}
-                            placeholder={`Person ${i + 2}`}
-                            onChange={e =>
-                              set({
-                                parties: form.parties.map((x, j) =>
-                                  j === i ? { ...x, name: e.target.value } : x,
-                                ),
-                              })
-                            }
-                            className="min-w-0 flex-1 border-b-2 border-dotted border-[color-mix(in_oklab,var(--paper-ink)_25%,transparent)] bg-transparent font-bold outline-none placeholder:font-normal placeholder:text-[var(--paper-faint)] [font-size:16px]"
-                          />
-                        }
-                        value={shares.others[i]}
-                        fixed={p.share !== null}
-                        currency={currency}
-                        label={`${p.name || `Person ${i + 2}`}'s share`}
-                        onChange={share =>
-                          set({
-                            parties: form.parties.map((x, j) => (j === i ? { ...x, share } : x)),
-                          })
-                        }
-                        onRemove={() => {
-                          const left = form.parties.filter((_, j) => j !== i);
-                          set({ split: left.length ? left.length + 1 : null, parties: left });
-                        }}
-                      />
+                      <Fragment key={i}>
+                        <ShareRow
+                          who={
+                            <input
+                              aria-label={`Person ${i + 2} name`}
+                              list="split-people"
+                              value={p.name}
+                              placeholder={`Person ${i + 2}`}
+                              onChange={e =>
+                                set({
+                                  parties: form.parties.map((x, j) =>
+                                    j === i ? { ...x, name: e.target.value } : x,
+                                  ),
+                                })
+                              }
+                              className="min-w-0 flex-1 border-b-2 border-dotted border-[color-mix(in_oklab,var(--paper-ink)_25%,transparent)] bg-transparent font-bold outline-none placeholder:font-normal placeholder:text-[var(--paper-faint)] [font-size:16px]"
+                            />
+                          }
+                          value={p.share ?? shares.owes[i]}
+                          fixed={p.share !== null}
+                          currency={currency}
+                          label={`${p.name || `Person ${i + 2}`}'s share`}
+                          onChange={share =>
+                            set({
+                              parties: form.parties.map((x, j) => (j === i ? { ...x, share } : x)),
+                            })
+                          }
+                          onRemove={() => {
+                            const left = form.parties.filter((_, j) => j !== i);
+                            set({ split: left.length ? left.length + 1 : null, parties: left });
+                          }}
+                        />
+                        {p.share !== null && (p.mode !== 'SPLIT' || p.share < equalShare) && (
+                          <>
+                            <ReceiptLine
+                              label={`${p.name || `Person ${i + 2}`} is short`}
+                              value={MODES.find(m => m.value === p.mode)!.label}
+                              control={
+                                <LineSelect
+                                  label={`${p.name || `Person ${i + 2}`} is short`}
+                                  value={p.mode}
+                                  options={MODES}
+                                  onChange={mode =>
+                                    set({
+                                      parties: form.parties.map((x, j) =>
+                                        j === i ? { ...x, mode: mode as Mode } : x,
+                                      ),
+                                    })
+                                  }
+                                />
+                              }
+                            />
+                            {p.mode !== 'SPLIT' && !(lockType && p.mode === 'COVER') && (
+                              <ReceiptLine
+                                label={p.mode === 'COVER' ? 'I cover it with' : 'They paid into'}
+                                value={
+                                  name(cat.accounts, p.accountId ?? form.accountId) ?? 'Pick one'
+                                }
+                                control={
+                                  <LineSelect
+                                    label={
+                                      p.mode === 'COVER' ? 'I cover it with' : 'They paid into'
+                                    }
+                                    value={p.accountId ?? form.accountId}
+                                    options={accounts}
+                                    onChange={accountId =>
+                                      set({
+                                        parties: form.parties.map((x, j) =>
+                                          j === i ? { ...x, accountId } : x,
+                                        ),
+                                      })
+                                    }
+                                  />
+                                }
+                              />
+                            )}
+                            {shares.covered[i] > 0 && (
+                              <p className="py-0.5 text-right text-[12px] text-[var(--paper-faint)]">
+                                You cover {formatMoney(shares.covered[i], currency)}
+                              </p>
+                            )}
+                            {shares.paidNow[i] > 0 && (
+                              <p className="py-0.5 text-right text-[12px] text-[var(--paper-faint)]">
+                                {formatMoney(shares.owes[i] - shares.paidNow[i], currency)} stays on{' '}
+                                {p.name || 'their'} tab
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </Fragment>
                     ))}
                     {shares.problem && (
                       <p
@@ -334,7 +394,11 @@ export function EntryForm({
                           ? `${formatMoney(Math.abs(shares.gap), currency)} ${shares.gap > 0 ? 'not covered' : 'too much'}`
                           : shares.problem === 'over'
                             ? 'The amounts add up to more than the total'
-                            : 'Your share must be more than zero'}
+                            : shares.problem === 'nothing'
+                              ? `${form.parties[shares.badIndex]?.name || `Person ${shares.badIndex + 2}`} pays their full share, nothing to cover`
+                              : shares.problem === 'name'
+                                ? 'Name the person who pays later'
+                                : 'Your share must be more than zero'}
                       </p>
                     )}
                     {anyFixed && (
@@ -343,7 +407,12 @@ export function EntryForm({
                         onClick={() =>
                           set({
                             myShare: null,
-                            parties: form.parties.map(p => ({ ...p, share: null })),
+                            parties: form.parties.map(p => ({
+                              ...p,
+                              share: null,
+                              mode: 'SPLIT' as const,
+                              accountId: null,
+                            })),
                           })
                         }
                         className="text-[12px] font-bold uppercase tracking-[0.1em] underline decoration-dotted underline-offset-4 active:opacity-70"

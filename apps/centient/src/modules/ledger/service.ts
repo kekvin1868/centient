@@ -47,7 +47,9 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
             catalog.invalidate();
             c = await catalog.load();
           }
-          resolved.push({ iouAccountId, share: p.share });
+          if (p.paid && !iouAccountId)
+            throw new DomainError('PAID_NEEDS_NAME', 'Name the person who paid');
+          resolved.push({ iouAccountId, share: p.share, paid: p.paid });
         }
         const ids = resolved.flatMap(p => (p.iouAccountId ? [p.iouAccountId] : []));
         if (new Set(ids).size !== ids.length)
@@ -202,6 +204,26 @@ function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] {
           toEnvelope: c.defaultEnvelope(iou.row),
         });
       };
+      // A person handing money over now: out of their tab, into one of my accounts.
+      const paidBack = (
+        iouId: string,
+        paid: { amount: number; accountId: string },
+        note: string,
+      ) => {
+        const to = c.account(paid.accountId);
+        if (to.row.kind === 'IOU')
+          throw new DomainError('INVALID_PAYMENT', 'Pick one of your own accounts');
+        return transfer({
+          occurredAt,
+          from: c.account(iouId),
+          to,
+          amount: paid.amount,
+          merchant: cmd.merchant,
+          note,
+          fromEnvelope: c.defaultEnvelope(c.account(iouId).row),
+          toEnvelope: c.defaultEnvelope(to.row),
+        });
+      };
       const tail = cmd.note ? ` · ${cmd.note}` : '';
       if (!ps) {
         const { mine, others } = splitShares(cmd.amount, cmd.split.people);
@@ -211,6 +233,9 @@ function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] {
           owed(cmd.split.iouAccountId!, others, note),
         ];
       }
+      for (const p of ps)
+        if (p.paid && p.paid.amount > p.share)
+          throw new DomainError('INVALID_PAYMENT', 'Nobody can hand over more than their share');
       const mine = cmd.amount - ps.reduce((s, p) => s + p.share, 0);
       if (mine <= 0) throw new DomainError('INVALID_SHARE', 'Your share must be more than zero');
       const named = ps.filter(p => p.iouAccountId);
@@ -220,7 +245,10 @@ function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] {
       const note = `Split with ${[...names, ...(unnamed ? [`${unnamed} more`] : [])].join(', ')}${tail}`;
       return [
         expense({ ...base, amount: mine, note }),
-        ...named.filter(p => p.share > 0).map(p => owed(p.iouAccountId!, p.share, note)),
+        ...named.flatMap(p => [
+          ...(p.share > 0 ? [owed(p.iouAccountId!, p.share, note)] : []),
+          ...(p.paid ? [paidBack(p.iouAccountId!, p.paid, note)] : []),
+        ]),
         ...(lump > 0 ? [owed(cmd.split.iouAccountId!, lump, note)] : []),
       ];
     }
