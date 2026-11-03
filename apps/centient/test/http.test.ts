@@ -106,6 +106,18 @@ describe('http', () => {
     expect(await call('GET', `/api/envelopes/${goal.id}/activity?cursor=oops`)).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
   });
 
+  it('exports CSV for a period and currency, and checks the options (T7.8)', async () => {
+    expect((await app.request('https://example.com/api/export.csv?currency=IDR', {}, env)).status).toBe(401);
+    const res = await app.request('http://localhost/api/export.csv?from=2026-11-01&to=2026-12-01&currency=IDR', {}, env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('text/csv; charset=utf-8');
+    expect(res.headers.get('Content-Disposition')).toMatch(/^attachment;/);
+    expect((await res.text()).split('\n')[0]).toBe('date,type,account,amount,currency,envelope,category,merchant,note');
+    for (const q of ['currency=XXX', 'from=2026-02-31', 'from=1/11/2026', 'from=2026-11-10&to=2026-11-10', 'from=2026-12-01&to=2026-11-01']) {
+      expect(await call('GET', `/api/export.csv?${q}`)).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    }
+  });
+
   it('deletes an account, downloads a backup and resets', async () => {
     const { body: acc } = await call('POST', '/api/accounts', { name: 'Jago', kind: 'BANK', openingBalance: 5_000 });
     expect(await call('PATCH', `/api/accounts/${acc.id}`, { kind: 'EWALLET', due_day: 5 })).toMatchObject({ status: 200 });
