@@ -31,7 +31,9 @@ const pockets = () => page.getByRole('region', { name: 'Pockets in Main Account'
 
 /** Lifts an account's card on Money so its pockets show. */
 async function pick(name: string) {
-  const card = page.getByRole('group', { name: 'Accounts' }).getByRole('button', { name: new RegExp(`^${name}`) });
+  const card = page
+    .getByRole('group', { name: 'Accounts' })
+    .getByRole('button', { name: new RegExp(`^${name}`) });
   if ((await card.getAttribute('aria-pressed')) === 'true') return;
   await card.focus();
   await card.press('Enter');
@@ -40,23 +42,46 @@ async function pick(name: string) {
 
 /** Opens a pocket's actions from its card on Money, then one of them (by keyboard: closing sheets hand focus back). */
 async function action(pocket: string, name: string) {
-  await pockets().getByRole('button', { name: new RegExp(`^${pocket},`) }).focus();
+  await pockets()
+    .getByRole('button', { name: new RegExp(`^${pocket},`) })
+    .focus();
   await page.keyboard.press('Enter');
-  await page.getByRole('dialog', { name: new RegExp(`^${pocket} ·`) }).getByRole('button', { name }).focus();
+  await page
+    .getByRole('dialog', { name: new RegExp(`^${pocket} ·`) })
+    .getByRole('button', { name })
+    .focus();
   await page.keyboard.press('Enter');
 }
 
 test('T6.19 Activity on a goal: progress, the per-cycle line and four movements', async () => {
-  const cat = await (await page.request.get('/api/catalog')).json() as { accounts: { id: string; name: string; default_envelope_id: string }[] };
+  const cat = (await (await page.request.get('/api/catalog')).json()) as {
+    accounts: { id: string; name: string; default_envelope_id: string }[];
+  };
   const main = cat.accounts.find(a => a.name === 'Main Account')!;
   await post(`/accounts/${main.id}/balance`, { actual: 20_000_000 });
-  const goal = await post('/envelopes', { accountId: main.id, name: 'Holiday', kind: 'GOAL', targetAmount: 10_000_000, targetDate });
-  const move = (from: string, to: string, amount: number, date: string) => ({ type: 'ALLOCATE', fromEnvelopeId: from, toEnvelopeId: to, amount, date });
+  const goal = await post('/envelopes', {
+    accountId: main.id,
+    name: 'Holiday',
+    kind: 'GOAL',
+    targetAmount: 10_000_000,
+    targetDate,
+  });
+  const move = (from: string, to: string, amount: number, date: string) => ({
+    type: 'ALLOCATE',
+    fromEnvelopeId: from,
+    toEnvelopeId: to,
+    amount,
+    date,
+  });
   const pot = main.default_envelope_id;
-  await post('/transactions', { commands: [
-    move(pot, goal.id, 500_000, firstOf(2)), move(goal.id, pot, 500_000, firstOf(1)),
-    move(pot, goal.id, 2_000_000, firstOf(0) < today ? firstOf(0) : today), move(pot, goal.id, 1_000_000, today),
-  ] });
+  await post('/transactions', {
+    commands: [
+      move(pot, goal.id, 500_000, firstOf(2)),
+      move(goal.id, pot, 500_000, firstOf(1)),
+      move(pot, goal.id, 2_000_000, firstOf(0) < today ? firstOf(0) : today),
+      move(pot, goal.id, 1_000_000, today),
+    ],
+  });
   await page.goto('/');
   await tab('Money').tap();
   await pick('Main Account');
@@ -91,10 +116,23 @@ test('T6.20 money added shows as a new top line when Activity opens again', asyn
 });
 
 test('T6.21 a goal with no date has no per-cycle line; its list still shows', async () => {
-  const cat = await (await page.request.get('/api/catalog')).json() as { accounts: { id: string; name: string; default_envelope_id: string }[] };
+  const cat = (await (await page.request.get('/api/catalog')).json()) as {
+    accounts: { id: string; name: string; default_envelope_id: string }[];
+  };
   const main = cat.accounts.find(a => a.name === 'Main Account')!;
-  const laptop = await post('/envelopes', { accountId: main.id, name: 'Laptop', kind: 'GOAL', targetAmount: 5_000_000 });
-  await post('/transactions', { type: 'ALLOCATE', fromEnvelopeId: main.default_envelope_id, toEnvelopeId: laptop.id, amount: 1_000_000, date: today });
+  const laptop = await post('/envelopes', {
+    accountId: main.id,
+    name: 'Laptop',
+    kind: 'GOAL',
+    targetAmount: 5_000_000,
+  });
+  await post('/transactions', {
+    type: 'ALLOCATE',
+    fromEnvelopeId: main.default_envelope_id,
+    toEnvelopeId: laptop.id,
+    amount: 1_000_000,
+    date: today,
+  });
   await page.reload();
   await tab('Money').tap();
   await pick('Main Account');
@@ -107,12 +145,20 @@ test('T6.21 a goal with no date has no per-cycle line; its list still shows', as
 
 test('a pocket that is not a goal has no Activity', async () => {
   await page.keyboard.press('Escape');
-  const cat = await (await page.request.get('/api/catalog')).json() as { accounts: { id: string; name: string }[] };
-  await post('/envelopes', { accountId: cat.accounts.find(a => a.name === 'Main Account')!.id, name: 'Rent', kind: 'SPENDING' });
+  const cat = (await (await page.request.get('/api/catalog')).json()) as {
+    accounts: { id: string; name: string }[];
+  };
+  await post('/envelopes', {
+    accountId: cat.accounts.find(a => a.name === 'Main Account')!.id,
+    name: 'Rent',
+    kind: 'SPENDING',
+  });
   await page.reload();
   await tab('Money').tap();
   await pick('Main Account');
-  await pockets().getByRole('button', { name: /^Rent,/ }).focus();
+  await pockets()
+    .getByRole('button', { name: /^Rent,/ })
+    .focus();
   await page.keyboard.press('Enter');
   const actions = page.getByRole('dialog', { name: /^Rent ·/ });
   await expect(actions.getByRole('button', { name: 'Edit' })).toBeVisible();

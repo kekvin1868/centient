@@ -16,10 +16,16 @@ const GAP = 36;
 /** Where each section goes: in order; one that doesn't fit what's left starts the next page; one taller than a page shrinks to fit. */
 export function paginate(heights: number[], first: number, full: number, gap: number) {
   const out: { page: number; y: number; h: number }[] = [];
-  let page = 0, cap = first, y = 0;
+  let page = 0,
+    cap = first,
+    y = 0;
   for (const h of heights) {
     let top = y ? y + gap : 0;
-    if (y && top + h > cap) { page++; cap = full; top = 0; }
+    if (y && top + h > cap) {
+      page++;
+      cap = full;
+      top = 0;
+    }
     const fit = Math.min(h, cap - top);
     out.push({ page, y: top, h: fit });
     y = top + fit;
@@ -29,26 +35,42 @@ export function paginate(heights: number[], first: number, full: number, gap: nu
 
 const dataUrl = async (url: string) => {
   const blob = await (await fetch(url)).blob();
-  return new Promise<string>((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = fail; r.readAsDataURL(blob); });
+  return new Promise<string>((ok, fail) => {
+    const r = new FileReader();
+    r.onload = () => ok(String(r.result));
+    r.onerror = fail;
+    r.readAsDataURL(blob);
+  });
 };
 
 /** The two faces the screen uses, inlined once: "Centient Digits" is added from code, so html-to-image would not find it. */
 let fonts: Promise<string> | null = null;
-const fontCss = () => (fonts ??= loadFonts().catch(e => { fonts = null; throw e; }));
+const fontCss = () =>
+  (fonts ??= loadFonts().catch(e => {
+    fonts = null;
+    throw e;
+  }));
 async function loadFonts() {
   const [dot, digits] = await Promise.all([dataUrl(dotUrl), dataUrl(digitsUrl)]);
-  return `@font-face{font-family:"DotGothic16";src:url(${dot}) format("woff2");font-weight:400}`
-    + `@font-face{font-family:"Centient Digits";src:url(${digits}) format("woff2");font-weight:100 900;unicode-range:U+0030-0039,U+002B-002E,U+0025,U+2212}`;
+  return (
+    `@font-face{font-family:"DotGothic16";src:url(${dot}) format("woff2");font-weight:400}` +
+    `@font-face{font-family:"Centient Digits";src:url(${digits}) format("woff2");font-weight:100 900;unicode-range:U+0030-0039,U+002B-002E,U+0025,U+2212}`
+  );
 }
 
 const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 
-export async function makeReport(root: HTMLElement, o: { title: string; made: string; name: string }): Promise<File> {
+export async function makeReport(
+  root: HTMLElement,
+  o: { title: string; made: string; name: string },
+): Promise<File> {
   const [{ toCanvas }, fontEmbedCSS] = await Promise.all([import('html-to-image'), fontCss()]);
   const html = document.documentElement;
   const dark = html.classList.contains('dark');
   // Colours fade between the themes; with transitions off the light ones apply at once.
-  const still = Object.assign(document.createElement('style'), { textContent: '*,*::before,*::after{transition:none!important;animation:none!important}' });
+  const still = Object.assign(document.createElement('style'), {
+    textContent: '*,*::before,*::after{transition:none!important;animation:none!important}',
+  });
   document.head.appendChild(still);
   html.classList.remove('dark');
   let shots: HTMLCanvasElement[];
@@ -59,10 +81,14 @@ export async function makeReport(root: HTMLElement, o: { title: string; made: st
     const width = PAGE.w - 2 * MARGIN;
     shots = [];
     for (const node of root.querySelectorAll<HTMLElement>('[data-report]')) {
-      shots.push(await toCanvas(node, {
-        pixelRatio: width / node.offsetWidth, backgroundColor: paper, fontEmbedCSS,
-        filter: n => !(n instanceof HTMLElement && n.dataset.noprint !== undefined), // the `?` buttons
-      }));
+      shots.push(
+        await toCanvas(node, {
+          pixelRatio: width / node.offsetWidth,
+          backgroundColor: paper,
+          fontEmbedCSS,
+          filter: n => !(n instanceof HTMLElement && n.dataset.noprint !== undefined), // the `?` buttons
+        }),
+      );
     }
   } finally {
     if (dark) html.classList.add('dark');
@@ -70,7 +96,12 @@ export async function makeReport(root: HTMLElement, o: { title: string; made: st
   }
 
   const full = PAGE.h - 2 * MARGIN - FOOTER;
-  const places = paginate(shots.map(s => s.height), full - TITLE, full, GAP);
+  const places = paginate(
+    shots.map(s => s.height),
+    full - TITLE,
+    full,
+    GAP,
+  );
   const count = (places.at(-1)?.page ?? 0) + 1;
   await document.fonts.load('40px DotGothic16');
   const pages = [];
@@ -81,7 +112,10 @@ export async function makeReport(root: HTMLElement, o: { title: string; made: st
     g.fillRect(0, 0, PAGE.w, PAGE.h);
     g.fillStyle = ink;
     g.textBaseline = 'alphabetic';
-    if (p === 0) { g.font = '44px "DotGothic16"'; g.fillText(o.title, MARGIN, MARGIN + 48); }
+    if (p === 0) {
+      g.font = '44px "DotGothic16"';
+      g.fillText(o.title, MARGIN, MARGIN + 48);
+    }
     const top = MARGIN + (p === 0 ? TITLE : 0);
     places.forEach((at, i) => {
       if (at.page !== p) return;
@@ -91,9 +125,15 @@ export async function makeReport(root: HTMLElement, o: { title: string; made: st
     });
     g.font = '22px "DotGothic16"';
     g.globalAlpha = 0.7;
-    g.fillText(`Centient · made ${o.made} · page ${p + 1} of ${count}`, MARGIN, PAGE.h - MARGIN + 10);
+    g.fillText(
+      `Centient · made ${o.made} · page ${p + 1} of ${count}`,
+      MARGIN,
+      PAGE.h - MARGIN + 10,
+    );
     g.globalAlpha = 1;
-    const blob = await new Promise<Blob>((ok, fail) => c.toBlob(b => (b ? ok(b) : fail(new Error('Could not draw the report'))), 'image/jpeg', 0.88));
+    const blob = await new Promise<Blob>((ok, fail) =>
+      c.toBlob(b => (b ? ok(b) : fail(new Error('Could not draw the report'))), 'image/jpeg', 0.88),
+    );
     pages.push({ jpeg: new Uint8Array(await blob.arrayBuffer()), width: PAGE.w, height: PAGE.h });
   }
   return new File([jpegPdf(pages)], o.name, { type: 'application/pdf' });

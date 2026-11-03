@@ -35,22 +35,58 @@ export function Settings() {
   return (
     <Page title="Settings">
       <Group label="Accounts">
-        {active(cat.accounts).map(a => <Row key={a.id} title={a.name} sub={`${ACCOUNT_KINDS[a.kind]}${a.currency_code !== 'IDR' ? ` · ${a.currency_code}` : ''}`} chevron onClick={() => setAccount(a)} />)}
-        <Row title={<span className="text-primary">Add account</span>} onClick={() => setAdd('account')} />
+        {active(cat.accounts).map(a => (
+          <Row
+            key={a.id}
+            title={a.name}
+            sub={`${ACCOUNT_KINDS[a.kind]}${a.currency_code !== 'IDR' ? ` · ${a.currency_code}` : ''}`}
+            chevron
+            onClick={() => setAccount(a)}
+          />
+        ))}
+        <Row
+          title={<span className="text-primary">Add account</span>}
+          onClick={() => setAdd('account')}
+        />
       </Group>
 
-      <Group label="Pockets" foot="Pockets live inside an account and set some of its money aside. New money lands in the account's balance; move it into pockets, or to another account, on the Money tab.">
-        {active(cat.envelopes).filter(e => !cat.accounts.some(a => a.default_envelope_id === e.id)).map(e => (
-          <Row key={e.id} title={e.name} sub={`${nameOf(cat.accounts, e.account_id)} · ${POCKET_KINDS[e.kind]}`} chevron onClick={() => setPocket(e)} />
-        ))}
-        <Row title={<span className="text-primary">Add pocket</span>} onClick={() => setAdd('pocket')} />
+      <Group
+        label="Pockets"
+        foot="Pockets live inside an account and set some of its money aside. New money lands in the account's balance; move it into pockets, or to another account, on the Money tab."
+      >
+        {active(cat.envelopes)
+          .filter(e => !cat.accounts.some(a => a.default_envelope_id === e.id))
+          .map(e => (
+            <Row
+              key={e.id}
+              title={e.name}
+              sub={`${nameOf(cat.accounts, e.account_id)} · ${POCKET_KINDS[e.kind]}`}
+              chevron
+              onClick={() => setPocket(e)}
+            />
+          ))}
+        <Row
+          title={<span className="text-primary">Add pocket</span>}
+          onClick={() => setAdd('pocket')}
+        />
       </Group>
 
       <Group label="Categories">
-        {active(cat.categories).filter(c => !['Balance adjustment', 'Opening balance'].includes(c.name)).map(c => (
-          <Row key={c.id} title={`${categoryEmoji(c.name, c.kind)} ${c.name}`} sub={c.kind === 'EXPENSE' ? 'Spending' : 'Income'} chevron onClick={() => setCategory(c)} />
-        ))}
-        <Row title={<span className="text-primary">Add category</span>} onClick={() => setAdd('category')} />
+        {active(cat.categories)
+          .filter(c => !['Balance adjustment', 'Opening balance'].includes(c.name))
+          .map(c => (
+            <Row
+              key={c.id}
+              title={`${categoryEmoji(c.name, c.kind)} ${c.name}`}
+              sub={c.kind === 'EXPENSE' ? 'Spending' : 'Income'}
+              chevron
+              onClick={() => setCategory(c)}
+            />
+          ))}
+        <Row
+          title={<span className="text-primary">Add category</span>}
+          onClick={() => setAdd('category')}
+        />
       </Group>
 
       <HiddenItems />
@@ -58,22 +94,58 @@ export function Settings() {
       <ForecastStart />
 
       <Group label="Your data">
-        <Row title="Download all as spreadsheet (CSV)" chevron onClick={() => location.assign('/api/export.csv')} />
-        <Row title="Download a backup" sub="Everything, as one file you can keep" chevron onClick={() => attempt(downloadBackup)} />
+        <Row
+          title="Download all as spreadsheet (CSV)"
+          chevron
+          onClick={() => location.assign('/api/export.csv')}
+        />
+        <Row
+          title="Download a backup"
+          sub="Everything, as one file you can keep"
+          chevron
+          onClick={() => attempt(downloadBackup)}
+        />
       </Group>
 
       <Group>
-        <Row title={<span className="k-color-brand-red font-semibold text-primary">Reset Centient</span>} onClick={() => setReset(true)} />
+        <Row
+          title={
+            <span className="k-color-brand-red font-semibold text-primary">Reset Centient</span>
+          }
+          onClick={() => setReset(true)}
+        />
       </Group>
 
       {/* Sheets are keyed by what they show, so each opening starts from fresh state set at mount. */}
       <ResetSheet open={reset} onClose={() => setReset(false)} />
-      <EditAccountSheet key={`account:${account?.id ?? 'none'}`} account={account} onClose={() => setAccount(null)} />
-      <EditPocketSheet key={`pocket:${pocket?.id ?? 'none'}`} pocket={pocket} onClose={() => setPocket(null)} />
-      <EditCategorySheet key={`category:${category?.id ?? 'none'}`} category={category} onClose={() => setCategory(null)} />
-      <Sheet open={add === 'account'} onClose={close} title="Add account"><AccountForm onDone={close} /></Sheet>
-      <AddPocketSheet key={`add-pocket:${add === 'pocket'}`} open={add === 'pocket'} onClose={close} />
-      <AddCategorySheet key={`add-category:${add === 'category'}`} open={add === 'category'} onClose={close} />
+      <EditAccountSheet
+        key={`account:${account?.id ?? 'none'}`}
+        account={account}
+        onClose={() => setAccount(null)}
+      />
+      <EditPocketSheet
+        key={`pocket:${pocket?.id ?? 'none'}`}
+        pocket={pocket}
+        onClose={() => setPocket(null)}
+      />
+      <EditCategorySheet
+        key={`category:${category?.id ?? 'none'}`}
+        category={category}
+        onClose={() => setCategory(null)}
+      />
+      <Sheet open={add === 'account'} onClose={close} title="Add account">
+        <AccountForm onDone={close} />
+      </Sheet>
+      <AddPocketSheet
+        key={`add-pocket:${add === 'pocket'}`}
+        open={add === 'pocket'}
+        onClose={close}
+      />
+      <AddCategorySheet
+        key={`add-category:${add === 'category'}`}
+        open={add === 'category'}
+        onClose={close}
+      />
     </Page>
   );
 }

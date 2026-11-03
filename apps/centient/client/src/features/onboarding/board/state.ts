@@ -3,7 +3,11 @@
 export type Point = [number, number];
 export type Link = { id: string; from: string; to: string };
 export type Stroke = { id: string; pts: Point[] };
-export type Board = { pos: Record<string, { x: number; y: number }>; links: Link[]; strokes: Stroke[] };
+export type Board = {
+  pos: Record<string, { x: number; y: number }>;
+  links: Link[];
+  strokes: Stroke[];
+};
 
 export const emptyBoard = (): Board => ({ pos: {}, links: [], strokes: [] });
 
@@ -11,7 +15,8 @@ let seq = 0;
 export const markId = (p: 'l' | 's') => `${p}${++seq}`;
 
 export const FRAME_W = 220;
-const COL_GAP = 40, ROW_GAP = 60;
+const COL_GAP = 40,
+  ROW_GAP = 60;
 /** A frame's height before it is measured: header plus one row per pocket. */
 export const frameHeight = (pockets: number) => 74 + pockets * 46;
 
@@ -34,8 +39,13 @@ export function place(board: Board, frames: { key: string; pockets: number }[]):
 }
 
 export const addLink = (b: Board, from: string, to: string): Board =>
-  from === to || b.links.some(l => l.from === from && l.to === to) ? b : { ...b, links: [...b.links, { id: markId('l'), from, to }] };
+  from === to || b.links.some(l => l.from === from && l.to === to)
+    ? b
+    : { ...b, links: [...b.links, { id: markId('l'), from, to }] };
 
 /** Removes links and strokes by id. */
-export const erase = (b: Board, ids: Set<string>): Board =>
-  ({ ...b, links: b.links.filter(l => !ids.has(l.id)), strokes: b.strokes.filter(s => !ids.has(s.id)) });
+export const erase = (b: Board, ids: Set<string>): Board => ({
+  ...b,
+  links: b.links.filter(l => !ids.has(l.id)),
+  strokes: b.strokes.filter(s => !ids.has(s.id)),
+});

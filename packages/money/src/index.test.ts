@@ -3,8 +3,14 @@ import { CURRENCIES, DECIMALS, formatMoney, parseAmount, parseNumber, toMinor } 
 
 describe('parseNumber', () => {
   it.each([
-    ['52.500', 52500], ['25,000', 25000], ['1.500.000', 1500000], ['52.500,00', 52500],
-    ['1,5', 1.5], ['1.5', 1.5], ['1234', 1234], ['100', 100],
+    ['52.500', 52500],
+    ['25,000', 25000],
+    ['1.500.000', 1500000],
+    ['52.500,00', 52500],
+    ['1,5', 1.5],
+    ['1.5', 1.5],
+    ['1234', 1234],
+    ['100', 100],
   ])('%s -> %s', (s, n) => expect(parseNumber(s)).toBe(n));
 
   it('rejects malformed numbers', () => expect(parseNumber('1.2.3')).toBeNull());
@@ -12,10 +18,21 @@ describe('parseNumber', () => {
 
 describe('parseAmount', () => {
   it.each([
-    ['25rb', 25000], ['25Rb', 25000], ['25RB', 25000], ['25k', 25000], ['25K', 25000],
-    ['25ribu', 25000], ['1jt', 1000000], ['1,5jt', 1500000], ['1.5juta', 1500000],
-    ['Rp52.500', 52500], ['rp. 52.500', 52500], ['Rp. 25,000', 25000], ['IDR 15000', 15000],
-    ['2000', 2000], ['Rp100', 100],
+    ['25rb', 25000],
+    ['25Rb', 25000],
+    ['25RB', 25000],
+    ['25k', 25000],
+    ['25K', 25000],
+    ['25ribu', 25000],
+    ['1jt', 1000000],
+    ['1,5jt', 1500000],
+    ['1.5juta', 1500000],
+    ['Rp52.500', 52500],
+    ['rp. 52.500', 52500],
+    ['Rp. 25,000', 25000],
+    ['IDR 15000', 15000],
+    ['2000', 2000],
+    ['Rp100', 100],
   ])('%s -> exact %s', (t, v) => expect(parseAmount(t)).toEqual({ kind: 'exact', value: v }));
 
   it('infers a bare small number', () =>
@@ -26,9 +43,16 @@ describe('parseAmount', () => {
   it('ignores words', () => expect(parseAmount('kopi')).toBeNull());
 
   it.each([
-    ['20usd', 2000, 'USD'], ['$20', 2000, 'USD'], ['us$20.5', 2050, 'USD'], ['usd 1,500', 150000, 'USD'],
-    ['usdt50', 50_000_000, 'USDT'], ['0.001btc', 100_000, 'BTC'], ['btc 0.00012', 12_000, 'BTC'],
-  ])('%s -> %s minor units of %s', (t, v, currency) => expect(parseAmount(t)).toEqual({ kind: 'exact', value: v, currency }));
+    ['20usd', 2000, 'USD'],
+    ['$20', 2000, 'USD'],
+    ['us$20.5', 2050, 'USD'],
+    ['usd 1,500', 150000, 'USD'],
+    ['usdt50', 50_000_000, 'USDT'],
+    ['0.001btc', 100_000, 'BTC'],
+    ['btc 0.00012', 12_000, 'BTC'],
+  ])('%s -> %s minor units of %s', (t, v, currency) =>
+    expect(parseAmount(t)).toEqual({ kind: 'exact', value: v, currency }),
+  );
 
   it('treats rupiah words like before and rejects mixed currencies', () => {
     expect(parseAmount('25rb')).toEqual({ kind: 'exact', value: 25000 });
@@ -58,7 +82,9 @@ describe('currency list', () => {
   });
 
   it('keeps ISO decimals, rupiah whole and the old four unchanged', () =>
-    expect(['JPY', 'KRW', 'IDR', 'USD', 'EUR', 'KWD', 'USDT', 'BTC'].map(c => DECIMALS[c])).toEqual([0, 0, 0, 2, 2, 3, 6, 8]));
+    expect(['JPY', 'KRW', 'IDR', 'USD', 'EUR', 'KWD', 'USDT', 'BTC'].map(c => DECIMALS[c])).toEqual(
+      [0, 0, 0, 2, 2, 3, 6, 8],
+    ));
 
   it('converts and prints any listed currency', () => {
     expect(toMinor(1500, 'JPY')).toBe(1500);

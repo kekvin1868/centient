@@ -4,9 +4,22 @@ import type { Command } from '../../../src/lib/schemas';
 import { catalog, nameOf, type Catalog } from './state';
 
 const CATEGORY_EMOJI: Record<string, string> = {
-  'Food & Drink': '🍜', Transport: '🚗', 'Home & Bills': '🏠', Shopping: '🛍️', Health: '💊', Fun: '🎬',
-  Education: '📚', 'Family & Giving': '💌', Fees: '🧾', Other: '📦', Salary: '💼', 'Angpao & THR': '🧧', 'Interest & cashback': '💸', 'Opening balance': '🏁',
-  'Balance adjustment': '⚖️', 'Other income': '💰',
+  'Food & Drink': '🍜',
+  Transport: '🚗',
+  'Home & Bills': '🏠',
+  Shopping: '🛍️',
+  Health: '💊',
+  Fun: '🎬',
+  Education: '📚',
+  'Family & Giving': '💌',
+  Fees: '🧾',
+  Other: '📦',
+  Salary: '💼',
+  'Angpao & THR': '🧧',
+  'Interest & cashback': '💸',
+  'Opening balance': '🏁',
+  'Balance adjustment': '⚖️',
+  'Other income': '💰',
 };
 
 export function categoryEmoji(name: string | undefined, type: Command['type'] = 'EXPENSE'): string {
@@ -24,7 +37,14 @@ export function pocketLabel(id: string) {
 
 export const titleCase = (s: string) => s.replace(/\b\p{L}/gu, c => c.toUpperCase());
 
-type EntryRow = { emoji: string; title: string; sub: string; amount: number; currency: string; tone: 'out' | 'in' | 'neutral' };
+type EntryRow = {
+  emoji: string;
+  title: string;
+  sub: string;
+  amount: number;
+  currency: string;
+  tone: 'out' | 'in' | 'neutral';
+};
 
 /** How an entry reads in a list: from its saved command, or from its first transaction for system entries. */
 export function entryRow(e: EntryView & { command: Command | null }, cat: Catalog): EntryRow {
@@ -33,8 +53,10 @@ export function entryRow(e: EntryView & { command: Command | null }, cat: Catalo
 }
 
 function baseRow(e: EntryView & { command: Command | null }, cat: Catalog): EntryRow {
-  const name = (rows: { id: string; name: string }[], id?: string | null) => rows.find(r => r.id === id)?.name ?? '';
-  const accCur = (id?: string | null) => cat.accounts.find(a => a.id === id)?.currency_code ?? 'IDR';
+  const name = (rows: { id: string; name: string }[], id?: string | null) =>
+    rows.find(r => r.id === id)?.name ?? '';
+  const accCur = (id?: string | null) =>
+    cat.accounts.find(a => a.id === id)?.currency_code ?? 'IDR';
   const c = e.command;
   if (e.kind !== 'USER' || !c) {
     const t = e.transactions[0];
@@ -44,8 +66,15 @@ function baseRow(e: EntryView & { command: Command | null }, cat: Catalog): Entr
     return {
       emoji: opening ? '🏁' : '⚖️',
       title: opening ? 'Starting balance' : 'Balance correction',
-      sub: [name(cat.accounts, line?.account_id), !opening && category !== 'Balance adjustment' ? category : ''].filter(Boolean).join(' · '),
-      amount: Math.abs(line?.amount ?? 0), currency: accCur(line?.account_id), tone: (line?.amount ?? 0) < 0 ? 'out' : 'in',
+      sub: [
+        name(cat.accounts, line?.account_id),
+        !opening && category !== 'Balance adjustment' ? category : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      amount: Math.abs(line?.amount ?? 0),
+      currency: accCur(line?.account_id),
+      tone: (line?.amount ?? 0) < 0 ? 'out' : 'in',
     };
   }
   switch (c.type) {
@@ -54,21 +83,35 @@ function baseRow(e: EntryView & { command: Command | null }, cat: Catalog): Entr
       const category = name(cat.categories, c.categoryId);
       const split = c.type === 'EXPENSE' && c.split ? `split with ${c.split.people}` : '';
       return {
-        emoji: categoryEmoji(category, c.type), title: c.merchant ? titleCase(c.merchant) : category || (c.type === 'EXPENSE' ? 'Spent' : 'Received'),
-        sub: [c.merchant ? category : '', name(cat.accounts, c.accountId), split].filter(Boolean).join(' · '),
-        amount: c.amount, currency: accCur(c.accountId), tone: c.type === 'EXPENSE' ? 'out' : 'in',
+        emoji: categoryEmoji(category, c.type),
+        title: c.merchant
+          ? titleCase(c.merchant)
+          : category || (c.type === 'EXPENSE' ? 'Spent' : 'Received'),
+        sub: [c.merchant ? category : '', name(cat.accounts, c.accountId), split]
+          .filter(Boolean)
+          .join(' · '),
+        amount: c.amount,
+        currency: accCur(c.accountId),
+        tone: c.type === 'EXPENSE' ? 'out' : 'in',
       };
     }
     case 'TRANSFER':
       return {
-        emoji: '🔁', title: `${name(cat.accounts, c.fromAccountId)} → ${name(cat.accounts, c.toAccountId)}`,
+        emoji: '🔁',
+        title: `${name(cat.accounts, c.fromAccountId)} → ${name(cat.accounts, c.toAccountId)}`,
         sub: ['Moved', c.fee ? 'admin fee' : '', c.note ?? ''].filter(Boolean).join(' · '),
-        amount: c.amount, currency: accCur(c.fromAccountId), tone: 'neutral',
+        amount: c.amount,
+        currency: accCur(c.fromAccountId),
+        tone: 'neutral',
       };
     case 'ALLOCATE':
       return {
-        emoji: '🫙', title: `${name(cat.envelopes, c.fromEnvelopeId)} → ${name(cat.envelopes, c.toEnvelopeId)}`,
-        sub: 'Moved between pockets', amount: c.amount, currency: cat.envelopes.find(x => x.id === c.fromEnvelopeId)?.currency_code ?? 'IDR', tone: 'neutral',
+        emoji: '🫙',
+        title: `${name(cat.envelopes, c.fromEnvelopeId)} → ${name(cat.envelopes, c.toEnvelopeId)}`,
+        sub: 'Moved between pockets',
+        amount: c.amount,
+        currency: cat.envelopes.find(x => x.id === c.fromEnvelopeId)?.currency_code ?? 'IDR',
+        tone: 'neutral',
       };
   }
 }

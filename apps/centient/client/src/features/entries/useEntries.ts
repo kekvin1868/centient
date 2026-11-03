@@ -1,30 +1,16 @@
-// A page of entries for a filter, with "load more". With a cache key, the last page shown comes back at once.
-import { useState } from 'react';
-import { call, client } from '../../lib/api';
-import { attempt } from '../../lib/run';
-import { type Entry } from './EntryList';
+// A list of entries for a filter, a page at a time (models/entry). The pages are kept with the query cache, so
+// coming back to a list shows it at once while it refreshes.
+import { useInfiniteQuery } from '@tanstack/react-query';
+import { entryQueries, type EntryFilter } from '../../models/entry';
+import type { Entry } from './EntryList';
 
-const recentCache = new Map<string, { items: Entry[]; cursor: string | null }>();
-
-export function useEntries(filter: { account?: string | null; type?: string; from?: string; to?: string }, limit: number, cacheKey?: string) {
-  const cached = cacheKey ? recentCache.get(cacheKey) : undefined;
-  const [items, setItems] = useState<Entry[]>(cached?.items ?? []);
-  const [cursor, setCursor] = useState<string | null>(cached?.cursor ?? null);
-  const [loaded, setLoaded] = useState(Boolean(cached));
-  const load = async (more: boolean) => {
-    type EntryType = 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'ALLOCATE';
-    const query = {
-      limit: String(limit), account: filter.account || undefined, type: (filter.type || undefined) as EntryType | undefined,
-      from: filter.from || undefined, to: filter.to || undefined, cursor: more && cursor ? cursor : undefined,
-    };
-    await attempt(async () => {
-      const page = await call(client.api.entries.$get({ query }));
-      const next = more ? [...items, ...(page.items as Entry[])] : (page.items as Entry[]);
-      setItems(next);
-      setCursor(page.nextCursor);
-      setLoaded(true);
-      if (cacheKey && !more) recentCache.set(cacheKey, { items: next, cursor: page.nextCursor });
-    });
+export function useEntries(filter: EntryFilter, limit: number, enabled = true) {
+  const q = useInfiniteQuery({ ...entryQueries.list(filter, limit), enabled });
+  const items: Entry[] = q.data?.pages.flatMap(p => p.items) ?? [];
+  return {
+    items,
+    more: q.hasNextPage,
+    loaded: q.data !== undefined,
+    loadMore: () => void q.fetchNextPage(),
   };
-  return { items, more: cursor !== null, loaded, load };
 }

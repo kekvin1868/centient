@@ -6,33 +6,77 @@ import { formatMoney } from '../../lib/format';
 
 export type EntryType = Command['type'];
 export type Form = {
-  type: EntryType; amount: number | null; date: string;
-  accountId: string | null; toAccountId: string | null; categoryId: string | null; envelopeId: string | null;
-  fromEnvelopeId: string | null; toEnvelopeId: string | null;
-  merchant: string; note: string; split: number | null; iouAccountId: string | null; fee: number | null;
-  originalAmount: number | null; originalCurrency: string | null;
+  type: EntryType;
+  amount: number | null;
+  date: string;
+  accountId: string | null;
+  toAccountId: string | null;
+  categoryId: string | null;
+  envelopeId: string | null;
+  fromEnvelopeId: string | null;
+  toEnvelopeId: string | null;
+  merchant: string;
+  note: string;
+  split: number | null;
+  iouAccountId: string | null;
+  fee: number | null;
+  originalAmount: number | null;
+  originalCurrency: string | null;
 };
 
 /** One line part from the log box, with the questions it still needs answered. */
 export type LogItem = {
-  key: string; text: string; form: Form; candidates: number[];
-  askAmount: boolean; askCharged: boolean; rawMerchant: string; suggestedMerchant: string;
+  key: string;
+  text: string;
+  form: Form;
+  candidates: number[];
+  askAmount: boolean;
+  askCharged: boolean;
+  rawMerchant: string;
+  suggestedMerchant: string;
 };
 
 export const blankForm = (date: string, type: EntryType = 'EXPENSE'): Form => ({
-  type, amount: null, date, accountId: null, toAccountId: null, categoryId: null, envelopeId: null,
-  fromEnvelopeId: null, toEnvelopeId: null, merchant: '', note: '', split: null, iouAccountId: null, fee: null,
-  originalAmount: null, originalCurrency: null,
+  type,
+  amount: null,
+  date,
+  accountId: null,
+  toAccountId: null,
+  categoryId: null,
+  envelopeId: null,
+  fromEnvelopeId: null,
+  toEnvelopeId: null,
+  merchant: '',
+  note: '',
+  split: null,
+  iouAccountId: null,
+  fee: null,
+  originalAmount: null,
+  originalCurrency: null,
 });
 
 export function fromDraft(d: Draft, key: string, iouAccountId: string | null): LogItem {
   return {
-    key, text: d.text, candidates: d.candidates, rawMerchant: d.rawMerchant, suggestedMerchant: d.merchant,
-    askAmount: d.needsConfirm, askCharged: d.needs === 'CHARGED_AMOUNT',
+    key,
+    text: d.text,
+    candidates: d.candidates,
+    rawMerchant: d.rawMerchant,
+    suggestedMerchant: d.merchant,
+    askAmount: d.needsConfirm,
+    askCharged: d.needs === 'CHARGED_AMOUNT',
     form: {
-      ...blankForm(d.date, d.type), amount: d.amount, accountId: d.accountId, toAccountId: d.toAccountId, categoryId: d.categoryId,
-      merchant: d.merchant, note: d.note, split: d.split, iouAccountId: d.split ? iouAccountId : null, fee: d.fee,
-      originalAmount: d.originalAmount, originalCurrency: d.originalCurrency,
+      ...blankForm(d.date, d.type),
+      amount: d.amount,
+      accountId: d.accountId,
+      toAccountId: d.toAccountId,
+      categoryId: d.categoryId,
+      merchant: d.merchant,
+      note: d.note,
+      split: d.split,
+      iouAccountId: d.split ? iouAccountId : null,
+      fee: d.fee,
+      originalAmount: d.originalAmount,
+      originalCurrency: d.originalCurrency,
     },
   };
 }
@@ -41,10 +85,25 @@ export function fromCommand(c: Command): Form {
   const f = { ...blankForm(c.date, c.type), amount: c.amount, note: c.note ?? '' };
   switch (c.type) {
     case 'EXPENSE':
-      return { ...f, accountId: c.accountId, categoryId: c.categoryId, envelopeId: c.envelopeId ?? null, merchant: c.merchant ?? '',
-        split: c.split?.people ?? null, iouAccountId: c.split?.iouAccountId ?? null, originalAmount: c.originalAmount ?? null, originalCurrency: c.originalCurrency ?? null };
+      return {
+        ...f,
+        accountId: c.accountId,
+        categoryId: c.categoryId,
+        envelopeId: c.envelopeId ?? null,
+        merchant: c.merchant ?? '',
+        split: c.split?.people ?? null,
+        iouAccountId: c.split?.iouAccountId ?? null,
+        originalAmount: c.originalAmount ?? null,
+        originalCurrency: c.originalCurrency ?? null,
+      };
     case 'INCOME':
-      return { ...f, accountId: c.accountId, categoryId: c.categoryId, envelopeId: c.envelopeId ?? null, merchant: c.merchant ?? '' };
+      return {
+        ...f,
+        accountId: c.accountId,
+        categoryId: c.categoryId,
+        envelopeId: c.envelopeId ?? null,
+        merchant: c.merchant ?? '',
+      };
     case 'TRANSFER':
       return { ...f, accountId: c.fromAccountId, toAccountId: c.toAccountId, fee: c.fee ?? null };
     case 'ALLOCATE':
@@ -63,14 +122,25 @@ export function toCommand(f: Form): { command: Command } | { error: string } {
     case 'INCOME': {
       if (!f.accountId) return { error: 'Pick an account' };
       if (!f.categoryId) return { error: 'Pick a category' };
-      const common = { ...base, accountId: f.accountId, categoryId: f.categoryId, envelopeId: f.envelopeId ?? undefined, merchant: opt(f.merchant) };
+      const common = {
+        ...base,
+        accountId: f.accountId,
+        categoryId: f.categoryId,
+        envelopeId: f.envelopeId ?? undefined,
+        merchant: opt(f.merchant),
+      };
       if (f.type === 'INCOME') return { command: { type: 'INCOME', ...common } };
       return {
         command: {
-          type: 'EXPENSE', ...common,
+          type: 'EXPENSE',
+          ...common,
           // No IOU account yet: the server creates "Friends" on the first split.
-          split: f.split && f.split > 1 ? { people: f.split, iouAccountId: f.iouAccountId ?? undefined } : undefined,
-          originalAmount: f.originalAmount ?? undefined, originalCurrency: f.originalCurrency ?? undefined,
+          split:
+            f.split && f.split > 1
+              ? { people: f.split, iouAccountId: f.iouAccountId ?? undefined }
+              : undefined,
+          originalAmount: f.originalAmount ?? undefined,
+          originalCurrency: f.originalCurrency ?? undefined,
         },
       };
     }
@@ -78,11 +148,26 @@ export function toCommand(f: Form): { command: Command } | { error: string } {
       if (!f.accountId) return { error: 'Pick where the money came from' };
       if (!f.toAccountId) return { error: 'Pick where the money went' };
       if (f.accountId === f.toAccountId) return { error: 'Pick two different accounts' };
-      return { command: { type: 'TRANSFER', ...base, fromAccountId: f.accountId, toAccountId: f.toAccountId, fee: f.fee || undefined } };
+      return {
+        command: {
+          type: 'TRANSFER',
+          ...base,
+          fromAccountId: f.accountId,
+          toAccountId: f.toAccountId,
+          fee: f.fee || undefined,
+        },
+      };
     case 'ALLOCATE':
       if (!f.fromEnvelopeId || !f.toEnvelopeId) return { error: 'Pick both pockets' };
       if (f.fromEnvelopeId === f.toEnvelopeId) return { error: 'Pick two different pockets' };
-      return { command: { type: 'ALLOCATE', ...base, fromEnvelopeId: f.fromEnvelopeId, toEnvelopeId: f.toEnvelopeId } };
+      return {
+        command: {
+          type: 'ALLOCATE',
+          ...base,
+          fromEnvelopeId: f.fromEnvelopeId,
+          toEnvelopeId: f.toEnvelopeId,
+        },
+      };
   }
 }
 
@@ -95,10 +180,15 @@ type ChipView =
 export function chipView(i: LogItem): ChipView {
   const f = i.form;
   if (i.askCharged && f.originalAmount !== null) {
-    return { state: 'ask', ask: 'charged', question: `How much rupiah was charged for ${formatMoney(f.originalAmount, f.originalCurrency ?? 'USD')}?` };
+    return {
+      state: 'ask',
+      ask: 'charged',
+      question: `How much rupiah was charged for ${formatMoney(f.originalAmount, f.originalCurrency ?? 'USD')}?`,
+    };
   }
   if (i.askAmount) return { state: 'ask', ask: 'amount', question: 'Which amount did you mean?' };
-  if (f.type !== 'ALLOCATE' && !f.accountId) return { state: 'ask', ask: 'account', question: 'Which account?' };
+  if (f.type !== 'ALLOCATE' && !f.accountId)
+    return { state: 'ask', ask: 'account', question: 'Which account?' };
   const r = toCommand(f);
   return 'error' in r ? { state: 'incomplete', missing: r.error } : { state: 'ready' };
 }

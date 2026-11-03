@@ -2,10 +2,13 @@
 // seeded accounts are kept, dropped, renamed and filled in, with pockets and starting balances. Nothing is saved
 // until CONFIRM; then the draft becomes API calls and Home takes over. Shown while the workspace isn't onboarded.
 import { useEffect, useRef, useState } from 'react';
-import { call, client, patchRow } from '../lib/api';
 import { useHistory } from '../lib/history';
-import { attempt } from '../lib/run';
-import { catalog, me, refresh } from '../lib/state';
+import { catalog, me } from '../lib/state';
+import { accountApi, toAccountKind } from '../models/account';
+import { entryApi } from '../models/entry';
+import { pocketApi, toPocketKind } from '../models/pocket';
+import { persist, queryClient } from '../models/query';
+import { workspaceApi } from '../models/workspace';
 import { save } from '../lib/storage';
 import { emptyBoard, type Board } from '../features/onboarding/board/state';
 import { DateCard } from '../features/onboarding/intro/DateCard';
@@ -21,7 +24,9 @@ type Phase = 'title' | 'date' | 'boot' | 'menu';
 
 export function FirstRun({ onDone }: { onDone: () => void }) {
   const [phase, setPhase] = useState<Phase>('title');
-  const [draft, setDraft, undo] = useHistory<Draft>(() => fromCatalog(catalog.value.accounts, catalog.value.envelopes));
+  const [draft, setDraft, undo] = useHistory<Draft>(() =>
+    fromCatalog(catalog.value.accounts, catalog.value.envelopes),
+  );
   const [board, setBoard, undoBoard] = useHistory<Board>(emptyBoard);
   const [closing, setClosing] = useState(false);
   // Server ids of what this run created (by draft key), and the steps already done, so a retry picks up where it failed.
@@ -37,45 +42,69 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
   }, [phase]);
 
   const accountId = (key: string) => draft.find(a => a.key === key)?.id ?? ids.current.get(key)!;
-  const pocketId = (key: string) => draft.flatMap(a => a.pockets).find(p => p.key === key)?.id ?? ids.current.get(key)!;
-  const mainOf = (key: string) => pocketId(draft.find(a => a.key === key)!.pockets.find(p => p.main)!.key);
+  const pocketId = (key: string) =>
+    draft.flatMap(a => a.pockets).find(p => p.key === key)?.id ?? ids.current.get(key)!;
+  const mainOf = (key: string) =>
+    pocketId(draft.find(a => a.key === key)!.pockets.find(p => p.main)!.key);
 
   const run = async (s: Step) => {
     switch (s.op) {
-      case 'deleteAccount': return call(client.api.accounts[':id'].$delete({ param: { id: s.accountId } }));
-      case 'patchAccount': return patchRow('accounts', s.accountId, s.json);
+      case 'deleteAccount':
+        return accountApi.remove(s.accountId);
+      case 'patchAccount':
+        return accountApi.update(s.accountId, {
+          ...s.json,
+          kind: s.json.kind === undefined ? undefined : toAccountKind(s.json.kind),
+        });
       case 'createAccount': {
-        const a = await call(client.api.accounts.$post({ json: { name: s.name, kind: s.kind as 'CASH' } }));
+        const a = await accountApi.create({ name: s.name, kind: toAccountKind(s.kind) });
         ids.current.set(s.accountKey, a.id);
         const main = draft.find(x => x.key === s.accountKey)!.pockets.find(p => p.main)!;
         ids.current.set(main.key, a.default_envelope_id!);
         return;
       }
-      case 'patchPocket': return patchRow('envelopes', s.pocketId, { name: s.name });
+      case 'patchPocket':
+        return pocketApi.update(s.pocketId, { name: s.name });
       case 'createPocket': {
-        const p = await call(client.api.envelopes.$post({ json: { accountId: accountId(s.accountKey), name: s.name, kind: s.kind as 'SAVINGS' } }));
+        const p = await pocketApi.create({
+          accountId: accountId(s.accountKey),
+          name: s.name,
+          kind: toPocketKind(s.kind),
+        });
         ids.current.set(s.pocketKey, p.id);
         return;
       }
-      case 'setBalance': return call(client.api.accounts[':id'].balance.$post({ param: { id: accountId(s.accountKey) }, json: { actual: s.actual } }));
-      case 'allocate': return call(client.api.transactions.$post({
-        json: { commands: s.moves.map(m => ({ type: 'ALLOCATE' as const, fromEnvelopeId: mainOf(m.accountKey), toEnvelopeId: pocketId(m.pocketKey), amount: m.amount, date: me.value!.today })) },
-      }));
-      case 'finish': return call(client.api.workspace.$patch({ json: { onboarded: true } }));
+      case 'setBalance':
+        return accountApi.checkBalance(accountId(s.accountKey), { actual: s.actual });
+      case 'allocate':
+        return entryApi.record({
+          commands: s.moves.map(m => ({
+            type: 'ALLOCATE' as const,
+            fromEnvelopeId: mainOf(m.accountKey),
+            toEnvelopeId: pocketId(m.pocketKey),
+            amount: m.amount,
+            date: me.value!.today,
+          })),
+        });
+      case 'finish':
+        return workspaceApi.update({ onboarded: true });
     }
   };
 
   const confirm = async () => {
-    const ok = await attempt(async () => {
+    // The steps resume where a failure stopped them. Nothing refreshes until the closing animation has played:
+    // the refreshed workspace is onboarded, which swaps this screen for Home.
+    const ok = await persist(async () => {
       for (const s of toSteps(draft)) {
         if (done.current.has(s.id)) continue;
         await run(s);
         done.current.add(s.id);
       }
-    });
+    }, []);
     if (!ok) return;
     // ponytail: the flow map is kept on this device by server id; nothing reads it yet (a transfers map could).
-    const key = (k: string) => ids.current.get(k) ?? draft.find(a => a.key === k)?.id ?? pocketId(k);
+    const key = (k: string) =>
+      ids.current.get(k) ?? draft.find(a => a.key === k)?.id ?? pocketId(k);
     save('flowMap', {
       pos: Object.fromEntries(Object.entries(board.pos).map(([k, p]) => [key(k), p])),
       links: board.links.map(l => ({ from: key(l.from), to: key(l.to) })),
@@ -83,7 +112,7 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
     });
     setClosing(true);
     await wait(380);
-    await refresh();
+    await queryClient.invalidateQueries();
     onDone();
   };
 
@@ -91,9 +120,22 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
     <NightRoot className={phase === 'title' || phase === 'date' ? 'n-dark' : ''}>
       {phase === 'title' && <TitleScreen onStart={() => setPhase('date')} />}
       {phase === 'date' && <DateCard today={me.value!.today} onDone={() => setPhase('boot')} />}
-      {phase === 'boot' && <div className="tv-boot" aria-hidden="true"><i /></div>}
+      {phase === 'boot' && (
+        <div className="tv-boot" aria-hidden="true">
+          <i />
+        </div>
+      )}
       {phase === 'menu' && (
-        <NightMenu draft={draft} setDraft={setDraft} undo={undo} board={board} setBoard={setBoard} undoBoard={undoBoard} onSave={confirm} closing={closing} />
+        <NightMenu
+          draft={draft}
+          setDraft={setDraft}
+          undo={undo}
+          board={board}
+          setBoard={setBoard}
+          undoBoard={undoBoard}
+          onSave={confirm}
+          closing={closing}
+        />
       )}
     </NightRoot>
   );

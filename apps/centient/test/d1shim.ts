@@ -11,14 +11,24 @@ export function testD1(migrationSql: string): D1Database {
     let args: unknown[] = [];
     const exec = () => {
       const st = db.prepare(sql);
-      if (st.columns().length) return { results: st.all(...(args as never[])), meta: { changes: 0 } };
+      if (st.columns().length)
+        return { results: st.all(...(args as never[])), meta: { changes: 0 } };
       return { results: [], meta: { changes: Number(st.run(...(args as never[])).changes) } };
     };
     const s = {
-      bind(...a: unknown[]) { args = a.map(v => (v === undefined ? null : v)); return s; },
-      async first() { return (db.prepare(sql).get(...(args as never[])) as unknown) ?? null; },
-      async all() { return exec(); },
-      async run() { return exec(); },
+      bind(...a: unknown[]) {
+        args = a.map(v => (v === undefined ? null : v));
+        return s;
+      },
+      async first() {
+        return (db.prepare(sql).get(...(args as never[])) as unknown) ?? null;
+      },
+      async all() {
+        return exec();
+      },
+      async run() {
+        return exec();
+      },
       exec,
     };
     return s;
@@ -28,8 +38,14 @@ export function testD1(migrationSql: string): D1Database {
     // D1 runs a batch as one transaction.
     async batch(stmts: ReturnType<typeof statement>[]) {
       db.exec('BEGIN');
-      try { const out = stmts.map(s => s.exec()); db.exec('COMMIT'); return out; }
-      catch (e) { db.exec('ROLLBACK'); throw e; }
+      try {
+        const out = stmts.map(s => s.exec());
+        db.exec('COMMIT');
+        return out;
+      } catch (e) {
+        db.exec('ROLLBACK');
+        throw e;
+      }
     },
   } as unknown as D1Database;
 }
@@ -37,5 +53,9 @@ export function testD1(migrationSql: string): D1Database {
 /** Every migration in order, as one SQL string. */
 export function migrationsSql(): string {
   const dir = new URL('../migrations/', import.meta.url);
-  return readdirSync(dir).filter(f => f.endsWith('.sql')).sort().map(f => readFileSync(new URL(f, dir), 'utf8')).join('\n');
+  return readdirSync(dir)
+    .filter(f => f.endsWith('.sql'))
+    .sort()
+    .map(f => readFileSync(new URL(f, dir), 'utf8'))
+    .join('\n');
 }

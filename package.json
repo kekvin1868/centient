@@ -10,11 +10,15 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p apps/centient && tsc --noEmit -p apps/centient/client",
     "dev": "npm run dev -w apps/centient",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "perf": "node scripts/perf.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261016.1",
     "@playwright/test": "1.63.0",
+    "prettier": "3.9.10",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5",
     "wrangler": "^4.151.1"

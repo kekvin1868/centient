@@ -1,12 +1,25 @@
 // Set, change or remove a monthly budget for a category, a pocket, or both, in one currency: a pocket's own, or
 // for a category alone the one picked (rupiah unless changed). The switch makes it a temporary budget: a start
 // day and a length, one limit for the whole run. A clash with another temporary one shows in a warning popup.
+// The form's state and rules are models/budget (formFrom, validate, toRequest); this only renders them.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { call, client } from '../../lib/api';
 import { pocketLabel } from '../../lib/labels';
-import { attempt } from '../../lib/run';
-import { active, catalog, me, refresh } from '../../lib/state';
+import { errorText } from '../../lib/run';
+import { active, catalog, me } from '../../lib/state';
+import {
+  formCurrency,
+  formFrom,
+  TEMPORARY_DAYS,
+  toRequest,
+  useRemoveBudget,
+  useSaveBudget,
+  validate,
+  type Budget,
+  type BudgetForm,
+} from '../../models/budget';
+import { addDays } from '../../models/dates';
+import { monthDay } from '../../models/forecast';
 import { AmountField } from '../../ui/AmountField';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { CurrencyPicker } from '../../ui/CurrencyPicker';
@@ -15,82 +28,163 @@ import { Group, Row } from '../../ui/List';
 import { NoticeSheet } from '../../ui/NoticeSheet';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
-import { monthDay, type BudgetStatus } from './forecast';
 
-export type BudgetRow = {
-  id: string; categoryId: string | null; envelopeId: string | null; currency: string; limit: number; spent: number; remaining: number;
-  percent: number; safePerDay: number | null; daysGone: number | null; cycleDays: number; projected: number | null; status: BudgetStatus;
-  startsOn: string | null; endsOn: string | null;
-};
+const DAYS = Array.from({ length: TEMPORARY_DAYS.max - TEMPORARY_DAYS.min + 1 }, (_, i) => {
+  const d = String(i + TEMPORARY_DAYS.min);
+  return { value: d, label: `${d} days` };
+});
 
-const DAYS = Array.from({ length: 89 }, (_, i) => String(i + 2)).map(d => ({ value: d, label: `${d} days` }));
-const addDays = (day: string, n: number) => new Date(Date.parse(day) + n * 864e5).toISOString().slice(0, 10);
-
-export function BudgetSheet({ budget, onClose }: { budget: BudgetRow | 'new' | null; onClose: () => void }) {
+export function BudgetSheet({
+  budget,
+  onClose,
+}: {
+  budget: Budget | 'new' | null;
+  onClose: () => void;
+}) {
   const initial = budget === 'new' ? null : budget;
-  const [categoryId, setCategoryId] = useState<string | null>(initial?.categoryId ?? null);
-  const [envelopeId, setEnvelopeId] = useState<string | null>(initial?.envelopeId ?? null);
-  const [limit, setLimit] = useState<number | null>(initial?.limit ?? null);
-  const [picked, setPicked] = useState(initial?.currency ?? 'IDR');
   const today = me.value?.today ?? new Date().toISOString().slice(0, 10);
-  const [temporary, setTemporary] = useState(Boolean(initial?.startsOn));
-  const [startsOn, setStartsOn] = useState(initial?.startsOn ?? today);
-  const [days, setDays] = useState(initial?.startsOn ? initial.cycleDays : 14);
+  const [form, setForm] = useState<BudgetForm>(() => formFrom(initial, today));
+  const set = (patch: Partial<BudgetForm>) => setForm(f => ({ ...f, ...patch }));
+  // Popups over the sheet: removing asks first; an overlapping temporary budget is explained.
   const [confirm, setConfirm] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const saveBudget = useSaveBudget(e =>
+    e.code === 'BUDGET_OVERLAP' ? setNotice(e.message) : showToast(errorText(e)),
+  );
+  const removeBudget = useRemoveBudget();
   if (!budget) return null;
+
   const cat = catalog.value;
-  const editing = budget !== 'new';
-  const pocketCurrency = cat.envelopes.find(e => e.id === envelopeId)?.currency_code;
-  const currency = editing ? initial!.currency : pocketCurrency ?? picked;
-  const error = !categoryId && !envelopeId ? 'Pick a category or a pocket' : !limit ? 'Enter a limit'
-    : temporary && !editing && !(startsOn >= today) ? 'Start today or later' : null;
-  const save = async () => {
+  const editing = initial !== null;
+  const pocketCurrency = cat.envelopes.find(e => e.id === form.envelopeId)?.currency_code;
+  const currency = formCurrency(form, editing, pocketCurrency);
+  const error = validate(form, { editing, today });
+  const busy = saveBudget.isPending || removeBudget.isPending;
+
+  const save = () => {
     if (error) return;
-    let clash = false;
-    const ok = await attempt(() => call(client.api.budgets.$put({ json: { categoryId, envelopeId, currency, limit: limit!, ...(temporary ? { startsOn, days, id: initial?.id } : {}) } }))
-      .catch((e: Error & { code?: string }) => {
-        if (e.code !== 'BUDGET_OVERLAP') throw e;
-        clash = true;
-        setNotice(e.message);
-      }));
-    if (ok && !clash) { onClose(); showToast('Budget saved'); await refresh(); }
+    saveBudget.mutate(toRequest(form, currency, initial?.id), {
+      onSuccess: () => {
+        onClose();
+        showToast('Budget saved');
+      },
+    });
   };
-  const remove = async () => {
+  const remove = () => {
     setConfirm(false);
-    if (budget === 'new') return;
-    const ok = await attempt(() => call(client.api.budgets[':id'].$delete({ param: { id: budget.id } })));
-    if (ok) { onClose(); showToast('Budget removed'); await refresh(); }
+    if (!initial) return;
+    removeBudget.mutate(initial.id, {
+      onSuccess: () => {
+        onClose();
+        showToast('Budget removed');
+      },
+    });
   };
+
+  const categories = active(cat.categories)
+    .filter(c => c.kind === 'EXPENSE')
+    .map(c => ({ value: c.id, label: c.name }));
+  const pockets = active(cat.envelopes)
+    .filter(
+      e => e.kind === 'SPENDING' && cat.accounts.find(x => x.id === e.account_id)?.kind !== 'IOU',
+    )
+    .map(e => ({ value: e.id, label: pocketLabel(e.id) }));
+
   return (
     <>
-      <Sheet open={!confirm && notice === null} onClose={onClose} title={editing ? 'Budget' : 'Set a budget'}>
-        <Group foot={temporary
-          ? `Ends ${monthDay(addDays(startsOn, days))} at 00:00. Spending in these days still counts toward a monthly budget too.`
-          : 'A new limit counts from this month on; past months keep theirs.'}>
-          <PickerRow label="Category" value={categoryId} placeholder="Any category"
-            options={active(cat.categories).filter(c => c.kind === 'EXPENSE').map(c => ({ value: c.id, label: c.name }))}
-            onChange={v => !editing && setCategoryId(v)} />
-          <PickerRow label="Pocket" value={envelopeId} placeholder="Any pocket"
-            options={active(cat.envelopes).filter(e => e.kind === 'SPENDING' && cat.accounts.find(x => x.id === e.account_id)?.kind !== 'IOU').map(e => ({ value: e.id, label: pocketLabel(e.id) }))}
-            onChange={v => !editing && setEnvelopeId(v)} />
-          {editing || pocketCurrency
-            ? <Row title="Currency" trail={currency} />
-            : <CurrencyPicker value={picked} onChange={setPicked} />}
-          {!editing && <ToggleRow label="Temporary" checked={temporary} onChange={setTemporary} />}
-          {temporary && (editing
-            ? <><Row title="Starts" trail={monthDay(startsOn)} /><Row title="Lasts" trail={`${days} days`} /></>
-            : <><InputRow label="Starts" type="date" value={startsOn} onInput={setStartsOn} />
-              <PickerRow label="Lasts" value={String(days)} options={DAYS} onChange={v => v && setDays(Number(v))} /></>)}
-          <AmountField label={temporary ? `Limit for these ${days} days` : 'Limit per month'} value={limit} currency={currency} onChange={setLimit} />
+      <Sheet
+        open={!confirm && notice === null}
+        onClose={onClose}
+        title={editing ? 'Budget' : 'Set a budget'}
+      >
+        <Group
+          foot={
+            form.temporary
+              ? `Ends ${monthDay(addDays(form.startsOn, form.days))} at 00:00. Spending in these days still counts toward a monthly budget too.`
+              : 'A new limit counts from this month on; past months keep theirs.'
+          }
+        >
+          <PickerRow
+            label="Category"
+            value={form.categoryId}
+            placeholder="Any category"
+            options={categories}
+            onChange={v => !editing && set({ categoryId: v })}
+          />
+          <PickerRow
+            label="Pocket"
+            value={form.envelopeId}
+            placeholder="Any pocket"
+            options={pockets}
+            onChange={v => !editing && set({ envelopeId: v })}
+          />
+          {editing || pocketCurrency ? (
+            <Row title="Currency" trail={currency} />
+          ) : (
+            <CurrencyPicker value={form.currency} onChange={v => set({ currency: v })} />
+          )}
+          {!editing && (
+            <ToggleRow
+              label="Temporary"
+              checked={form.temporary}
+              onChange={v => set({ temporary: v })}
+            />
+          )}
+          {form.temporary &&
+            (editing ? (
+              <>
+                <Row title="Starts" trail={monthDay(form.startsOn)} />
+                <Row title="Lasts" trail={`${form.days} days`} />
+              </>
+            ) : (
+              <>
+                <InputRow
+                  label="Starts"
+                  type="date"
+                  value={form.startsOn}
+                  onInput={v => set({ startsOn: v })}
+                />
+                <PickerRow
+                  label="Lasts"
+                  value={String(form.days)}
+                  options={DAYS}
+                  onChange={v => v && set({ days: Number(v) })}
+                />
+              </>
+            ))}
+          <AmountField
+            label={form.temporary ? `Limit for these ${form.days} days` : 'Limit per month'}
+            value={form.limit}
+            currency={currency}
+            onChange={v => set({ limit: v })}
+          />
         </Group>
         <Block className="flex flex-col gap-2.5">
-          <Button large rounded disabled={Boolean(error)} onClick={save}>{error ?? 'Save'}</Button>
-          {editing && <Button large rounded tonal className="k-color-brand-red" onClick={() => setConfirm(true)}>Remove budget</Button>}
+          <Button large rounded disabled={Boolean(error) || busy} onClick={save}>
+            {error ?? 'Save'}
+          </Button>
+          {editing && (
+            <Button
+              large
+              rounded
+              tonal
+              className="k-color-brand-red"
+              disabled={busy}
+              onClick={() => setConfirm(true)}
+            >
+              Remove budget
+            </Button>
+          )}
         </Block>
       </Sheet>
       <NoticeSheet message={notice} onClose={() => setNotice(null)} />
-      <ConfirmSheet open={confirm} message="Remove this budget? Your entries stay." confirmLabel="Remove" onCancel={() => setConfirm(false)} onConfirm={remove} />
+      <ConfirmSheet
+        open={confirm}
+        message="Remove this budget? Your entries stay."
+        confirmLabel="Remove"
+        onCancel={() => setConfirm(false)}
+        onConfirm={remove}
+      />
     </>
   );
 }

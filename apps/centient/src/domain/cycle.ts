@@ -2,7 +2,8 @@
 // Dates are YYYY-MM-DD strings in Asia/Jakarta.
 
 const monthLength = (y: number, m: number) => new Date(Date.UTC(y, m, 0)).getUTCDate(); // m is 1-12
-const fmt = (y: number, m: number, d: number) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+const fmt = (y: number, m: number, d: number) =>
+  `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
 function startIn(y: number, m: number, startDay: number): string {
   return fmt(y, m, Math.min(startDay, monthLength(y, m)));
@@ -41,7 +42,8 @@ export function toOccurredAt(input: string, now = Date.now()): string {
   return new Date(Date.parse(input) + 7 * 3600e3).toISOString().slice(0, 19) + '+07:00';
 }
 
-export const addDays = (day: string, n: number) => new Date(Date.parse(day) + n * 864e5).toISOString().slice(0, 10);
+export const addDays = (day: string, n: number) =>
+  new Date(Date.parse(day) + n * 864e5).toISOString().slice(0, 10);
 
 /**
  * A cycle's name: the month holding most of its days, with a fixed cut-off so it never jumps between months.
@@ -62,7 +64,11 @@ export type PeriodKind = 'cycle' | 'year';
 export type Span = { from: string; to: string; year: number; month: number | null };
 
 /** The cycle (or the year of cycles named Jan to Dec) holding `day`, and the one before it. */
-export function periodOf(kind: PeriodKind, day: string, startDay: number): { span: Span; before: Span } {
+export function periodOf(
+  kind: PeriodKind,
+  day: string,
+  startDay: number,
+): { span: Span; before: Span } {
   const from = cycleStart(day, startDay);
   if (kind === 'cycle') {
     const prev = cycleStart(addDays(from, -1), startDay);
@@ -74,18 +80,28 @@ export function periodOf(kind: PeriodKind, day: string, startDay: number): { spa
   const { year } = cycleName(from, startDay);
   return {
     span: { from: yearStart(year, startDay), to: yearStart(year + 1, startDay), year, month: null },
-    before: { from: yearStart(year - 1, startDay), to: yearStart(year, startDay), year: year - 1, month: null },
+    before: {
+      from: yearStart(year - 1, startDay),
+      to: yearStart(year, startDay),
+      year: year - 1,
+      month: null,
+    },
   };
 }
 
 /** The cycles inside [from, to), in order: each `{ from, to }` plus its name. */
 export function cyclesIn(from: string, to: string, startDay: number): Span[] {
   const out: Span[] = [];
-  for (let c = cycleStart(from, startDay); c < to; c = nextCycleStart(c, startDay)) out.push({ from: c, to: nextCycleStart(c, startDay), ...cycleName(c, startDay) });
+  for (let c = cycleStart(from, startDay); c < to; c = nextCycleStart(c, startDay))
+    out.push({ from: c, to: nextCycleStart(c, startDay), ...cycleName(c, startDay) });
   return out;
 }
 
 /** A YYYY-MM-DD that is a real calendar day (Feb 31 comes back as Mar 3; month 13 throws). */
 export function realDay(day: string): boolean {
-  try { return addDays(day, 0) === day; } catch { return false; }
+  try {
+    return addDays(day, 0) === day;
+  } catch {
+    return false;
+  }
 }

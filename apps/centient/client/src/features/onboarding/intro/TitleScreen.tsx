@@ -18,15 +18,33 @@ export function TitleScreen({ onStart }: { onStart: () => void }) {
     await leave();
     onStart();
   };
-  useLayerKeys(e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  useLayerKeys(e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      go();
+    }
+  });
   return (
-    <div className={`scene n-dark t-title ${pressed ? 'pressed' : ''} ${leaving ? 'tv-out' : ''}`} onClick={go}>
+    <div
+      className={`scene n-dark t-title ${pressed ? 'pressed' : ''} ${leaving ? 'tv-out' : ''}`}
+      onClick={go}
+    >
       <div className="ld-bg" />
-      <div className="ld-head" aria-hidden="true"><span className="ld-t">LOADING</span><span className="ld-sub">- BOOTING SYSTEM<i className="ld-dots" /></span></div>
+      <div className="ld-head" aria-hidden="true">
+        <span className="ld-t">LOADING</span>
+        <span className="ld-sub">
+          - BOOTING SYSTEM
+          <i className="ld-dots" />
+        </span>
+      </div>
       <div className="t-stage">
-        <div className="t-coin"><Coin3D paused={pressed} /></div>
+        <div className="t-coin">
+          <Coin3D paused={pressed} />
+        </div>
         <Wordmark className="t-word" />
-        <button type="button" className="t-press">CLICK TO START</button>
+        <button type="button" className="t-press">
+          CLICK TO START
+        </button>
       </div>
     </div>
   );

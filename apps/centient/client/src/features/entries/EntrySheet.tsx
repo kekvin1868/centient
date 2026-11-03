@@ -3,29 +3,30 @@
 // request is sent only when the Undo window ends.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { call, client } from '../../lib/api';
 import { fromCommand, toCommand, type Form } from './form';
 import { formatMoney } from '../../lib/format';
 import { entryRow } from '../../lib/labels';
-import { attempt } from '../../lib/run';
-import { catalog, hiddenEntries, refresh } from '../../lib/state';
+import { catalog, hiddenEntries } from '../../lib/state';
 import type { Entry } from './EntryList';
 import { EntryForm } from './EntryForm';
 import { Group, Row } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
+import { entryApi } from '../../models/entry';
+import { persist } from '../../models/query';
 
 export function deleteWithUndo(id: string) {
   const hide = (on: boolean) => {
     const next = new Set(hiddenEntries.value);
-    if (on) next.add(id); else next.delete(id);
+    if (on) next.add(id);
+    else next.delete(id);
     hiddenEntries.value = next;
   };
   hide(true);
   showToast('Deleted', {
     action: { label: 'Undo', run: () => hide(false) },
     onExpire: async () => {
-      if (await attempt(() => call(client.api.entries[':id'].$delete({ param: { id } })))) await refresh();
+      await persist(() => entryApi.remove(id));
       hide(false);
     },
   });
@@ -40,8 +41,11 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
 
   const save = async () => {
     if (!result || 'error' in result) return;
-    const ok = await attempt(() => call(client.api.entries[':id'].$patch({ param: { id: entry.id }, json: result.command })));
-    if (ok) { onClose(); showToast('Saved'); await refresh(); }
+    const ok = await persist(() => entryApi.edit(entry.id, result.command));
+    if (ok) {
+      onClose();
+      showToast('Saved');
+    }
   };
 
   return (
@@ -57,7 +61,9 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
           </Block>
         </>
       ) : (
-        <Group foot={`${entry.kind === 'OPENING' ? 'To change it, use Update balance on the Money tab.' : 'Corrections come from Update balance on the Money tab.'} Swipe the row left to delete it.`}>
+        <Group
+          foot={`${entry.kind === 'OPENING' ? 'To change it, use Update balance on the Money tab.' : 'Corrections come from Update balance on the Money tab.'} Swipe the row left to delete it.`}
+        >
           <Row title={row.sub || row.title} trail={formatMoney(row.amount, row.currency)} />
         </Group>
       )}

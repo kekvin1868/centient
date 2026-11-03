@@ -46,7 +46,17 @@ function soFar(digits: string) {
   return 0;
 }
 
-export function Keypad({ digits, onPress, empty, refused = 0 }: { digits: string; onPress: (k: string) => void; empty: string; refused?: number }) {
+export function Keypad({
+  digits,
+  onPress,
+  empty,
+  refused = 0,
+}: {
+  digits: string;
+  onPress: (k: string) => void;
+  empty: string;
+  refused?: number;
+}) {
   const sum = /\D/.test(digits);
   const v = keypadValue(digits);
   // A half-typed sum shows what it comes to so far (never "?": ??? means "not set" here); the sum line turns pink.
@@ -54,12 +64,37 @@ export function Keypad({ digits, onPress, empty, refused = 0 }: { digits: string
   const size = !shown ? 56 : shown.length > 9 ? 34 : shown.length > 6 ? 44 : 56;
   return (
     <>
-      {sum && <div className={`k-sum ${v === null ? 'bad' : ''}`}>{digits.replace(/\*/g, '×').replace(/\//g, '÷')}</div>}
-      <div key={refused} className={`k-amt money ${shown ? '' : 'unk'} ${refused ? 'shake' : ''}`} style={{ fontSize: size }} aria-live="polite">
-        {shown ? <><span className="cur">Rp</span>{shown}</> : empty}
+      {sum && (
+        <div className={`k-sum ${v === null ? 'bad' : ''}`}>
+          {digits.replace(/\*/g, '×').replace(/\//g, '÷')}
+        </div>
+      )}
+      <div
+        key={refused}
+        className={`k-amt money ${shown ? '' : 'unk'} ${refused ? 'shake' : ''}`}
+        style={{ fontSize: size }}
+        aria-live="polite"
+      >
+        {shown ? (
+          <>
+            <span className="cur">Rp</span>
+            {shown}
+          </>
+        ) : (
+          empty
+        )}
       </div>
       <div className="k-keys">
-        {KEYS.map(k => <button key={k} type="button" aria-label={k === '⌫' ? 'Delete' : k} onClick={() => onPress(k)}>{k}</button>)}
+        {KEYS.map(k => (
+          <button
+            key={k}
+            type="button"
+            aria-label={k === '⌫' ? 'Delete' : k}
+            onClick={() => onPress(k)}
+          >
+            {k}
+          </button>
+        ))}
       </div>
     </>
   );

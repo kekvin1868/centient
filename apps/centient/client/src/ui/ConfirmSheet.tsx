@@ -4,7 +4,13 @@ import { createPortal } from 'react-dom';
 import { NightSheet } from './night/NightSheet';
 import { usePresence } from './night/tv';
 
-type Props = { open: boolean; message: string; confirmLabel: string; onConfirm: () => void; onCancel: () => void };
+type Props = {
+  open: boolean;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+};
 
 export function ConfirmSheet({ open, message, confirmLabel, onConfirm, onCancel }: Props) {
   const { mounted, gen, unmount } = usePresence(open);
@@ -12,14 +18,29 @@ export function ConfirmSheet({ open, message, confirmLabel, onConfirm, onCancel 
   asked.current = open;
   if (!mounted) return null;
   return createPortal(
-    <NightSheet key={gen} fixed open={open} place="mid" fx="glitch" label={message} title="CONFIRM"
-      onClose={() => { unmount(); if (asked.current) onCancel(); }}>
+    <NightSheet
+      key={gen}
+      fixed
+      open={open}
+      place="mid"
+      fx="glitch"
+      label={message}
+      title="CONFIRM"
+      onClose={() => {
+        unmount();
+        if (asked.current) onCancel();
+      }}
+    >
       {close => (
         <>
           <p className="c-msg">{message}</p>
           <div className="k-acts">
-            <button type="button" className="n-btn" onClick={close}>CANCEL</button>
-            <button type="button" className="n-go" onClick={onConfirm}>{confirmLabel}</button>
+            <button type="button" className="n-btn" onClick={close}>
+              CANCEL
+            </button>
+            <button type="button" className="n-go" onClick={onConfirm}>
+              {confirmLabel}
+            </button>
           </div>
         </>
       )}

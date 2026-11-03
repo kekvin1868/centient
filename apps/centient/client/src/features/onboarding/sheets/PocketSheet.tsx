@@ -6,7 +6,13 @@ import { POCKET_KINDS } from '../../../lib/format';
 import { Keypad, keypadKey, keypadValue, pressKey } from '../../../ui/night/Keypad';
 import { NightSheet } from '../../../ui/night/NightSheet';
 import { typing } from '../../../ui/night/useLayers';
-import { NAME_MAX, owes, type AccountDraft, type PocketDraft, type PocketKind } from '../model/draft';
+import {
+  NAME_MAX,
+  owes,
+  type AccountDraft,
+  type PocketDraft,
+  type PocketKind,
+} from '../model/draft';
 
 type Props = {
   account: AccountDraft;
@@ -24,7 +30,11 @@ export function PocketSheet({ account, pocket, onSave, onDelete, onMove, onClose
   const [kind, setKind] = useState<PocketKind>(pocket.kind);
   const [refused, setRefused] = useState(0);
   const at = account.pockets.indexOf(pocket);
-  const press = (k: string) => { const next = pressKey(digits, k); if (next === null) setRefused(r => r + 1); else setDigits(next); };
+  const press = (k: string) => {
+    const next = pressKey(digits, k);
+    if (next === null) setRefused(r => r + 1);
+    else setDigits(next);
+  };
   const save = (balance: number | null, close: () => void) => {
     onSave(pocket.main ? { balance } : { name, kind, balance });
     close();
@@ -42,40 +52,111 @@ export function PocketSheet({ account, pocket, onSave, onDelete, onMove, onClose
     await close();
     onMove();
   };
-  const question = owes(account.kind) ? <>What do you owe on <em>{account.name}</em>?</>
-    : pocket.main ? <>What's in <em>{account.name}</em>?</> : <>How much is in this pocket?</>;
+  const question = owes(account.kind) ? (
+    <>
+      What do you owe on <em>{account.name}</em>?
+    </>
+  ) : pocket.main ? (
+    <>
+      What's in <em>{account.name}</em>?
+    </>
+  ) : (
+    <>How much is in this pocket?</>
+  );
   return (
-    <NightSheet label={pocket.main ? `Balance in ${account.name}` : `${pocket.name} in ${account.name}`}
-      title={pocket.main ? `${account.name} · BALANCE` : `${account.name} · POCKET ${at}/${account.pockets.length - 1}`}
-      meta={!pocket.main ? 'POCKET' : !onMove ? '' : close => (
-        <button type="button" className="n-win" disabled={!v} onClick={() => move(close)}>MOVE BALANCES</button>
-      )}
+    <NightSheet
+      label={pocket.main ? `Balance in ${account.name}` : `${pocket.name} in ${account.name}`}
+      title={
+        pocket.main
+          ? `${account.name} · BALANCE`
+          : `${account.name} · POCKET ${at}/${account.pockets.length - 1}`
+      }
+      meta={
+        !pocket.main
+          ? 'POCKET'
+          : !onMove
+            ? ''
+            : close => (
+                <button type="button" className="n-win" disabled={!v} onClick={() => move(close)}>
+                  MOVE BALANCES
+                </button>
+              )
+      }
       onClose={onClose}
       onKey={(e, close) => {
-        if (typing(e)) { if (e.key === 'Enter') { e.preventDefault(); (e.target as HTMLElement).blur(); } return; }
-        if (e.key === 'Enter') { e.preventDefault(); set(close); return; }
-        if (e.key === '?') { save(null, close); return; }
+        if (typing(e)) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            (e.target as HTMLElement).blur();
+          }
+          return;
+        }
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          set(close);
+          return;
+        }
+        if (e.key === '?') {
+          save(null, close);
+          return;
+        }
         const k = keypadKey(e);
-        if (k) { e.preventDefault(); press(k); }
-      }}>
+        if (k) {
+          e.preventDefault();
+          press(k);
+        }
+      }}
+    >
       {close => (
         <>
-          {!pocket.main && <div className="k-top"><button type="button" className="del" onClick={async () => { await close(); onDelete(); }}>DELETE</button></div>}
+          {!pocket.main && (
+            <div className="k-top">
+              <button
+                type="button"
+                className="del"
+                onClick={async () => {
+                  await close();
+                  onDelete();
+                }}
+              >
+                DELETE
+              </button>
+            </div>
+          )}
           <p className="k-q">{question}</p>
           {!pocket.main && (
             <>
-              <div className="k-name"><input value={name} maxLength={NAME_MAX} aria-label="Pocket name" autoComplete="off" onChange={e => setName(e.target.value)} /></div>
+              <div className="k-name">
+                <input
+                  value={name}
+                  maxLength={NAME_MAX}
+                  aria-label="Pocket name"
+                  autoComplete="off"
+                  onChange={e => setName(e.target.value)}
+                />
+              </div>
               <div className="k-kinds">
                 {(['SPENDING', 'SAVINGS'] as const).map(k => (
-                  <button key={k} type="button" aria-pressed={kind === k} onClick={() => setKind(k)}>{POCKET_KINDS[k].toUpperCase()}</button>
+                  <button
+                    key={k}
+                    type="button"
+                    aria-pressed={kind === k}
+                    onClick={() => setKind(k)}
+                  >
+                    {POCKET_KINDS[k].toUpperCase()}
+                  </button>
                 ))}
               </div>
             </>
           )}
           <Keypad digits={digits} onPress={press} empty="???" refused={refused} />
           <div className="k-acts">
-            <button type="button" className="n-btn" onClick={() => save(null, close)}>LEAVE ???</button>
-            <button type="button" className="n-go" onClick={() => set(close)}>SET ▸</button>
+            <button type="button" className="n-btn" onClick={() => save(null, close)}>
+              LEAVE ???
+            </button>
+            <button type="button" className="n-go" onClick={() => set(close)}>
+              SET ▸
+            </button>
           </div>
         </>
       )}

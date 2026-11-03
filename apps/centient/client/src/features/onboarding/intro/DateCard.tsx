@@ -9,7 +9,11 @@ export function DateCard({ today, onDone }: { today: string; onDone: () => void 
   const [step, setStep] = useState(0);
   const [out, setOut] = useState(false);
   const next = async (i: number) => {
-    if (i < lines.length - 1) { await wait(i === 1 ? 250 : 0); setStep(i + 1); return; }
+    if (i < lines.length - 1) {
+      await wait(i === 1 ? 250 : 0);
+      setStep(i + 1);
+      return;
+    }
     await wait(1100);
     setOut(true);
     await wait(420);
@@ -19,7 +23,12 @@ export function DateCard({ today, onDone }: { today: string; onDone: () => void 
     <div className="scene n-dark va-scene">
       <div className={`va-card ${out ? 'glitch-out' : ''}`}>
         {lines.slice(0, step + 1).map((t, i) => (
-          <RichType key={i} text={t} className={i === 1 ? 'va-big' : 'va-k'} onDone={() => next(i)} />
+          <RichType
+            key={i}
+            text={t}
+            className={i === 1 ? 'va-big' : 'va-k'}
+            onDone={() => next(i)}
+          />
         ))}
       </div>
     </div>

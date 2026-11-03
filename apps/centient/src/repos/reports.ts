@@ -5,51 +5,100 @@ import { all } from './sql';
 
 const COUNTED = `t.workspace_id = ? AND t.deleted_at IS NULL AND substr(t.occurred_at, 1, 10) >= ? AND substr(t.occurred_at, 1, 10) < ?`;
 
-export type CurrencyTotals = { currency: string; spending: number; income: number; entries: number };
+export type CurrencyTotals = {
+  currency: string;
+  spending: number;
+  income: number;
+  entries: number;
+};
 
 export function reportsRepo(db: D1Database) {
   return {
     /** Spending, income and how many entries counted, per currency with any of them in [from, to). */
-    totals: (ws: string, from: string, to: string) => all<CurrencyTotals>(db, `SELECT e.currency_code AS currency,
+    totals: (ws: string, from: string, to: string) =>
+      all<CurrencyTotals>(
+        db,
+        `SELECT e.currency_code AS currency,
         COALESCE(SUM(CASE WHEN t.type = 'EXPENSE' THEN -a.amount ELSE 0 END), 0) AS spending,
         COALESCE(SUM(CASE WHEN t.type = 'INCOME' THEN a.amount ELSE 0 END), 0) AS income,
         COUNT(DISTINCT t.id) AS entries
       FROM transactions t JOIN allocations a ON a.transaction_id = t.id JOIN envelopes e ON e.id = a.envelope_id
         JOIN categories c ON c.id = t.category_id
       WHERE ${COUNTED} AND (t.type = 'EXPENSE' OR (t.type = 'INCOME' AND c.name NOT IN ('Opening balance', 'Balance adjustment')))
-      GROUP BY e.currency_code`, ws, from, to),
+      GROUP BY e.currency_code`,
+        ws,
+        from,
+        to,
+      ),
 
     /** Spending per category in one currency, largest first. */
-    byCategory: (ws: string, currency: string, from: string, to: string) => all<{ categoryId: string; amount: number }>(db, `SELECT t.category_id AS categoryId, SUM(-a.amount) AS amount
+    byCategory: (ws: string, currency: string, from: string, to: string) =>
+      all<{ categoryId: string; amount: number }>(
+        db,
+        `SELECT t.category_id AS categoryId, SUM(-a.amount) AS amount
       FROM transactions t JOIN allocations a ON a.transaction_id = t.id JOIN envelopes e ON e.id = a.envelope_id AND e.currency_code = ?
       WHERE ${COUNTED} AND t.type = 'EXPENSE'
-      GROUP BY t.category_id ORDER BY amount DESC`, currency, ws, from, to),
+      GROUP BY t.category_id ORDER BY amount DESC`,
+        currency,
+        ws,
+        from,
+        to,
+      ),
 
     /** Spending per Jakarta day in one currency (days with none are absent). */
-    daily: (ws: string, currency: string, from: string, to: string) => all<{ day: string; amount: number }>(db, `SELECT substr(t.occurred_at, 1, 10) AS day, SUM(-a.amount) AS amount
+    daily: (ws: string, currency: string, from: string, to: string) =>
+      all<{ day: string; amount: number }>(
+        db,
+        `SELECT substr(t.occurred_at, 1, 10) AS day, SUM(-a.amount) AS amount
       FROM transactions t JOIN allocations a ON a.transaction_id = t.id JOIN envelopes e ON e.id = a.envelope_id AND e.currency_code = ?
       WHERE ${COUNTED} AND t.type = 'EXPENSE'
-      GROUP BY day`, currency, ws, from, to),
+      GROUP BY day`,
+        currency,
+        ws,
+        from,
+        to,
+      ),
 
     /**
      * Top 5 merchants by spending in one currency. Names are grouped ignoring case and outer spaces; `latest` is
      * "<occurred_at>|<name as last typed>" so the caller shows the newest spelling. Visits = entries.
      */
-    merchants: (ws: string, currency: string, from: string, to: string) => all<{ key: string; total: number; visits: number; latest: string }>(db, `SELECT lower(trim(t.merchant)) AS key,
+    merchants: (ws: string, currency: string, from: string, to: string) =>
+      all<{ key: string; total: number; visits: number; latest: string }>(
+        db,
+        `SELECT lower(trim(t.merchant)) AS key,
         SUM(-a.amount) AS total, COUNT(DISTINCT t.group_id) AS visits, MAX(t.occurred_at || '|' || trim(t.merchant)) AS latest
       FROM transactions t JOIN allocations a ON a.transaction_id = t.id JOIN envelopes e ON e.id = a.envelope_id AND e.currency_code = ?
       WHERE ${COUNTED} AND t.type = 'EXPENSE' AND trim(IFNULL(t.merchant, '')) <> ''
-      GROUP BY key ORDER BY total DESC, key LIMIT 5`, currency, ws, from, to),
+      GROUP BY key ORDER BY total DESC, key LIMIT 5`,
+        currency,
+        ws,
+        from,
+        to,
+      ),
 
     /** Top 5 entries by their spending in one currency (a split bill's share, a transfer's fee), ties newest first. */
-    biggest: (ws: string, currency: string, from: string, to: string) => all<{ entryId: string; amount: number }>(db, `SELECT t.group_id AS entryId, SUM(-a.amount) AS amount
+    biggest: (ws: string, currency: string, from: string, to: string) =>
+      all<{ entryId: string; amount: number }>(
+        db,
+        `SELECT t.group_id AS entryId, SUM(-a.amount) AS amount
       FROM transactions t JOIN allocations a ON a.transaction_id = t.id JOIN envelopes e ON e.id = a.envelope_id AND e.currency_code = ?
       WHERE ${COUNTED} AND t.type = 'EXPENSE'
-      GROUP BY t.group_id ORDER BY amount DESC, MAX(t.occurred_at) DESC LIMIT 5`, currency, ws, from, to),
+      GROUP BY t.group_id ORDER BY amount DESC, MAX(t.occurred_at) DESC LIMIT 5`,
+        currency,
+        ws,
+        from,
+        to,
+      ),
 
     /** The Jakarta day of the oldest live entry, any type and currency; null when there is none. */
     async oldest(ws: string): Promise<string | null> {
-      const r = await db.prepare('SELECT MIN(substr(occurred_at, 1, 10)) AS day FROM transactions WHERE workspace_id = ? AND deleted_at IS NULL').bind(ws).first<{ day: string | null }>();
+      const r = await db
+        .prepare(
+          'SELECT MIN(substr(occurred_at, 1, 10)) AS day FROM transactions WHERE workspace_id = ? AND deleted_at IS NULL',
+        )
+        .bind(ws)
+        .first<{ day: string | null }>();
       return r?.day ?? null;
     },
   };

@@ -2,8 +2,8 @@
    theme's paper (NieR:Automata beige in light, VA-11 Hall-A night in dark; tokens and dialogs in ui/night/night.css),
    pixel words (DotGothic16) with clean digits (Centient Digits), Hatsune Miku's teal and pink as accents, and a
    light game feel: hairline outlines, a short "lip" shadow under raised pieces, cards dealt and floating. */
-@import "tailwindcss";
-@import "konsta/react/theme.css";
+@import 'tailwindcss';
+@import 'konsta/react/theme.css';
 /* Our own components are styled with Tailwind classes too. */
 @source "./";
 
@@ -12,8 +12,9 @@
   --color-brand-primary: #005f57;
   /* Destructive actions (Miku's pink, not red): add class k-color-brand-red to a Konsta component. 5.6:1 on white. */
   --color-brand-red: #a8125f;
-  --font-ios: "Centient Digits", "DotGothic16", "Geist Variable", -apple-system, system-ui, sans-serif;
-  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-ios:
+    'Centient Digits', 'DotGothic16', 'Geist Variable', -apple-system, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* NieR paper (light) and VA-11 night (dark); same values as --n-bg in ui/night/night.css. */
   --color-ios-light-surface: #dad4bb;
@@ -22,7 +23,13 @@
   --color-ios-dark-surface-1: #16122a;
 
   /* NieR's UI is square: every rounded-* step is a hard corner or a hint of one (rounded-full stays round). */
-  --radius-xs: 1px; --radius-sm: 2px; --radius-md: 2px; --radius-lg: 3px; --radius-xl: 3px; --radius-2xl: 4px; --radius-3xl: 4px;
+  --radius-xs: 1px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 3px;
+  --radius-2xl: 4px;
+  --radius-3xl: 4px;
 
   /* Tailwind names for our own pieces. */
   --color-miku: var(--miku);
@@ -51,7 +58,10 @@
   --logo-edge: #4e4b42; /* outline that keeps the light coin visible on paper */
 }
 @supports (color: color(display-p3 0 0 0)) {
-  :root { --miku: color(display-p3 0.05 0.95 0.86); --pink: color(display-p3 0.9 0.12 0.53); }
+  :root {
+    --miku: color(display-p3 0.05 0.95 0.86);
+    --pink: color(display-p3 0.9 0.12 0.53);
+  }
 }
 .dark {
   --k-color-primary: var(--miku); /* bright cyan reads at 12:1 on the dark cards */
@@ -65,188 +75,582 @@
   --logo-edge: #07050d;
   --lip: color-mix(in oklab, var(--miku) 16%, transparent);
 }
-.dark .k-color-brand-red { --k-color-primary: #ff6fb5; }
+.dark .k-color-brand-red {
+  --k-color-primary: #ff6fb5;
+}
 
 /* Clip sideways overflow: a phone would otherwise widen the page and stay zoomed out. */
-html, body { overflow-x: clip; }
+html,
+body {
+  overflow-x: clip;
+}
 body {
   @apply bg-ios-light-surface dark:bg-ios-dark-surface font-ios antialiased;
   color: var(--ink);
   overscroll-behavior-y: none;
   font-synthesis: none; /* the pixel face has one weight; a faked bold smears it */
   /* NieR's faint grid on the paper */
-  background-image: repeating-linear-gradient(0deg, rgb(var(--n-ink-rgb) / .05) 0 1px, transparent 1px 8px), repeating-linear-gradient(90deg, rgb(var(--n-ink-rgb) / .05) 0 1px, transparent 1px 8px);
+  background-image:
+    repeating-linear-gradient(0deg, rgb(var(--n-ink-rgb) / 0.05) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(90deg, rgb(var(--n-ink-rgb) / 0.05) 0 1px, transparent 1px 8px);
   background-attachment: fixed;
 }
 /* A convex old monitor over everything: scanlines and darker edges. Never takes a tap. */
-body::after { content: ""; position: fixed; inset: 0; z-index: 9999; pointer-events: none; background: radial-gradient(ellipse at center, transparent 62%, rgb(var(--n-shade-rgb) / .22)), repeating-linear-gradient(0deg, rgb(var(--n-shade-rgb) / .06) 0 1px, transparent 1px 3px); }
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center, transparent 62%, rgb(var(--n-shade-rgb) / 0.22)),
+    repeating-linear-gradient(0deg, rgb(var(--n-shade-rgb) / 0.06) 0 1px, transparent 1px 3px);
+}
 /* The logo's light coin and the wordmark keep a one-pixel outline, so they stay clear on paper. */
-.logo-edge { filter: drop-shadow(1px 0 0 var(--logo-edge)) drop-shadow(-1px 0 0 var(--logo-edge)) drop-shadow(0 1px 0 var(--logo-edge)) drop-shadow(0 -1px 0 var(--logo-edge)); }
-.num { font-variant-numeric: tabular-nums; }
+.logo-edge {
+  filter: drop-shadow(1px 0 0 var(--logo-edge)) drop-shadow(-1px 0 0 var(--logo-edge))
+    drop-shadow(0 1px 0 var(--logo-edge)) drop-shadow(0 -1px 0 var(--logo-edge));
+}
+.num {
+  font-variant-numeric: tabular-nums;
+}
 /* In the base layer, so a component's own outline-none / ring utilities still win. */
-@layer base { :focus-visible { outline: 2px solid var(--k-color-primary); outline-offset: 2px; } }
-::selection { background: color-mix(in oklab, var(--miku) 45%, transparent); }
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--k-color-primary);
+    outline-offset: 2px;
+  }
+}
+::selection {
+  background: color-mix(in oklab, var(--miku) 45%, transparent);
+}
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition-duration: 1ms !important; animation: none !important; }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    animation: none !important;
+  }
 }
 
 /* Screens scroll the page; the tab bar sits over the bottom. The top clears the status bar plus the strip
    under it that iOS fades and blurs in Home Screen apps. */
 .screen {
-  max-width: 640px; margin: 0 auto;
+  max-width: 640px;
+  margin: 0 auto;
   padding: calc(env(safe-area-inset-top) + 28px) 0 calc(env(safe-area-inset-bottom) + 112px);
 }
-.screen-title { margin: 8px 16px 4px; font-size: 34px; font-weight: 400; line-height: 1.05; letter-spacing: .06em; }
-.text-negative { color: var(--negative); }
+.screen-title {
+  margin: 8px 16px 4px;
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0.06em;
+}
+.text-negative {
+  color: var(--negative);
+}
 
 /* ---- The kit ------------------------------------------------------------------------------------------- */
 
 /* A raised piece: hairline outline and a short lip under it (no blur, no thick outline). */
-.panel { border: 1px solid var(--edge); box-shadow: 0 3px 0 var(--lip); }
+.panel {
+  border: 1px solid var(--edge);
+  box-shadow: 0 3px 0 var(--lip);
+}
 /* Halftone dots, for drenched panels. Sits under the content (add to a positioned element). */
 .halftone::before {
-  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  background: radial-gradient(circle, rgb(0 0 0 / 0.10) 1.1px, transparent 1.5px) 0 0 / 7px 7px;
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(circle, rgb(0 0 0 / 0.1) 1.1px, transparent 1.5px) 0 0 / 7px 7px;
   mask-image: linear-gradient(115deg, transparent 40%, #000 100%);
 }
 /* A keycap: the "press [Enter]" prompt. */
 .keycap {
-  display: inline-grid; place-items: center; min-width: 44px; height: 44px; padding: 0 10px; border-radius: 12px;
-  font-weight: 700; font-size: 15px; background: var(--miku); color: var(--on-miku);
-  border: 1px solid var(--edge); box-shadow: 0 3px 0 color-mix(in oklab, var(--miku) 45%, #137a7f);
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 10px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 15px;
+  background: var(--miku);
+  color: var(--on-miku);
+  border: 1px solid var(--edge);
+  box-shadow: 0 3px 0 color-mix(in oklab, var(--miku) 45%, #137a7f);
 }
-.keycap:active { box-shadow: 0 1px 0 color-mix(in oklab, var(--miku) 45%, #137a7f); }
-.keycap-quiet { background: var(--raised-2); color: var(--ink); box-shadow: 0 3px 0 var(--lip); }
+.keycap:active {
+  box-shadow: 0 1px 0 color-mix(in oklab, var(--miku) 45%, #137a7f);
+}
+.keycap-quiet {
+  background: var(--raised-2);
+  color: var(--ink);
+  box-shadow: 0 3px 0 var(--lip);
+}
 
 /* Money set big: heavy, tight, tabular; the currency smaller and lifted like Cash App's "$". */
-.money-big { font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
-.money-big .cur { font-size: 0.5em; font-weight: 700; letter-spacing: -0.02em; vertical-align: 0.72em; margin-right: 0.08em; }
+.money-big {
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.money-big .cur {
+  font-size: 0.5em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  vertical-align: 0.72em;
+  margin-right: 0.08em;
+}
 
 /* Account types get colors from Miku's palette (loot-rarity style). Text on them is dark ink. */
-.rarity-CASH { --rarity: #e9eef1; }
-.rarity-DEBIT_CARD { --rarity: #7fd8cf; }
-.rarity-EWALLET { --rarity: #86cecb; }
-.rarity-BANK { --rarity: #39c5bb; }
-.rarity-CREDIT_CARD { --rarity: #ff8cc6; }
-.rarity-PAYLATER { --rarity: #ffc2df; }
-.rarity-EXCHANGE { --rarity: #b6f2ec; }
-.rarity-IOU { --rarity: #bec8d1; }
-.rarity-ALL { --rarity: var(--miku); }
+.rarity-CASH {
+  --rarity: #e9eef1;
+}
+.rarity-DEBIT_CARD {
+  --rarity: #7fd8cf;
+}
+.rarity-EWALLET {
+  --rarity: #86cecb;
+}
+.rarity-BANK {
+  --rarity: #39c5bb;
+}
+.rarity-CREDIT_CARD {
+  --rarity: #ff8cc6;
+}
+.rarity-PAYLATER {
+  --rarity: #ffc2df;
+}
+.rarity-EXCHANGE {
+  --rarity: #b6f2ec;
+}
+.rarity-IOU {
+  --rarity: #bec8d1;
+}
+.rarity-ALL {
+  --rarity: var(--miku);
+}
 
 /* Idle float for cards in hand (Balatro). */
-@keyframes bob { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-4px) rotate(0.6deg); } }
+@keyframes bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(0.6deg);
+  }
+}
 /* Paused under a finger or pointer, so the card holds still while it is being tapped. */
-.bob { animation: bob 3.2s ease-in-out infinite; }
-.bob:hover, .bob:has(:active) { animation-play-state: paused; }
+.bob {
+  animation: bob 3.2s ease-in-out infinite;
+}
+.bob:hover,
+.bob:has(:active) {
+  animation-play-state: paused;
+}
 /* Cards are dealt in from below, one after another. */
-@keyframes deal { from { transform: translateY(140%) rotate(-24deg); opacity: 0; } }
+@keyframes deal {
+  from {
+    transform: translateY(140%) rotate(-24deg);
+    opacity: 0;
+  }
+}
 /* When a number changes it flashes like a CRT redraw: bright, blank, a jitter, settled (used with steps). */
-@keyframes pop { 0% { filter: brightness(2.4); } 20% { opacity: .3; } 40% { opacity: 1; transform: translateX(2px); } 60% { transform: translateX(-1px); } 100% { transform: none; filter: none; } }
+@keyframes pop {
+  0% {
+    filter: brightness(2.4);
+  }
+  20% {
+    opacity: 0.3;
+  }
+  40% {
+    opacity: 1;
+    transform: translateX(2px);
+  }
+  60% {
+    transform: translateX(-1px);
+  }
+  100% {
+    transform: none;
+    filter: none;
+  }
+}
 /* A hint that breathes. */
-@keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes nudge {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
 
 /* ---- Konsta, re-skinned -------------------------------------------------------------------------- */
 
 /* No glass anywhere. */
-.k-glass { box-shadow: none !important; backdrop-filter: none !important; }
+.k-glass {
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
 
 /* Toast: restyled with the dialogs in ui/night/night.css. */
 
 /* Big buttons: rounded slabs with a hairline and a lip. Press flattens the lip; the button itself never
    moves (a target that moves under the finger can swallow the tap). */
-.k-button.h-12 { height: 56px; border-radius: 3px; font-size: 17px; font-weight: 700; border: 1px solid var(--edge); box-shadow: 0 3px 0 var(--lip); }
-.k-button.h-12:active { box-shadow: 0 1px 0 var(--lip); }
-.k-button.bg-primary:not(.k-color-brand-red) { background: var(--miku); color: var(--on-miku); box-shadow: 0 3px 0 color-mix(in oklab, var(--miku) 45%, #137a7f); }
-.k-button.bg-primary.k-color-brand-red { color: #fff; }
+.k-button.h-12 {
+  height: 56px;
+  border-radius: 3px;
+  font-size: 17px;
+  font-weight: 700;
+  border: 1px solid var(--edge);
+  box-shadow: 0 3px 0 var(--lip);
+}
+.k-button.h-12:active {
+  box-shadow: 0 1px 0 var(--lip);
+}
+.k-button.bg-primary:not(.k-color-brand-red) {
+  background: var(--miku);
+  color: var(--on-miku);
+  box-shadow: 0 3px 0 color-mix(in oklab, var(--miku) 45%, #137a7f);
+}
+.k-button.bg-primary.k-color-brand-red {
+  color: #fff;
+}
 /* ~= matches the whole class, so clear buttons (active:bg-primary/15) keep their transparent fill. */
-.k-button[class~="bg-primary/15"] { background: var(--raised); }
-.k-button[class~="bg-primary/15"]:not(.k-color-brand-red) { color: var(--ink); }
+.k-button[class~='bg-primary/15'] {
+  background: var(--raised);
+}
+.k-button[class~='bg-primary/15']:not(.k-color-brand-red) {
+  color: var(--ink);
+}
 /* Disabled big buttons lose the lip. */
-.k-button.h-12[class~="bg-black/10"], .dark .k-button.h-12[class~="dark:bg-white/10"] { box-shadow: none; border-color: transparent; font-weight: 600; }
+.k-button.h-12[class~='bg-black/10'],
+.dark .k-button.h-12[class~='dark:bg-white/10'] {
+  box-shadow: none;
+  border-color: transparent;
+  font-weight: 600;
+}
 /* Anything Konsta fills with the accent and labels white (stepper) gets dark ink once the accent is bright. */
-.dark .bg-primary.text-white { color: var(--on-miku); }
-.k-button:active { opacity: 0.85; }
+.dark .bg-primary.text-white {
+  color: var(--on-miku);
+}
+.k-button:active {
+  opacity: 0.85;
+}
 
 /* Segmented: hairline track, Miku pill for the choice. */
-.k-segmented { background: var(--raised) !important; border: 1px solid var(--edge); border-radius: 3px !important; }
-.k-segmented-strong-highlight, .k-segmented > span[class*="bg-white"] { background: var(--miku) !important; box-shadow: none !important; border-radius: 2px !important; }
-.k-segmented .k-button { color: var(--muted); font-weight: 600; }
-.k-segmented .k-button[class*="text-black"] { color: var(--on-miku); }
+.k-segmented {
+  background: var(--raised) !important;
+  border: 1px solid var(--edge);
+  border-radius: 3px !important;
+}
+.k-segmented-strong-highlight,
+.k-segmented > span[class*='bg-white'] {
+  background: var(--miku) !important;
+  box-shadow: none !important;
+  border-radius: 2px !important;
+}
+.k-segmented .k-button {
+  color: var(--muted);
+  font-weight: 600;
+}
+.k-segmented .k-button[class*='text-black'] {
+  color: var(--on-miku);
+}
 
 /* Progress: a slightly thicker bar. */
-.k-progressbar { height: 10px; background: var(--raised-2); border-radius: 9999px; }
-.k-progressbar > span:not(.k-color-brand-red *) { background: var(--miku); }
+.k-progressbar {
+  height: 10px;
+  background: var(--raised-2);
+  border-radius: 9999px;
+}
+.k-progressbar > span:not(.k-color-brand-red *) {
+  background: var(--miku);
+}
 
 /* Lists: one even hairline. It goes on the list itself, which owns the rounded corners and clips its
    children; on the inner <ul> (square corners) the clip cut the line at every corner. */
-.k-list:where(:not(.k-list .k-list))[class*="rounded"] { border: 1px solid var(--edge); }
+.k-list:where(:not(.k-list .k-list))[class*='rounded'] {
+  border: 1px solid var(--edge);
+}
 /* Section headings: heavy and tight. */
-.k-block-title { font-weight: 400; letter-spacing: .08em; }
-
+.k-block-title {
+  font-weight: 400;
+  letter-spacing: 0.08em;
+}
 
 /* ---- Spacing ------------------------------------------------------------------------------------------ */
 
 /* One vertical rhythm: 24px between sections, 8px from a section's label or footnote to its list.
    Unlayered, so it beats Konsta's my-8 / -mb-6 / -mt-6. */
-.k-list:where(:not(.k-list .k-list)), .k-block { margin-block: 24px; }
-.k-block-title { margin-top: 28px; margin-bottom: 8px; }
-.k-block-title + .k-list, .k-block-title + .k-block { margin-top: 0; }
-.k-list:has(+ .k-block-footer) { margin-bottom: 0; }
-.k-block-footer { margin-top: 10px; margin-bottom: 24px; color: var(--muted); }
+.k-list:where(:not(.k-list .k-list)),
+.k-block {
+  margin-block: 24px;
+}
+.k-block-title {
+  margin-top: 28px;
+  margin-bottom: 8px;
+}
+.k-block-title + .k-list,
+.k-block-title + .k-block {
+  margin-top: 0;
+}
+.k-list:has(+ .k-block-footer) {
+  margin-bottom: 0;
+}
+.k-block-footer {
+  margin-top: 10px;
+  margin-bottom: 24px;
+  color: var(--muted);
+}
 /* A button block right under a list belongs to it: 16px, not a full section gap. */
-.k-list + .k-block, .k-block-footer + .k-block { margin-top: -8px; }
+.k-list + .k-block,
+.k-block-footer + .k-block {
+  margin-top: -8px;
+}
 
 /* Tappable rows render a <button> (keyboard access) as Konsta's row content; make it fill the row like
    Konsta's own <a>. Passing a className through linkProps would replace Konsta's row classes. */
-.k-list li > button { width: 100%; text-align: start; }
+.k-list li > button {
+  width: 100%;
+  text-align: start;
+}
 /* Swipeable entry rows: Konsta's hairline between rows, lined up with the text like its own. */
-.entry-row + .entry-row::before { content: ""; position: absolute; top: 0; right: 0; left: 68px; height: 1px; background: var(--edge); z-index: 1; }
+.entry-row + .entry-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 68px;
+  height: 1px;
+  background: var(--edge);
+  z-index: 1;
+}
 
 /* ---- Pocket deck ---------------------------------------------------------------------------------- */
 /* The front pocket floats a little; cards behind hold still. */
-@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-.float { animation: float 3.6s ease-in-out infinite; }
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+.float {
+  animation: float 3.6s ease-in-out infinite;
+}
 
 /* ---- Receipt (entry form) ---------------------------------------------------------------------------- */
 /* Paper stays paper in dark mode; it's the one place with the mono face (Geist Mono, same family). */
-:root { --paper: #fffdf7; --paper-ink: #22262a; --paper-faint: #686e73; }
-.dark { --paper: #f4f1e8; --paper-faint: #646a6f; }
-.receipt-stage { filter: drop-shadow(0 16px 18px rgb(0 0 0 / 0.16)) drop-shadow(0 1px 1px rgb(0 0 0 / 0.12)); }
-.receipt { position: relative; margin-block: 12px; padding: 20px 20px 24px; background: var(--paper); color: var(--paper-ink); font-family: var(--font-mono); font-size: 14px; }
+:root {
+  --paper: #fffdf7;
+  --paper-ink: #22262a;
+  --paper-faint: #686e73;
+}
+.dark {
+  --paper: #f4f1e8;
+  --paper-faint: #646a6f;
+}
+.receipt-stage {
+  filter: drop-shadow(0 16px 18px rgb(0 0 0 / 0.16)) drop-shadow(0 1px 1px rgb(0 0 0 / 0.12));
+}
+.receipt {
+  position: relative;
+  margin-block: 12px;
+  padding: 20px 20px 24px;
+  background: var(--paper);
+  color: var(--paper-ink);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
 /* Torn edges: a row of paper teeth above and below. */
-.receipt::before, .receipt::after { content: ""; position: absolute; left: 0; right: 0; height: 12px; background-size: 16px 12px; background-repeat: repeat-x; }
-.receipt::before { top: -11px; background-image: conic-gradient(from 135deg at 50% 0, var(--paper) 0 90deg, transparent 0); }
-.receipt::after { bottom: -11px; background-image: conic-gradient(from -45deg at 50% 100%, var(--paper) 0 90deg, transparent 0); }
-.receipt-stamp { position: absolute; right: 14px; top: 16px; padding: 2px 8px; border: 2px solid currentColor; border-radius: 6px; color: #c2185b; font-weight: 800; font-size: 13px; letter-spacing: 0.14em; transform: rotate(8deg); opacity: 0.85; }
+.receipt::before,
+.receipt::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background-size: 16px 12px;
+  background-repeat: repeat-x;
+}
+.receipt::before {
+  top: -11px;
+  background-image: conic-gradient(from 135deg at 50% 0, var(--paper) 0 90deg, transparent 0);
+}
+.receipt::after {
+  bottom: -11px;
+  background-image: conic-gradient(from -45deg at 50% 100%, var(--paper) 0 90deg, transparent 0);
+}
+.receipt-stamp {
+  position: absolute;
+  right: 14px;
+  top: 16px;
+  padding: 2px 8px;
+  border: 2px solid currentColor;
+  border-radius: 6px;
+  color: #c2185b;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  transform: rotate(8deg);
+  opacity: 0.85;
+}
 /* Typewriter: each new letter strikes the paper; a block cursor blinks after the last one. */
-@keyframes strike { 0% { transform: translateY(-5px) scale(1.15); opacity: 0.2; filter: blur(1px); } 60% { transform: translateY(1px); } 100% { transform: none; opacity: 1; filter: none; } }
-.strike { animation: strike 0.16s ease-out; }
-@keyframes blink { 50% { opacity: 0; } }
+@keyframes strike {
+  0% {
+    transform: translateY(-5px) scale(1.15);
+    opacity: 0.2;
+    filter: blur(1px);
+  }
+  60% {
+    transform: translateY(1px);
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+    filter: none;
+  }
+}
+.strike {
+  animation: strike 0.16s ease-out;
+}
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
 /* NuclearSign: an alarm lamp, lit 4.5 s then dark 0.5 s, hard on/off. */
-.alarm { animation: alarm 5s steps(1, end) infinite; }
-@keyframes alarm { 0%, 89.99% { opacity: 1; } 90%, 100% { opacity: 0; } }
-.typewriter-caret { display: inline-block; width: 0.55em; height: 0.8em; margin-left: 1px; vertical-align: -0.08em; background: var(--paper-ink); animation: blink 1s steps(1) infinite; }
-.receipt-stamp-btn { border: 2px solid currentColor; border-radius: 6px; padding: 3px 10px; font-weight: 700; font-size: 13px; letter-spacing: 0.04em; color: var(--paper-faint); }
-.receipt-stamp-btn[aria-pressed="true"] { color: var(--sc); background: color-mix(in oklab, var(--sc) 12%, transparent); animation: thunk 0.22s ease-out; }
-@keyframes thunk { 0% { transform: scale(1.2); } }
+.alarm {
+  animation: alarm 5s steps(1, end) infinite;
+}
+@keyframes alarm {
+  0%,
+  89.99% {
+    opacity: 1;
+  }
+  90%,
+  100% {
+    opacity: 0;
+  }
+}
+.typewriter-caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 0.8em;
+  margin-left: 1px;
+  vertical-align: -0.08em;
+  background: var(--paper-ink);
+  animation: blink 1s steps(1) infinite;
+}
+.receipt-stamp-btn {
+  border: 2px solid currentColor;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--paper-faint);
+}
+.receipt-stamp-btn[aria-pressed='true'] {
+  color: var(--sc);
+  background: color-mix(in oklab, var(--sc) 12%, transparent);
+  animation: thunk 0.22s ease-out;
+}
+@keyframes thunk {
+  0% {
+    transform: scale(1.2);
+  }
+}
 
 /* ---- Coin3D: the brand coin turning (ui/Coin3D) ---------------------------------------------------------- */
-.coin3d { position: relative; width: 100%; height: 100%; perspective: 520px; }
-.coin3d::before { content: ""; position: absolute; inset: -30%; background: radial-gradient(closest-side, color-mix(in oklab, var(--miku) 32%, transparent), transparent); animation: coin3d-glow 4s ease-in-out infinite; }
-.coin3d-spin { position: absolute; inset: 0; transform-style: preserve-3d; animation: coin3d-turn 4s linear infinite; }
-.coin3d-spin > i { position: absolute; inset: 0; }
-.coin3d-spin > i svg { display: block; width: 100%; height: 100%; }
-.coin3d-spin > i.mid { filter: brightness(.42) saturate(1.4); }
-.coin3d-spin > b { position: absolute; left: 50%; top: 22%; height: 56%; width: 14px; margin-left: -7px; background: repeating-linear-gradient(0deg, #137a7f 0 5px, #0b4f53 5px 7px); transform: rotateY(90deg); }
-.coin3d.paused .coin3d-spin, .coin3d.paused::before { animation-play-state: paused; }
-@keyframes coin3d-turn { from { transform: rotateX(-10deg) rotateY(0); } to { transform: rotateX(-10deg) rotateY(360deg); } }
-@keyframes coin3d-glow { 25%, 75% { opacity: .5; } }
+.coin3d {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  perspective: 520px;
+}
+.coin3d::before {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--miku) 32%, transparent),
+    transparent
+  );
+  animation: coin3d-glow 4s ease-in-out infinite;
+}
+.coin3d-spin {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  animation: coin3d-turn 4s linear infinite;
+}
+.coin3d-spin > i {
+  position: absolute;
+  inset: 0;
+}
+.coin3d-spin > i svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.coin3d-spin > i.mid {
+  filter: brightness(0.42) saturate(1.4);
+}
+.coin3d-spin > b {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  height: 56%;
+  width: 14px;
+  margin-left: -7px;
+  background: repeating-linear-gradient(0deg, #137a7f 0 5px, #0b4f53 5px 7px);
+  transform: rotateY(90deg);
+}
+.coin3d.paused .coin3d-spin,
+.coin3d.paused::before {
+  animation-play-state: paused;
+}
+@keyframes coin3d-turn {
+  from {
+    transform: rotateX(-10deg) rotateY(0);
+  }
+  to {
+    transform: rotateX(-10deg) rotateY(360deg);
+  }
+}
+@keyframes coin3d-glow {
+  25%,
+  75% {
+    opacity: 0.5;
+  }
+}
 
 /* Insights report sections (step 7) hold their headings' margins, so each one's picture has its whole content. */
-[data-report] { display: flow-root; }
+[data-report] {
+  display: flow-root;
+}
 
 /* Section titles (Q46). The pixel face has one weight and fake bold is off (it smears), so these titles draw each
    letter twice 1px apart (a crisp pixel bold), with NieR's pink ◆ in front and a staff line under them. */
-.section-title { text-shadow: 1px 0 0 currentColor; border-bottom: 2px solid currentColor; padding-bottom: 6px; }
-.section-title::before { content: "◆ " / ""; color: var(--n-pink); }
+.section-title {
+  text-shadow: 1px 0 0 currentColor;
+  border-bottom: 2px solid currentColor;
+  padding-bottom: 6px;
+}
+.section-title::before {
+  content: '◆ ' / '';
+  color: var(--n-pink);
+}

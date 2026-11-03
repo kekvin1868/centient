@@ -5,7 +5,9 @@ import { CURRENCIES } from './currencies';
 export { CURRENCIES, type Currency } from './currencies';
 
 /** Decimals per listed currency code (IDR 0, USD 2, JPY 0, KWD 3, USDT 6, BTC 8, ...). */
-export const DECIMALS: Record<string, number> = Object.fromEntries(CURRENCIES.map(c => [c.code, c.decimals]));
+export const DECIMALS: Record<string, number> = Object.fromEntries(
+  CURRENCIES.map(c => [c.code, c.decimals]),
+);
 
 /**
  * Parses a written number the way Indonesians and English dictation write it.
@@ -22,7 +24,16 @@ const SUFFIX: Record<string, number> = { rb: 1e3, ribu: 1e3, k: 1e3, jt: 1e6, ju
 
 /** Currency words accepted before or after a number. Rupiah words keep the rupiah rules below. */
 export const CURRENCY_WORDS: Record<string, string> = {
-  rp: 'IDR', 'rp.': 'IDR', idr: 'IDR', $: 'USD', us$: 'USD', usd: 'USD', usdt: 'USDT', btc: 'BTC', eur: 'EUR', jpy: 'JPY',
+  rp: 'IDR',
+  'rp.': 'IDR',
+  idr: 'IDR',
+  $: 'USD',
+  us$: 'USD',
+  usd: 'USD',
+  usdt: 'USDT',
+  btc: 'BTC',
+  eur: 'EUR',
+  jpy: 'JPY',
 };
 
 export type Amount =
@@ -46,7 +57,12 @@ function parseForeignNumber(s: string): number | null {
  * is not an amount. With a prefix a small rupiah number is taken literally ("Rp100" is Rp100).
  */
 export function parseAmount(token: string): Amount | null {
-  const m = token.trim().toLowerCase().match(/^(rp\.?|idr|us\$|\$|usdt|usd|btc|eur|jpy)?\s?(\d[\d.,]*)\s?(rb|ribu|k|jt|juta|m|usdt|usd|btc|eur|jpy)?$/);
+  const m = token
+    .trim()
+    .toLowerCase()
+    .match(
+      /^(rp\.?|idr|us\$|\$|usdt|usd|btc|eur|jpy)?\s?(\d[\d.,]*)\s?(rb|ribu|k|jt|juta|m|usdt|usd|btc|eur|jpy)?$/,
+    );
   if (!m) return null;
   const [, prefix, digits, suffix] = m;
   const prefixCur = prefix ? CURRENCY_WORDS[prefix] : undefined;
@@ -63,7 +79,8 @@ export function parseAmount(token: string): Amount | null {
   if (n === null) return null;
   if (suffix === 'm') return { kind: 'ambiguous_m', value: n };
   if (suffix) return { kind: 'exact', value: Math.round(n * SUFFIX[suffix]) };
-  if (!prefix && Number.isInteger(n) && n < 1000) return { kind: 'inferred', candidates: [n, n * 1e3, n * 1e6] };
+  if (!prefix && Number.isInteger(n) && n < 1000)
+    return { kind: 'inferred', candidates: [n, n * 1e3, n * 1e6] };
   return { kind: 'exact', value: Math.round(n) };
 }
 
@@ -71,7 +88,10 @@ export function parseAmount(token: string): Amount | null {
 export function formatMoney(minor: number, currency = 'IDR'): string {
   const d = DECIMALS[currency] ?? 0;
   const major = minor / 10 ** d;
-  const s = Math.abs(major).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const s = Math.abs(major).toLocaleString('en-US', {
+    minimumFractionDigits: d,
+    maximumFractionDigits: d,
+  });
   const sign = minor < 0 ? '-' : '';
   return currency === 'IDR' ? `${sign}Rp${s}` : `${sign}${currency} ${s}`;
 }

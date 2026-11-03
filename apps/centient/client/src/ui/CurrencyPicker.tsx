@@ -12,22 +12,52 @@ export function searchCurrencies(query: string) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const code = CURRENCIES.filter(c => c.code.toLowerCase().startsWith(q));
-  return [...code, ...CURRENCIES.filter(c => !code.includes(c) && c.name.toLowerCase().includes(q))].slice(0, MAX_SHOWN);
+  return [
+    ...code,
+    ...CURRENCIES.filter(c => !code.includes(c) && c.name.toLowerCase().includes(q)),
+  ].slice(0, MAX_SHOWN);
 }
 
-export function CurrencyPicker({ value, onChange }: { value: string; onChange: (code: string) => void }) {
+export function CurrencyPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (code: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const name = CURRENCIES.find(c => c.code === value)?.name;
-  const pick = (code: string) => { onChange(code); setOpen(false); setQuery(''); };
+  const pick = (code: string) => {
+    onChange(code);
+    setOpen(false);
+    setQuery('');
+  };
 
   return (
     <>
-      <Row title="Currency" trail={<span className="max-w-[55vw] truncate">{value}{name ? ` · ${name}` : ''}</span>} chevron onClick={() => setOpen(!open)} />
-      {open && <InputRow label="Search" value={query} placeholder="yen, euro, SGD" onInput={setQuery} />}
-      {open && searchCurrencies(query).map(c => (
-        <Row key={`currency:${c.code}`} title={`${c.code} · ${c.name}`} onClick={() => pick(c.code)} />
-      ))}
+      <Row
+        title="Currency"
+        trail={
+          <span className="max-w-[55vw] truncate">
+            {value}
+            {name ? ` · ${name}` : ''}
+          </span>
+        }
+        chevron
+        onClick={() => setOpen(!open)}
+      />
+      {open && (
+        <InputRow label="Search" value={query} placeholder="yen, euro, SGD" onInput={setQuery} />
+      )}
+      {open &&
+        searchCurrencies(query).map(c => (
+          <Row
+            key={`currency:${c.code}`}
+            title={`${c.code} · ${c.name}`}
+            onClick={() => pick(c.code)}
+          />
+        ))}
     </>
   );
 }

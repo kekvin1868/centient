@@ -27,17 +27,40 @@ describe('evalAmount', () => {
     expect(evalAmount('0.001*2', 'BTC')).toBe(200_000);
   });
   it('refuses what cannot be worked out', () => {
-    for (const bad of ['', '5/0', '5-10', '-5', '(5+2', '5+2)', '5+', '*5', '5++2', '()', 'abc', '5 apples'])
+    for (const bad of [
+      '',
+      '5/0',
+      '5-10',
+      '-5',
+      '(5+2',
+      '5+2)',
+      '5+',
+      '*5',
+      '5++2',
+      '()',
+      'abc',
+      '5 apples',
+    ])
       expect(evalAmount(bad, 'IDR'), bad).toBeNull();
   });
 });
 
 describe('amountInput', () => {
   it('regroups a plain rupiah amount as before', () => {
-    expect(amountInput('1500000', 'IDR')).toEqual({ minor: 1_500_000, text: '1.500.000', sum: false, invalid: false });
+    expect(amountInput('1500000', 'IDR')).toEqual({
+      minor: 1_500_000,
+      text: '1.500.000',
+      sum: false,
+      invalid: false,
+    });
   });
   it('keeps a sum as typed and gives its result', () => {
-    expect(amountInput('1500000+5', 'IDR')).toEqual({ minor: 1_500_005, text: '1500000+5', sum: true, invalid: false });
+    expect(amountInput('1500000+5', 'IDR')).toEqual({
+      minor: 1_500_005,
+      text: '1500000+5',
+      sum: true,
+      invalid: false,
+    });
   });
   it('marks a half-typed sum invalid', () => {
     expect(amountInput('1500000+', 'IDR')).toMatchObject({ minor: null, sum: true, invalid: true });

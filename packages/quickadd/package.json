@@ -1,1 +1,9 @@
-{ "name": "@centient/quickadd", "private": true, "type": "module", "exports": "./src/index.ts", "dependencies": { "@centient/money": "*" } }
+{
+  "name": "@centient/quickadd",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@centient/money": "*"
+  }
+}
