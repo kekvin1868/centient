@@ -15,7 +15,6 @@ import {
   type QueryKey,
 } from '@tanstack/react-query';
 import { errorText } from '../lib/run';
-import { version } from '../lib/state';
 import { showToast } from '../ui/Toast';
 
 declare module '@tanstack/react-query' {
@@ -25,11 +24,6 @@ declare module '@tanstack/react-query' {
 }
 
 const DAY = 24 * 3600_000;
-
-// ponytail: bridge for screens not moved to models/ yet; both directions go with the last one.
-// A legacy save bumps `version` (refresh()), which marks every query stale; a query save bumps `version` too, so
-// legacy screens reload. `fromQuery` stops the second from echoing back as the first.
-let fromQuery = false;
 
 export const queryClient: QueryClient = new QueryClient({
   defaultOptions: {
@@ -48,19 +42,12 @@ export const queryClient: QueryClient = new QueryClient({
       if (!mutation.options.onError) showToast(errorText(e));
     },
     onSuccess: (_d, _v, _c, mutation) => {
-      fromQuery = true;
-      version.value++;
-      fromQuery = false;
       const keys = mutation.meta?.invalidates;
       return queryClient.invalidateQueries({
         predicate: q => keys?.some(queryKey => matchQuery({ queryKey }, q)) ?? true,
       });
     },
   }),
-});
-
-version.subscribe(() => {
-  if (!fromQuery) void queryClient.invalidateQueries();
 });
 
 /** localStorage when the device allows it (private mode can refuse); otherwise nothing is kept. */

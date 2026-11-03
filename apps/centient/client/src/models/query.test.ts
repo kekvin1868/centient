@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../ui/Toast', () => ({ showToast: vi.fn() }));
-const { queryClient } = await import('./query');
-const { version } = await import('../lib/state');
+const { persist, queryClient } = await import('./query');
 const { showToast } = await import('../ui/Toast');
 
 const seed = () => {
@@ -39,18 +38,22 @@ describe('saves refresh what they name', () => {
     expect(stale(['accounts', 'balances'])).toBe(true);
   });
 
-  it('tells screens not on queries yet (version) without echoing back', async () => {
+  it('persist resolves after the named queries refreshed, true when it worked', async () => {
     seed();
-    const before = version.value;
-    await save({ invalidates: [['budgets']] });
-    expect(version.value).toBe(before + 1);
-    expect(stale(['accounts', 'balances'])).toBe(false); // the bump did not invalidate everything
+    const ok = await persist(async () => 'ok', [['budgets']]);
+    expect(ok).toBe(true);
+    expect(stale(['budgets', 'status'])).toBe(true);
+    expect(stale(['accounts', 'balances'])).toBe(false);
+    expect(await persist(async () => Promise.reject(new Error('No')))).toBe(false);
   });
 
-  it('a legacy save (version bump) marks every query stale', () => {
+  it('persist leaves the toast to an onError of its own', async () => {
     seed();
-    version.value++;
-    expect(stale(['accounts', 'balances'])).toBe(true);
+    const own = vi.fn();
+    vi.mocked(showToast).mockClear();
+    await persist(async () => Promise.reject(new Error('Offline')), undefined, own);
+    expect(own).toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalled();
   });
 
   it('shows a refused save as a toast', async () => {

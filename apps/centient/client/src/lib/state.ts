@@ -1,5 +1,5 @@
 // App-wide state. Screens read these signals. The basics (me, catalog, qctx) are mirrored from the query cache by
-// models/workspace (loadBasics, refresh).
+// models/workspace (seedBasics on start, then whenever their queries refresh).
 import type { QAContext } from '@centient/quickadd';
 import { effect, signal } from '@preact/signals-react';
 import type { Catalog, Me } from '../models/workspace';
@@ -10,8 +10,6 @@ export type { Catalog } from '../models/workspace';
 export const me = signal<Me | null>(null);
 export const catalog = signal<Catalog>({ accounts: [], envelopes: [], categories: [] });
 export const qctx = signal<QAContext | null>(null);
-/** Bumped after every write; screens reload when it changes. */
-export const version = signal(0);
 /** Home's account filter (null = all accounts), remembered on this device. */
 export const selectedAccount = signal<string | null>(load('account', null));
 effect(() => save('account', selectedAccount.value));
