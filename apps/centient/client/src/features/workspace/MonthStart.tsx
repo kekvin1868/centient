@@ -1,7 +1,8 @@
 // The day the budget month starts (payday), so each month runs payday to payday.
 import { call, client } from '../../lib/api';
 import { attempt } from '../../lib/run';
-import { me, refresh } from '../../lib/state';
+import { me } from '../../lib/state';
+import { refresh } from '../../models/workspace';
 import { PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { showToast } from '../../ui/Toast';

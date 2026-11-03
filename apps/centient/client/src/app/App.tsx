@@ -1,12 +1,14 @@
 // App shell: first run, then four screens behind a tab bar, inside Konsta's iOS theme. A tab change redraws
 // the screen with a random retro effect (TV, glitch or render).
+import { useIsRestoring } from '@tanstack/react-query';
 import { App as KonstaApp } from 'konsta/react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { BottomNav, type Screen } from '../layouts/BottomNav';
 import { Toast } from '../ui/Toast';
 import { attempt } from '../lib/run';
 import { Home } from '../screens/Home';
-import { loadBasics, me } from '../lib/state';
+import { me } from '../lib/state';
+import { loadBasics, seedBasics } from '../models/workspace';
 import { randomFx, type Fx } from '../ui/night/tv';
 
 // Only Home is in the first download. The first run loads when it shows; the other tabs load while the phone is
@@ -27,10 +29,14 @@ export function App() {
   const prev = useRef<Screen>('home');
   const [fx, setFx] = useState<Fx | null>(null);
 
+  // Wait for the device's saved cache; when it holds the basics, render from it at once and refresh behind it.
+  const restoring = useIsRestoring();
   useEffect(() => {
+    if (restoring) return;
+    if (seedBasics()) setReady(true);
     attempt(loadBasics).then(() => setReady(true));
     whenIdle(() => void Promise.all([loadMoney(), loadInsights(), loadSettings()]));
-  }, []);
+  }, [restoring]);
   useEffect(() => {
     if (prev.current !== screen) {
       setFx(randomFx());

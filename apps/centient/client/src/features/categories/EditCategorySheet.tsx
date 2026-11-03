@@ -5,7 +5,7 @@ import { useState } from 'react';
 import type { Category } from '../../../../src/repos/categories';
 import { patchRow } from '../../lib/api';
 import { attempt } from '../../lib/run';
-import { refresh } from '../../lib/state';
+import { refresh } from '../../models/workspace';
 import { InputRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';

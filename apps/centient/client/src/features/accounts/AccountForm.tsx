@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { call, client } from '../../lib/api';
 import { attempt } from '../../lib/run';
 import { ACCOUNT_KINDS } from '../../lib/format';
-import { refresh } from '../../lib/state';
+import { refresh } from '../../models/workspace';
 import { AmountField } from '../../ui/AmountField';
 import { InputRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';

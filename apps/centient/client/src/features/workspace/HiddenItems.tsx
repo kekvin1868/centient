@@ -3,7 +3,8 @@ import { Button, ListItem } from 'konsta/react';
 import { useState } from 'react';
 import { patchRow } from '../../lib/api';
 import { attempt } from '../../lib/run';
-import { catalog, refresh } from '../../lib/state';
+import { catalog } from '../../lib/state';
+import { refresh } from '../../models/workspace';
 import { Group, Row } from '../../ui/List';
 
 type Table = 'accounts' | 'envelopes' | 'categories';

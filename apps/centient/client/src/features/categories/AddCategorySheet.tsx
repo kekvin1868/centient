@@ -3,7 +3,7 @@ import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
 import { call, client } from '../../lib/api';
 import { attempt } from '../../lib/run';
-import { refresh } from '../../lib/state';
+import { refresh } from '../../models/workspace';
 import { InputRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Segmented } from '../../ui/Segmented';
