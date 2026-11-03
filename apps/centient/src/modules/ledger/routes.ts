@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../../context';
-import { command, currency, day, id, json, query } from '../../lib/schemas';
+import { command, currency, cursor, day, id, json, query } from '../../lib/schemas';
 
 const txQuery = z.object({
   from: day.optional(),
@@ -13,7 +13,7 @@ const txQuery = z.object({
   type: z.enum(['INCOME', 'EXPENSE', 'TRANSFER', 'ALLOCATE']).optional(),
   merchant: z.string().trim().min(1).max(120).optional(),
   currency: currency.optional(),
-  cursor: z.string().max(200).optional(),
+  cursor: cursor.optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 const toFilter = (q: z.infer<typeof txQuery>) => ({

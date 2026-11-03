@@ -37,6 +37,10 @@ describe('http', () => {
       status: 400,
       body: { code: 'VALIDATION' },
     });
+    expect(await call('GET', '/api/entries?cursor=null')).toMatchObject({
+      status: 400,
+      body: { code: 'VALIDATION' },
+    });
     expect(await call('GET', '/api/entries?limit=0')).toMatchObject({
       status: 400,
       body: { code: 'VALIDATION' },

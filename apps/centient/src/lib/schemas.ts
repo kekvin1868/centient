@@ -7,6 +7,8 @@ export const id = z.string().min(1).max(64);
 export const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
 export const money = z.number().int().positive();
 export const text = (max: number) => z.string().trim().max(max);
+/** A list's page cursor, `occurred_at|id` as the lists send it; anything else is a 400, never a bad query. */
+export const cursor = z.string().regex(/^[^|]{1,40}\|[^|]{1,64}$/, 'Not a page cursor');
 export const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a #rrggbb color');
 
 export const accountKinds = [

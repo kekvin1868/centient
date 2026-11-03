@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../../context';
-import { day, hex, id, json, money, patch, query, text } from '../../lib/schemas';
+import { cursor, day, hex, id, json, money, patch, query, text } from '../../lib/schemas';
 
 export const pocketsRoutes = new Hono<AppEnv>()
   .post(
@@ -25,10 +25,7 @@ export const pocketsRoutes = new Hono<AppEnv>()
     '/:id/activity',
     query(
       z.object({
-        cursor: z
-          .string()
-          .regex(/^[^|]{1,40}\|[^|]{1,64}$/)
-          .optional(),
+        cursor: cursor.optional(),
       }),
     ),
     async c =>
