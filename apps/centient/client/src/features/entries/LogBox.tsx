@@ -6,7 +6,7 @@ import { KeyReturn, PencilSimple, Question, WifiSlash } from '@phosphor-icons/re
 import { useEffect, useMemo, useState } from 'react';
 import { OfflineError } from '../../lib/api';
 import { buzz } from '../../lib/motion';
-import { active, catalog, me, offline, qctx, selectedAccount } from '../../lib/state';
+import { catalog, me, offline, qctx, selectedAccount } from '../../lib/state';
 import { Banner } from '../../ui/Banner';
 import { showToast } from '../../ui/Toast';
 import { blankForm, chipView, fromDraft, toCommand, type LogItem } from './form';
@@ -22,7 +22,6 @@ export function LogBox() {
   const [sheet, setSheet] = useState<LogItem | null>(null);
   const [saving, setSaving] = useState(false);
   const today = me.value?.today ?? '';
-  const iou = active(catalog.value.accounts).find(a => a.kind === 'IOU')?.id ?? null;
 
   const live = useMemo(() => {
     if (!text.trim() || !qctx.value) return [];
@@ -35,7 +34,7 @@ export function LogBox() {
     };
     return parseQuickAdd(text, ctx).map((d, i) => {
       const key = `${i}:${d.text}`;
-      return edits[key] ?? fromDraft(d, key, iou);
+      return edits[key] ?? fromDraft(d, key, null);
     });
   }, [text, edits, qctx.value, selectedAccount.value, catalog.value]);
   const items = [...live, ...pending];

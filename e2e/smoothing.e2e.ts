@@ -464,6 +464,40 @@ test('a manual entry is a receipt: type the title, pick a pocket stamp, enter th
   await page.keyboard.press('Escape');
 });
 
+test('a split bill names people, re-divides live, and Equal resets it (Phase 1b)', async () => {
+  await tab('Home').tap();
+  await page.getByRole('button', { name: 'Add without typing' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'New entry' });
+  await sheet
+    .getByRole('textbox', { name: 'What was it?' })
+    .pressSequentially('Kado', { delay: 20 });
+  await sheet.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Home & Bills' });
+  await sheet.getByRole('combobox', { name: 'Paid with' }).selectOption({ label: 'Main Account' });
+  await sheet.getByRole('textbox', { name: 'Amount' }).fill('100000');
+  await sheet.getByRole('button', { name: '+ Split or note' }).tap();
+  for (let n = 0; n < 3; n++) await sheet.getByRole('button', { name: 'One person more' }).tap();
+  const who = sheet.getByRole('group', { name: 'Who pays what' });
+  await expect(who.getByRole('textbox', { name: 'Your share' })).toHaveValue('25.000');
+  // Person 2 is Andi and pays only 10.000: the others (me, Person 3, Person 4) share the other 90.000.
+  await who.getByRole('combobox', { name: 'Person 2 name' }).fill('Andi');
+  await who.getByRole('textbox', { name: "Andi's share" }).fill('10000');
+  await expect(who.getByRole('textbox', { name: 'Your share' })).toHaveValue('30.000');
+  await who.getByRole('button', { name: 'Equal' }).tap();
+  await expect(who.getByRole('textbox', { name: 'Your share' })).toHaveValue('25.000');
+  // One person leaves: 3 people, 33.334 for me.
+  await who.getByRole('button', { name: 'Remove Person 4' }).tap();
+  await expect(who.getByRole('textbox', { name: 'Your share' })).toHaveValue('33.334');
+  await who.getByRole('textbox', { name: "Andi's share" }).fill('50000');
+  await who.getByRole('textbox', { name: "Person 3's share" }).fill('50000');
+  await expect(who.getByRole('alert')).toContainText('Your share must be more than zero');
+  await who.getByRole('textbox', { name: "Person 3's share" }).fill('20000');
+  await sheet.getByRole('button', { name: 'Log it' }).tap();
+  await expect(sheet).toBeHidden();
+  // Andi has his own tab with 50.000; deleting it removes the split again, so later tests are unaffected.
+  expect(await balance('Andi')).toBe(50_000);
+  await api(`/accounts/${await accountId('Andi')}`, { method: 'DELETE' });
+});
+
 test('an account can be in any currency: search "yen", and its balance has no decimals', async () => {
   await tab('Settings').tap();
   await page.getByRole('button', { name: 'Add account' }).tap();

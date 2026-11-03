@@ -1,7 +1,7 @@
 // The full entry form, as a receipt: Spent / Received / Moved, used by chips, Edit, and "+ Add manually".
 // The title (where / from whom) is typed like a typewriter; every other detail is a receipt line you tap to
 // change; the pocket is picked up front as stamps (Main pressed by default); the amount is the TOTAL.
-import { Minus, Plus } from '@phosphor-icons/react';
+import { Minus, Plus, X } from '@phosphor-icons/react';
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { amountInput, showAmount } from '../../lib/amount';
 import { formatMoney } from '../../lib/format';
@@ -12,6 +12,7 @@ import { useSumInput } from '../../ui/useSumInput';
 import { Segmented } from '../../ui/Segmented';
 import { Typewriter } from '../../ui/Typewriter';
 import type { EntryType, Form } from './form';
+import { shareMath, withPeople } from './shares';
 
 const TYPES: { value: EntryType; label: string }[] = [
   { value: 'EXPENSE', label: 'Spent' },
@@ -63,9 +64,20 @@ export function EntryForm({
   // Pockets of the chosen account only (a pocket belongs to one account); none picked = where its new money goes.
   const pockets = active(cat.envelopes).filter(e => e.account_id === form.accountId);
   const pocket = form.envelopeId ?? account?.default_envelope_id ?? null;
-  const ious = active(cat.accounts)
-    .filter(a => a.kind === 'IOU')
-    .map(a => ({ value: a.id, label: a.name }));
+  // Names to suggest for a split: the people tabs, without the "Friends" lump or a currency suffix ("Andi (USD)").
+  const tabNames = [
+    ...new Set(
+      active(cat.accounts)
+        .filter(a => a.kind === 'IOU' && a.name.toLowerCase() !== 'friends')
+        .map(a => a.name.replace(/ \([A-Z]{3,}\)$/, '')),
+    ),
+  ];
+  const shares = shareMath(
+    form.amount,
+    form.parties.map(p => p.share),
+    form.myShare,
+  );
+  const anyFixed = form.myShare !== null || form.parties.some(p => p.share !== null);
   const money = form.type === 'EXPENSE' || form.type === 'INCOME';
 
   return (
@@ -75,7 +87,16 @@ export function EntryForm({
           label="Type"
           value={form.type}
           options={TYPES}
-          onChange={t => set({ type: t, categoryId: null, toAccountId: null, split: null })}
+          onChange={t =>
+            set({
+              type: t,
+              categoryId: null,
+              toAccountId: null,
+              split: null,
+              parties: [],
+              myShare: null,
+            })
+          }
         />
       )}
       <Receipt stamp={lockType ? 'EDITING' : undefined}>
@@ -241,13 +262,7 @@ export function EntryForm({
                   />
                   <Step
                     label="One person fewer"
-                    onClick={() => {
-                      const n = Math.max(1, (form.split ?? 1) - 1);
-                      set({
-                        split: n > 1 ? n : null,
-                        iouAccountId: n > 1 ? form.iouAccountId : null,
-                      });
-                    }}
+                    onClick={() => set(withPeople(form, (form.split ?? 1) - 1))}
                   >
                     <Minus size={12} weight="bold" />
                   </Step>
@@ -256,27 +271,87 @@ export function EntryForm({
                   </span>
                   <Step
                     label="One person more"
-                    onClick={() => {
-                      const n = Math.min(50, (form.split ?? 1) + 1);
-                      set({ split: n, iouAccountId: form.iouAccountId ?? ious[0]?.value ?? null });
-                    }}
+                    onClick={() => set(withPeople(form, (form.split ?? 1) + 1))}
                   >
                     <Plus size={12} weight="bold" />
                   </Step>
                 </div>
-                {form.split && form.split > 1 && ious.length > 1 && (
-                  <ReceiptLine
-                    label="Who owes you"
-                    value={name(cat.accounts, form.iouAccountId) ?? 'Pick one'}
-                    control={
-                      <LineSelect
-                        label="Who owes you"
-                        value={form.iouAccountId}
-                        options={ious}
-                        onChange={iouAccountId => set({ iouAccountId })}
+                {form.split && form.split > 1 && (
+                  <div className="pb-1" role="group" aria-label="Who pays what">
+                    <datalist id="split-people">
+                      {tabNames.map(n => (
+                        <option key={n} value={n} />
+                      ))}
+                    </datalist>
+                    <ShareRow
+                      who={<span className="font-bold">You</span>}
+                      value={shares.mine}
+                      fixed={form.myShare !== null}
+                      currency={currency}
+                      label="Your share"
+                      onChange={myShare => set({ myShare })}
+                    />
+                    {form.parties.map((p, i) => (
+                      <ShareRow
+                        key={i}
+                        who={
+                          <input
+                            aria-label={`Person ${i + 2} name`}
+                            list="split-people"
+                            value={p.name}
+                            placeholder={`Person ${i + 2}`}
+                            onChange={e =>
+                              set({
+                                parties: form.parties.map((x, j) =>
+                                  j === i ? { ...x, name: e.target.value } : x,
+                                ),
+                              })
+                            }
+                            className="min-w-0 flex-1 border-b-2 border-dotted border-[color-mix(in_oklab,var(--paper-ink)_25%,transparent)] bg-transparent font-bold outline-none placeholder:font-normal placeholder:text-[var(--paper-faint)] [font-size:16px]"
+                          />
+                        }
+                        value={shares.others[i]}
+                        fixed={p.share !== null}
+                        currency={currency}
+                        label={`${p.name || `Person ${i + 2}`}'s share`}
+                        onChange={share =>
+                          set({
+                            parties: form.parties.map((x, j) => (j === i ? { ...x, share } : x)),
+                          })
+                        }
+                        onRemove={() => {
+                          const left = form.parties.filter((_, j) => j !== i);
+                          set({ split: left.length ? left.length + 1 : null, parties: left });
+                        }}
                       />
-                    }
-                  />
+                    ))}
+                    {shares.problem && (
+                      <p
+                        role="alert"
+                        className="py-1 text-right text-[12px] font-bold text-[#b3261e]"
+                      >
+                        {shares.problem === 'gap'
+                          ? `${formatMoney(Math.abs(shares.gap), currency)} ${shares.gap > 0 ? 'not covered' : 'too much'}`
+                          : shares.problem === 'over'
+                            ? 'The amounts add up to more than the total'
+                            : 'Your share must be more than zero'}
+                      </p>
+                    )}
+                    {anyFixed && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          set({
+                            myShare: null,
+                            parties: form.parties.map(p => ({ ...p, share: null })),
+                          })
+                        }
+                        className="text-[12px] font-bold uppercase tracking-[0.1em] underline decoration-dotted underline-offset-4 active:opacity-70"
+                      >
+                        Equal
+                      </button>
+                    )}
+                  </div>
                 )}
               </>
             )}
@@ -307,6 +382,50 @@ export function EntryForm({
         </div>
       </Receipt>
     </>
+  );
+}
+
+/** One person's line in a split: who, and their amount. Typing over the amount fixes it (bold); empty = equal again. */
+function ShareRow({
+  who,
+  value,
+  fixed,
+  currency,
+  label,
+  onChange,
+  onRemove,
+}: {
+  who: ReactNode;
+  value: number;
+  fixed: boolean;
+  currency: string;
+  label: string;
+  onChange: (share: number | null) => void;
+  onRemove?: () => void;
+}) {
+  return (
+    <div className="flex items-baseline gap-1.5 py-[5px]">
+      {who}
+      <input
+        aria-label={label}
+        inputMode="decimal"
+        value={showAmount(value, currency)}
+        onChange={e => onChange(amountInput(e.target.value, currency).minor)}
+        className={`num w-[11ch] bg-transparent text-right outline-none [font-size:16px] ${fixed ? 'font-extrabold underline decoration-dotted' : 'font-normal text-[var(--paper-faint)]'}`}
+      />
+      {onRemove ? (
+        <button
+          type="button"
+          aria-label={`Remove ${label.replace(/'s share$/, '')}`}
+          onClick={onRemove}
+          className="grid size-5 shrink-0 place-items-center active:opacity-60"
+        >
+          <X size={12} weight="bold" />
+        </button>
+      ) : (
+        <span className="size-5 shrink-0" aria-hidden="true" />
+      )}
+    </div>
   );
 }
 

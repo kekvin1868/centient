@@ -91,3 +91,108 @@ describe('toCommand / fromCommand', () => {
     ).toEqual({ error: 'Enter an amount' });
   });
 });
+
+describe('split bills in the form (T1-T6)', () => {
+  const bill = {
+    type: 'EXPENSE' as const,
+    accountId: 'bca',
+    categoryId: 'food',
+    amount: 100_000,
+    date: '2026-10-20',
+  };
+  const tabName = (id: string) => ({ andi: 'Andi', budi: 'Budi' })[id] ?? '';
+
+  it('keeps an unnamed equal split as the plain head count (what quick add sends)', () => {
+    const r = toCommand(item('makan 90rb bagi 3').form);
+    expect(r).toEqual({
+      command: expect.objectContaining({ split: { people: 3, iouAccountId: 'friends' } }),
+    });
+  });
+
+  it('sends names, and the typed amount of one person with the rest shared equally', () => {
+    const f = fromCommand({
+      ...bill,
+      split: { people: 4, parties: [{ share: 25_000 }, { share: 25_000 }, { share: 25_000 }] },
+    });
+    f.parties[0] = { ...f.parties[0], name: 'Andi', share: 10_000 };
+    f.parties[1] = { ...f.parties[1], name: 'Budi' };
+    const r = toCommand(f);
+    expect(r).toEqual({
+      command: expect.objectContaining({
+        split: {
+          people: 4,
+          iouAccountId: undefined,
+          parties: [
+            { name: 'Andi', share: 10_000 },
+            { name: 'Budi', share: 30_000 },
+            { share: 30_000 },
+          ],
+        },
+      }),
+    });
+  });
+
+  it('blocks Save with the shares not adding up (T5) or leaving me nothing', () => {
+    const f = fromCommand({ ...bill, split: { people: 3, parties: [{ share: 1 }, { share: 1 }] } });
+    expect(
+      toCommand({ ...f, parties: f.parties.map((p, i) => ({ ...p, share: i ? 40_000 : 60_000 })) }),
+    ).toEqual({
+      error: 'Your share must be more than zero',
+    });
+    expect(
+      toCommand({ ...f, myShare: 10_000, parties: f.parties.map(p => ({ ...p, share: 30_000 })) }),
+    ).toEqual({ error: "The shares don't add up to the total" });
+  });
+
+  it('loads an equal split as automatic and an uneven one as typed, and sends a tab by id until renamed', () => {
+    const equal = fromCommand(
+      {
+        ...bill,
+        amount: 90_000,
+        split: { people: 3, parties: [{ iouAccountId: 'andi', share: 30_000 }, { share: 30_000 }] },
+      },
+      tabName,
+    );
+    expect(equal.parties.map(p => p.share)).toEqual([null, null]);
+    expect(equal.parties[0]).toMatchObject({ name: 'Andi', tab: 'andi' });
+
+    const uneven = fromCommand(
+      {
+        ...bill,
+        split: {
+          people: 3,
+          parties: [
+            { iouAccountId: 'andi', share: 10_000 },
+            { iouAccountId: 'budi', share: 50_000 },
+          ],
+        },
+      },
+      tabName,
+    );
+    expect(uneven.parties.map(p => p.share)).toEqual([10_000, 50_000]);
+    const same = toCommand(uneven);
+    expect(same).toEqual({
+      command: expect.objectContaining({
+        split: {
+          people: 3,
+          iouAccountId: undefined,
+          parties: [
+            { iouAccountId: 'andi', share: 10_000 },
+            { iouAccountId: 'budi', share: 50_000 },
+          ],
+        },
+      }),
+    });
+    uneven.parties[0] = { ...uneven.parties[0], name: 'Andy' };
+    expect(toCommand(uneven)).toEqual({
+      command: expect.objectContaining({
+        split: expect.objectContaining({
+          parties: [
+            { name: 'Andy', share: 10_000 },
+            { iouAccountId: 'budi', share: 50_000 },
+          ],
+        }),
+      }),
+    });
+  });
+});
