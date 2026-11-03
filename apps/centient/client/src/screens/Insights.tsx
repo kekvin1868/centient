@@ -1,13 +1,14 @@
 // Insights: the ledger read back for one period and one currency. Period bar, currency chips, the headline card
 // (spending, comparison, income, savings rate), where it went, the trend, Daily Wallet Spending, top merchants,
 // biggest expenses, Budgets over time. A category or merchant row opens its entries; an entry opens the entry sheet.
-// `?` explains the budget words.
-import { useEffect, useState } from 'react';
+// The export row makes a report PDF of the sections marked `data-report`, or a CSV (step 7); `?` explains the budget words.
+import { useEffect, useRef, useState } from 'react';
 import { BudgetGuideSheet } from '../features/budgets/BudgetGuideSheet';
 import { EntrySheet } from '../features/entries/EntrySheet';
 import { BiggestExpenses } from '../features/insights/BiggestExpenses';
 import { CurrencyChips } from '../features/insights/CurrencyChips';
 import { EntriesSheet, type Pick } from '../features/insights/EntriesSheet';
+import { ExportRow } from '../features/insights/ExportRow';
 import { InsightsHeadline } from '../features/insights/InsightsHeadline';
 import { periodLabel, shareLabel, trendBars, weekdayBars, weekdayReadout } from '../features/insights/insights';
 import { SavingsBars } from '../features/insights/SavingsBars';
@@ -43,6 +44,7 @@ export function Insights() {
   const [savings, setSavings] = useState<Savings>([]);
   const [pick, setPick] = useState<Pick | null>(null);
   const [entry, setEntry] = useState<Entry | null>(null);
+  const screen = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let live = true;
     attempt(async () => {
@@ -70,7 +72,11 @@ export function Insights() {
     <Page title="Insights">
       <PeriodBar kind={kind} span={data.period} oldest={data.oldest} onKind={setKind} onGo={setDate} />
       <CurrencyChips currencies={data.currencies} value={cur} onChange={setCurrency} />
-      <InsightsHeadline currency={cur} spending={data.spending} income={data.income} savingsRate={data.savingsRate} previous={data.previous} />
+      <div ref={screen}>
+      <section data-report>
+        <InsightsHeadline currency={cur} spending={data.spending} income={data.income} savingsRate={data.savingsRate} previous={data.previous} />
+      </section>
+      <section data-report>
       <Heading>Where it went</Heading>
       <RankedBars title="Spending by category" empty="No spending in this period yet."
         onPick={key => setPick({ title: `${nameOf(cats, key)} · ${span}`, categoryId: key })}
@@ -78,12 +84,18 @@ export function Insights() {
           const name = nameOf(cats, c.categoryId);
           return { key: c.categoryId, name, label: `${categoryEmoji(name)} ${name}`, value: c.amount, shown: formatMoney(c.amount, cur), note: shareLabel(c.amount, data.spending) ?? undefined };
         })} />
+      </section>
+      <section data-report>
       <Heading>{kind === 'cycle' ? 'Spending each day' : 'Spending each month'}</Heading>
       <BarChart key={`trend:${data.period.from}:${cur}`} title={kind === 'cycle' ? 'Spending each day' : 'Spending each month'}
         empty="No spending in this period yet." bars={trendBars(data.trend, data.period.year, cur)} />
+      </section>
+      <section data-report>
       <Heading>Daily Wallet Spending</Heading>
       <BarChart key={`week:${data.period.from}:${cur}`} title="Daily Wallet Spending" empty="No spending in this period yet."
         bars={days} readout={b => weekdayReadout(days.find(d => d.key === b.key)!, cur)} />
+      </section>
+      <section data-report>
       <Heading>Top merchants</Heading>
       <RankedBars title="Top merchants" empty="No merchants named in this period yet."
         onPick={key => { const m = data.merchants.find(x => x.key === key)!; setPick({ title: `${titleCase(m.name)} · ${span}`, merchant: m.key }); }}
@@ -91,17 +103,21 @@ export function Insights() {
           key: m.key, name: titleCase(m.name), label: titleCase(m.name), value: m.total, shown: formatMoney(m.total, cur),
           note: `${m.visits} ${m.visits === 1 ? 'visit' : 'visits'}`,
         }))} />
+      </section>
+      <section data-report>
       <Heading>Biggest expenses</Heading>
       <BiggestExpenses rows={data.biggest} currency={cur} onOpen={setEntry} />
-      {savings.length > 0 && (<>
+      </section>
+      {savings.length > 0 && (<section data-report>
         <Heading>Budgets over time</Heading>
         {history.length
           ? <SavingsBars budgets={history} currency={cur} />
           : <p className="mx-4 border border-dashed border-edge px-4 py-6 text-center text-sm text-muted">Shows here once a budget has run a full cycle.</p>}
-      </>)}
-      <div className="mx-4 mt-6 flex justify-end">
-        <WinButton label="What the budget words mean" onClick={() => setGuide(true)}>?</WinButton>
+      </section>)}
       </div>
+      <ExportRow period={data.period} currency={cur} report={() => screen.current}>
+        <WinButton label="What the budget words mean" onClick={() => setGuide(true)}>?</WinButton>
+      </ExportRow>
       <BudgetGuideSheet open={guide} onClose={() => setGuide(false)} />
       <EntriesSheet pick={pick} from={data.period.from} last={data.period.last} currency={cur} onClose={() => setPick(null)}
         onOpen={setEntry} />

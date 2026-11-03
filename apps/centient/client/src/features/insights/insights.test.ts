@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { comparisonLine, periodLabel, savingsView, shareLabel, trendBars, weekdayBars, weekdayReadout, counted, merchantKey } from './insights';
+import { paginate } from './report';
+import { exportName, comparisonLine, periodLabel, savingsView, shareLabel, trendBars, weekdayBars, weekdayReadout, counted, merchantKey } from './insights';
 
 const oct = (spending: number, basis: 'SAME_DAYS' | 'FULL' = 'SAME_DAYS') => ({ year: 2026, month: 10, spending, basis });
 
@@ -88,4 +89,26 @@ describe('counted amounts (T5.32)', () => {
     expect(counted(e, food, id => id !== 'usd').amount).toBe(0);
   });
   it('groups merchant names like the server', () => expect(merchantKey(' Indomaret ')).toBe('indomaret'));
+});
+
+describe('exportName (T7.9)', () => {
+  it('names the file by period and currency', () => {
+    expect(exportName({ year: 2026, month: 11 }, 'IDR', 'csv')).toBe('centient-2026-11-IDR.csv');
+    expect(exportName({ year: 2026, month: 11 }, null, 'csv')).toBe('centient-2026-11-all.csv');
+    expect(exportName({ year: 2026, month: null }, 'IDR', 'csv')).toBe('centient-2026-IDR.csv');
+    expect(exportName({ year: 2026, month: 3 }, 'USD', 'pdf')).toBe('centient-2026-03-USD.pdf');
+  });
+});
+
+describe('paginate (Q43)', () => {
+  it('packs sections in order and moves one that does not fit whole to the next page', () => {
+    // Page 1 has 1000 under the title, later pages 1200; 20 between sections.
+    expect(paginate([400, 500, 300, 800], 1000, 1200, 20)).toEqual([
+      { page: 0, y: 0, h: 400 }, { page: 0, y: 420, h: 500 }, { page: 1, y: 0, h: 300 }, { page: 1, y: 320, h: 800 },
+    ]);
+  });
+  it('shrinks a section taller than a whole page to fit it', () => {
+    expect(paginate([100, 1500], 1000, 1200, 20)).toEqual([{ page: 0, y: 0, h: 100 }, { page: 1, y: 0, h: 1200 }]);
+    expect(paginate([1500], 1000, 1200, 20)).toEqual([{ page: 0, y: 0, h: 1000 }]);
+  });
 });

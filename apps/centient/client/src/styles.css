@@ -242,3 +242,6 @@ body::after { content: ""; position: fixed; inset: 0; z-index: 9999; pointer-eve
 .coin3d.paused .coin3d-spin, .coin3d.paused::before { animation-play-state: paused; }
 @keyframes coin3d-turn { from { transform: rotateX(-10deg) rotateY(0); } to { transform: rotateX(-10deg) rotateY(360deg); } }
 @keyframes coin3d-glow { 25%, 75% { opacity: .5; } }
+
+/* Insights report sections (step 7) hold their headings' margins, so each one's picture has its whole content. */
+[data-report] { display: flow-root; }

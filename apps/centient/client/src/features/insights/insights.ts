@@ -7,6 +7,10 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 /** A cycle (month 1-12, named by the month holding most of its days) or a whole year (month null). */
 export type Span = { year: number; month: number | null };
 
+/** An export's file name: `centient-2026-11-IDR.pdf`, `centient-2026-11-all.csv`, year view `centient-2026-IDR.csv` (R7.6). */
+export const exportName = (s: Span, currency: string | null, ext: 'pdf' | 'csv') =>
+  `centient-${s.year}${s.month ? `-${String(s.month).padStart(2, '0')}` : ''}-${currency ?? 'all'}.${ext}`;
+
 /** The period bar's label: "Nov 2026 cycle" or "2026". */
 export const periodLabel = (s: Span) => (s.month ? `${MONTHS[s.month - 1].slice(0, 3)} ${s.year} cycle` : String(s.year));
 
