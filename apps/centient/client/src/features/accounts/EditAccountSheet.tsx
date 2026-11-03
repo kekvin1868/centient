@@ -3,12 +3,12 @@
 import { Block, BlockFooter, Button } from 'konsta/react';
 import { useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
-import { ACCOUNT_KINDS } from '../../lib/format';
+import { ACCOUNT_KINDS, dayLabel } from '../../lib/format';
 import { attempt } from '../../lib/run';
 import { active, catalog } from '../../lib/state';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { InputRow, PickerRow } from '../../ui/Fields';
-import { Group } from '../../ui/List';
+import { Group, Row } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
 import { CurrencyPicker } from '../../ui/CurrencyPicker';
@@ -33,6 +33,9 @@ export function EditAccountSheet({
   const [dueDay, setDueDay] = useState<string | null>(a?.due_day ? String(a.due_day) : null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   if (!a) return null;
+  // Old names are saved for every account; only people tabs list them for now.
+  const formerly =
+    a.kind === 'IOU' ? (catalog.value.accounts.find(x => x.id === a.id)?.formerNames ?? []) : [];
   const billed = kind === 'CREDIT_CARD' || kind === 'PAYLATER';
   const patch = async (json: RowPatch, done: string) => {
     if (!(await persist(() => accountApi.update(a.id, json)))) return;
@@ -73,6 +76,14 @@ export function EditAccountSheet({
       <Sheet open={!confirmDelete} onClose={onClose} title={a.name}>
         <Group>
           <InputRow label="Name" value={name} onInput={setName} />
+          {formerly.length > 0 && (
+            <Row
+              title="Formerly"
+              sub={formerly
+                .map(f => `${f.name} (until ${dayLabel(f.at.slice(0, 10), '')})`)
+                .join(', ')}
+            />
+          )}
           {a.kind !== 'IOU' && (
             <PickerRow
               label="Type"

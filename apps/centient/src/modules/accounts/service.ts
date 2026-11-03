@@ -137,7 +137,7 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
         );
       if (archived !== undefined) rest.archived_at = archived ? stamp() : null;
       // The account goes first: its update adds a first-use currency row the pockets then point at.
-      if (!(await repos.accounts.update(ws, id, rest)))
+      if (!(await repos.accounts.update(ws, id, rest, stamp())))
         throw new DomainError('NOT_FOUND', 'Not found');
       if (currency) {
         // Its pockets are empty too (no entries), so they simply follow the account's new currency.

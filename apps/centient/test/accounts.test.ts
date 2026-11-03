@@ -104,3 +104,41 @@ describe('accounts in any currency', () => {
     expect(Object.keys(b).sort()).toEqual(['accounts', 'envelopes']);
   });
 });
+
+describe('old names of an account', () => {
+  it('saves the old name with its time on a rename and lists them newest first in the catalog', async () => {
+    const ws = await ensure('rename@test');
+    const a = await svc(ws).accounts.create({ name: 'Abang', kind: 'IOU' });
+    await svc(ws).accounts.update(a.id, { name: 'Obang' });
+    await svc(ws).accounts.update(a.id, { name: 'Obang' }); // same name: no row
+    await svc(ws).accounts.update(a.id, { name: 'Bang O' });
+    const acc = (await svc(ws).workspace.catalog()).accounts.find(x => x.id === a.id)!;
+    expect(acc.name).toBe('Bang O');
+    expect(acc.formerNames).toEqual([
+      { name: 'Obang', at: new Date(NOW).toISOString() },
+      { name: 'Abang', at: new Date(NOW).toISOString() },
+    ]);
+  });
+
+  it('keeps other workspaces and unrenamed accounts empty', async () => {
+    const ws = await ensure('rename2@test');
+    const a = await svc(ws).accounts.create({ name: 'Solo', kind: 'IOU' });
+    const other = await ensure('rename3@test');
+    expect((await svc(other).workspace.catalog()).accounts.every(x => !x.formerNames.length)).toBe(
+      true,
+    );
+    expect(
+      (await svc(ws).workspace.catalog()).accounts.find(x => x.id === a.id)!.formerNames,
+    ).toEqual([]);
+  });
+
+  it('does not save a name when the rename fails on a duplicate', async () => {
+    const ws = await ensure('rename4@test');
+    await svc(ws).accounts.create({ name: 'Taken', kind: 'IOU' });
+    const b = await svc(ws).accounts.create({ name: 'Free', kind: 'IOU' });
+    await expect(svc(ws).accounts.update(b.id, { name: 'Taken' })).rejects.toThrow();
+    expect(
+      (await svc(ws).workspace.catalog()).accounts.find(x => x.id === b.id)!.formerNames,
+    ).toEqual([]);
+  });
+});

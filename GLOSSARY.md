@@ -30,6 +30,20 @@ _Avoid_: Trip budget, short budget
 The stretch of time from your month start day to the day before the next one. It is the app's only meaning of "month". A cycle is named by the month that holds most of its days: start day 1–15 takes the month it starts in, 16–31 the month it ends in.
 _Avoid_: Month, billing period
 
+### People
+
+**Person**:
+Someone you split a bill or an installment with. They need no app; they exist only in your workspace, as a tab.
+_Avoid_: Friend, contact, party
+
+**Tab**:
+The running tally of what a person owes you, such as "Andi owes me 20k". Only you see it. You settle it by logging a transfer.
+_Avoid_: IOU account (in the UI), debt
+
+**Share**:
+The part of a bill that belongs to one person. Shares start equal; you can type over one, and the people you have not edited split the rest.
+_Avoid_: Portion, cut
+
 ### Insights
 
 **Insights**:

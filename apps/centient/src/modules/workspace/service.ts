@@ -40,7 +40,12 @@ export function createWorkspaceService({
     /** Every account, pocket and category, archived ones included. */
     async catalog() {
       const { accounts, envelopes, categories } = await catalog.load();
-      return { accounts, envelopes, categories };
+      const former = await repos.accounts.formerNames(ws);
+      return {
+        accounts: accounts.map(a => ({ ...a, formerNames: former[a.id] ?? [] })),
+        envelopes,
+        categories,
+      };
     },
 
     /**
