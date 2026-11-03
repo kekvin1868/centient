@@ -4,12 +4,9 @@ import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
 import type { Envelope } from '../../../../src/repos/envelopes';
-import { call, client } from '../../lib/api';
 import { POCKET_KINDS } from '../../lib/format';
 import { nextPocketColor } from '../../lib/pocketColors';
-import { attempt } from '../../lib/run';
 import { catalog, everyday } from '../../lib/state';
-import { refresh } from '../../models/workspace';
 import { AmountField } from '../../ui/AmountField';
 import { ColorPicker } from '../../ui/ColorPicker';
 import { InputRow, PickerRow } from '../../ui/Fields';
@@ -17,6 +14,8 @@ import { Group } from '../../ui/List';
 import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
+import { pocketApi } from '../../models/pocket';
+import { persist } from '../../models/query';
 
 const KINDS = (Object.keys(POCKET_KINDS) as Envelope['kind'][]).map(k => ({
   value: k,
@@ -49,24 +48,21 @@ export function AddPocketSheet({
       : kind === 'GOAL' && !target
         ? 'Enter the goal amount'
         : null;
-  const save = () =>
-    attempt(async () => {
-      await call(
-        client.api.envelopes.$post({
-          json: {
-            accountId: accountId!,
-            name: name.trim(),
-            kind,
-            color,
-            targetAmount: kind === 'GOAL' ? target : null,
-            targetDate: kind === 'GOAL' && date ? date : null,
-          },
-        }),
-      );
-      onClose();
-      showToast(`Added to ${inside!.name}`);
-      await refresh();
-    });
+  const add = async () => {
+    const ok = await persist(() =>
+      pocketApi.create({
+        accountId: accountId!,
+        name: name.trim(),
+        kind,
+        color,
+        targetAmount: kind === 'GOAL' ? target : null,
+        targetDate: kind === 'GOAL' && date ? date : null,
+      }),
+    );
+    if (!ok) return;
+    onClose();
+    showToast(`Added to ${inside!.name}`);
+  };
   return (
     <Sheet
       open={open}
@@ -103,7 +99,7 @@ export function AddPocketSheet({
       </Group>
       <ColorPicker value={color} onChange={setColor} />
       <Block>
-        <Button large rounded disabled={Boolean(error)} onClick={save}>
+        <Button large rounded disabled={Boolean(error)} onClick={add}>
           {error ?? 'Add pocket'}
         </Button>
       </Block>

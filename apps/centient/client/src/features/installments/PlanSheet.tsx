@@ -3,26 +3,24 @@
 import { CheckCircle, Paperclip, Trash, X } from '@phosphor-icons/react';
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import type { PlanView } from '../../../../src/modules/installments/service';
 import type { Account } from '../../../../src/repos/accounts';
-import { call, client } from '../../lib/api';
 import { dayLabel, formatMoney } from '../../lib/format';
-import { attempt } from '../../lib/run';
 import { everyday, me } from '../../lib/state';
-import { refresh } from '../../models/workspace';
 import { load, save } from '../../lib/storage';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
+import { installmentApi, type Plan } from '../../models/installment';
+import { persist } from '../../models/query';
 
 export function PlanSheet({
   plan,
   account,
   onClose,
 }: {
-  plan: PlanView | null;
+  plan: Plan | null;
   account: Account;
   onClose: () => void;
 }) {
@@ -39,58 +37,28 @@ export function PlanSheet({
   const today = me.value?.today ?? '';
   const cur = account.currency_code;
   const shared = plan.parties.length > 1;
-  const base = client.api.installments[':id'];
-  const pay = (no: number, seq: number) =>
-    attempt(async () => {
-      if (seq === 0 && !from) return showToast('Pick the account you paid from');
-      if (seq === 0 && from) save('payFrom', from);
-      await call(
-        base.payments.$post({
-          param: { id: plan.id },
-          json: { no, seq, fromAccountId: seq === 0 ? from! : undefined },
-        }),
-      );
+  const slot = (no: number, seq: number) => ({ id: plan.id, no, seq });
+  const pay = async (no: number, seq: number) => {
+    if (seq === 0 && !from) return showToast('Pick the account you paid from');
+    if (seq === 0 && from) save('payFrom', from);
+    if (await persist(() => installmentApi.pay(slot(no, seq), seq === 0 ? from! : undefined)))
       showToast('Marked paid');
-      await refresh();
-    });
-  const undo = (no: number, seq: number) =>
-    attempt(async () => {
-      await call(
-        base.payments[':no'][':seq'].$delete({
-          param: { id: plan.id, no: String(no), seq: String(seq) },
-        }),
-      );
-      showToast('Marked unpaid');
-      await refresh();
-    });
-  const attach = (no: number, seq: number, file: File) =>
-    attempt(async () => {
-      await call(
-        base.payments[':no'][':seq'].proof.$post({
-          param: { id: plan.id, no: String(no), seq: String(seq) },
-          form: { file },
-        }),
-      );
+  };
+  const undo = async (no: number, seq: number) => {
+    if (await persist(() => installmentApi.unpay(slot(no, seq)))) showToast('Marked unpaid');
+  };
+  const attach = async (no: number, seq: number, file: File) => {
+    if (await persist(() => installmentApi.attachProof(slot(no, seq), file)))
       showToast('Proof attached');
-      await refresh();
-    });
+  };
   const unattach = (no: number, seq: number) =>
-    attempt(async () => {
-      await call(
-        base.payments[':no'][':seq'].proof.$delete({
-          param: { id: plan.id, no: String(no), seq: String(seq) },
-        }),
-      );
-      await refresh();
-    });
-  const remove = () =>
-    attempt(async () => {
-      setConfirm(false);
-      await call(base.$delete({ param: { id: plan.id } }));
-      onClose();
-      showToast('Plan removed. Its payments stay in your activity.');
-      await refresh();
-    });
+    persist(() => installmentApi.removeProof(slot(no, seq)));
+  const remove = async () => {
+    setConfirm(false);
+    if (!(await persist(() => installmentApi.remove(plan.id)))) return;
+    onClose();
+    showToast('Plan removed. Its payments stay in your activity.');
+  };
 
   return (
     <>

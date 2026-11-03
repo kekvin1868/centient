@@ -1,6 +1,6 @@
 // One plan in the list: what is due next, and one pip per installment.
 import { ClockCountdown } from '@phosphor-icons/react';
-import type { PlanView } from '../../../../src/modules/installments/service';
+import type { Plan } from '../../models/installment';
 import { formatMoney } from '../../lib/format';
 
 const shortDate = (d: string) =>
@@ -15,7 +15,7 @@ export function PlanCard({
   currency,
   onOpen,
 }: {
-  plan: PlanView;
+  plan: Plan;
   currency: string;
   onOpen: () => void;
 }) {

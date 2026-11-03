@@ -2,14 +2,13 @@
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
 import type { Category } from '../../../../src/repos/categories';
-import { call, client } from '../../lib/api';
-import { attempt } from '../../lib/run';
 import { active, catalog } from '../../lib/state';
-import { refresh } from '../../models/workspace';
 import { PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
+import { categoryApi } from '../../models/category';
+import { persist } from '../../models/query';
 
 export function DeleteCategorySheet({
   category,
@@ -30,18 +29,11 @@ export function DeleteCategorySheet({
     others.find(c => c.name === (category.kind === 'EXPENSE' ? 'Other' : 'Other income')) ??
     others[0];
   const [moveTo, setMoveTo] = useState<string | null>(fallback?.id ?? null);
-  const remove = () =>
-    attempt(async () => {
-      await call(
-        client.api.categories[':id'].$delete({
-          param: { id: category.id },
-          json: { moveTo: moveTo! },
-        }),
-      );
-      showToast(`Deleted ${category.name}`);
-      onDeleted();
-      await refresh();
-    });
+  const remove = async () => {
+    if (!(await persist(() => categoryApi.remove(category.id, moveTo!)))) return;
+    showToast(`Deleted ${category.name}`);
+    onDeleted();
+  };
   return (
     <Sheet open onClose={onClose} title={`Delete ${category.name}`}>
       <Group

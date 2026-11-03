@@ -5,17 +5,16 @@
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
-import { call, client } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
-import { attempt } from '../../lib/run';
 import { me } from '../../lib/state';
-import { refresh } from '../../models/workspace';
 import { AmountField } from '../../ui/AmountField';
 import { PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
 import type { Pocket } from './PocketCards';
+import { entryApi } from '../../models/entry';
+import { persist } from '../../models/query';
 
 type Bal = Account & { balance: number };
 /** Pocket ids of this account; `to` may also be `account:<id>` (another account's balance). */
@@ -65,26 +64,23 @@ export function MoveSheet({
   const save = async () => {
     if (error) return;
     const date = me.value!.today;
-    const ok = await attempt(() =>
-      call(
-        client.api.transactions.$post({
-          json: toAccount
-            ? {
-                type: 'TRANSFER',
-                fromAccountId: a.id,
-                toAccountId: toAccount,
-                fromEnvelopeId: from!,
-                amount: amount!,
-                date,
-              }
-            : { type: 'ALLOCATE', fromEnvelopeId: from!, toEnvelopeId: to!, amount: amount!, date },
-        }),
+    const ok = await persist(() =>
+      entryApi.record(
+        toAccount
+          ? {
+              type: 'TRANSFER',
+              fromAccountId: a.id,
+              toAccountId: toAccount,
+              fromEnvelopeId: from!,
+              amount: amount!,
+              date,
+            }
+          : { type: 'ALLOCATE', fromEnvelopeId: from!, toEnvelopeId: to!, amount: amount!, date },
       ),
     );
     if (ok) {
       onClose();
       showToast('Moved');
-      await refresh();
     }
   };
   return (

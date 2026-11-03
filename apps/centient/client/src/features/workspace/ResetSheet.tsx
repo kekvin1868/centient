@@ -1,12 +1,13 @@
 // Start over. Optionally downloads a backup first; the old data stays on the server, flagged as deleted.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { call, client } from '../../lib/api';
 import { downloadBackup } from '../../lib/backup';
 import { attempt } from '../../lib/run';
 import { ToggleRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
+import { persister, queryClient } from '../../models/query';
+import { workspaceApi } from '../../models/workspace';
 
 export function ResetSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [backup, setBackup] = useState(false);
@@ -15,11 +16,14 @@ export function ResetSheet({ open, onClose }: { open: boolean; onClose: () => vo
     setBusy(true);
     const ok = await attempt(async () => {
       if (backup) await downloadBackup();
-      await call(client.api.workspace.reset.$post());
+      await workspaceApi.reset();
     });
     setBusy(false);
-    // A clean start: reload so every screen and cache begins from the fresh workspace.
-    if (ok) location.assign('/');
+    if (!ok) return;
+    // A clean start: forget the data kept on this device, then reload into the fresh workspace.
+    queryClient.clear();
+    await persister.removeClient();
+    location.assign('/');
   };
   return (
     <Sheet open={open} onClose={onClose} title="Reset Centient">

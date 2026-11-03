@@ -4,16 +4,16 @@
 import { parseQuickAdd } from '@centient/quickadd';
 import { KeyReturn, PencilSimple, Question, WifiSlash } from '@phosphor-icons/react';
 import { useEffect, useMemo, useState } from 'react';
-import { call, client, OfflineError } from '../../lib/api';
+import { OfflineError } from '../../lib/api';
 import { buzz } from '../../lib/motion';
-import { attempt } from '../../lib/run';
 import { active, catalog, me, offline, qctx, selectedAccount } from '../../lib/state';
-import { refresh } from '../../models/workspace';
 import { Banner } from '../../ui/Banner';
 import { showToast } from '../../ui/Toast';
 import { blankForm, chipView, fromDraft, toCommand, type LogItem } from './form';
 import { LogChip } from './LogChip';
 import { LogSheet } from './LogSheet';
+import { entryApi } from '../../models/entry';
+import { persist } from '../../models/query';
 
 export function LogBox() {
   const [text, setText] = useState('');
@@ -63,29 +63,25 @@ export function LogBox() {
       return;
     }
     setSaving(true);
-    try {
-      await call(
-        client.api.quickadd.save.$post({
-          json: {
-            items: ready.map(i => {
-              const r = toCommand(i.form);
-              if ('error' in r) throw new Error(r.error);
-              return {
-                command: r.command,
-                rawMerchant: i.rawMerchant || undefined,
-                suggestedMerchant: i.rawMerchant ? i.suggestedMerchant : undefined,
-              };
-            }),
-          },
+    const ok = await persist(
+      () =>
+        entryApi.quickSave({
+          items: ready.map(i => {
+            const r = toCommand(i.form);
+            if ('error' in r) throw new Error(r.error);
+            return {
+              command: r.command,
+              rawMerchant: i.rawMerchant || undefined,
+              suggestedMerchant: i.rawMerchant ? i.suggestedMerchant : undefined,
+            };
+          }),
         }),
-      );
-    } catch (e) {
-      if (e instanceof OfflineError) offline.value = true;
-      else showToast((e as Error).message);
-      return;
-    } finally {
-      setSaving(false);
-    }
+      undefined,
+      // Offline: keep everything and show the banner; it retries when the connection is back.
+      e => (e instanceof OfflineError ? (offline.value = true) : showToast(e.message)),
+    );
+    setSaving(false);
+    if (!ok) return;
     offline.value = false;
     buzz(20);
     // Cards still waiting for an answer stay, detached from the cleared box.
@@ -97,7 +93,6 @@ export function LogBox() {
     setText('');
     setEdits({});
     showToast(ready.length === 1 ? 'Logged' : `Logged ${ready.length} entries`);
-    await refresh();
   };
 
   // Offline: keep everything, try again as soon as the connection is back.
@@ -113,27 +108,22 @@ export function LogBox() {
   const logOne = async (item: LogItem) => {
     const r = toCommand(item.form);
     if ('error' in r) return false;
-    const ok = await attempt(() =>
-      call(
-        client.api.quickadd.save.$post({
-          json: {
-            items: [
-              {
-                command: r.command,
-                rawMerchant: item.rawMerchant || undefined,
-                suggestedMerchant: item.rawMerchant ? item.suggestedMerchant : undefined,
-              },
-            ],
+    const ok = await persist(() =>
+      entryApi.quickSave({
+        items: [
+          {
+            command: r.command,
+            rawMerchant: item.rawMerchant || undefined,
+            suggestedMerchant: item.rawMerchant ? item.suggestedMerchant : undefined,
           },
-        }),
-      ),
+        ],
+      }),
     );
     if (!ok) return false;
     buzz(20);
     setSheet(null);
     remove(item);
     showToast('Logged');
-    await refresh();
     return true;
   };
   const manual = () =>

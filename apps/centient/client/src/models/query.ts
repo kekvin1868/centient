@@ -9,6 +9,7 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import {
   matchQuery,
   MutationCache,
+  MutationObserver,
   QueryCache,
   QueryClient,
   type QueryKey,
@@ -83,3 +84,23 @@ export const persistOptions = {
   maxAge: DAY,
   buster: typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : 'dev',
 };
+
+/**
+ * Runs a save as a tracked mutation, for code that saves once and moves on (a sheet's Save, the first run).
+ * A refusal shows as a toast; when it works, the queries it names (every query when it names none) refresh, and
+ * it resolves only after that, so the next line sees fresh data. Resolves true when it worked.
+ * Screens that show a save's progress use `useMutation` from their model instead.
+ */
+export function persist(
+  fn: () => Promise<unknown>,
+  invalidates?: QueryKey[],
+  /** Handles a refusal itself (no toast), e.g. quick-add keeping its drafts while offline. */
+  onError?: (e: Error) => void,
+): Promise<boolean> {
+  return new MutationObserver(queryClient, { mutationFn: fn, meta: { invalidates }, onError })
+    .mutate()
+    .then(
+      () => true,
+      () => false,
+    );
+}

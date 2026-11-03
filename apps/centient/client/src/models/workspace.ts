@@ -3,9 +3,9 @@
 // are mirrored into the `me` / `catalog` / `qctx` signals that screens read, so a reopened app renders from the
 // device at once and refreshes behind it.
 import type { QAContext } from '@centient/quickadd';
-import { queryOptions } from '@tanstack/react-query';
-import { catalog, me, qctx, selectedAccount, version } from '../lib/state';
-import { call, client, type Res } from './api';
+import { queryOptions, useQuery } from '@tanstack/react-query';
+import { catalog, me, qctx, selectedAccount } from '../lib/state';
+import { call, client, type Req, type Res } from './api';
 import { queryClient } from './query';
 
 export type Me = Res<typeof client.api.me.$get>;
@@ -63,8 +63,23 @@ export async function loadBasics() {
   mirror(m, c, q);
 }
 
-/** After a save outside the query layer: every screen reloads (the version bump marks every query stale). */
-export async function refresh() {
-  version.value++;
-  await loadBasics();
+// Whenever a basic query gets new data (a save's refresh, a refetch on reopen), the signals follow.
+queryClient.getQueryCache().subscribe(e => {
+  if (e.type === 'updated' && e.action.type === 'success' && e.query.queryKey[0] === 'workspace')
+    seedBasics();
+});
+
+/** Keeps the basics observed (App), so a save's refresh refetches them and the signals follow. */
+export function useBasicsLive(enabled: boolean) {
+  useQuery({ ...workspaceQueries.me(), enabled });
+  useQuery({ ...workspaceQueries.catalog(), enabled });
+  useQuery({ ...workspaceQueries.quickadd(), enabled });
 }
+
+type WorkspacePatch = Req<typeof client.api.workspace.$patch>['json'];
+
+/** Workspace saves; each refreshes everything. */
+export const workspaceApi = {
+  update: (json: WorkspacePatch) => call(client.api.workspace.$patch({ json })),
+  reset: () => call(client.api.workspace.reset.$post()),
+};

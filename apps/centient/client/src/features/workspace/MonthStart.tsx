@@ -1,11 +1,10 @@
 // The day the budget month starts (payday), so each month runs payday to payday.
-import { call, client } from '../../lib/api';
-import { attempt } from '../../lib/run';
 import { me } from '../../lib/state';
-import { refresh } from '../../models/workspace';
 import { PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { showToast } from '../../ui/Toast';
+import { persist } from '../../models/query';
+import { workspaceApi } from '../../models/workspace';
 
 export function MonthStart() {
   const day = me.value?.workspace.cycle_start_day ?? 1;
@@ -22,13 +21,10 @@ export function MonthStart() {
           value: String(i + 1),
           label: String(i + 1),
         }))}
-        onChange={v =>
-          attempt(async () => {
-            await call(client.api.workspace.$patch({ json: { cycle_start_day: Number(v ?? 1) } }));
-            await refresh();
+        onChange={async v => {
+          if (await persist(() => workspaceApi.update({ cycle_start_day: Number(v ?? 1) })))
             showToast('Saved');
-          })
-        }
+        }}
       />
     </Group>
   );

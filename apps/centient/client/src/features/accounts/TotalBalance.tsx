@@ -2,16 +2,18 @@
 // without a rupiah price are listed apart.
 import type { Account } from '../../../../src/repos/accounts';
 import { formatMoney } from '../../lib/format';
-import { idrValue, priceAge, prices } from '../../lib/prices';
+import { idrValue, priceAge } from '../../lib/prices';
+import { usePrices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 
 export function TotalBalance({ accounts }: { accounts: (Account & { balance: number })[] }) {
+  const p = usePrices();
   let total = 0,
     cryptoIdr = 0;
   const unpriced = new Map<string, number>();
   const priced = new Set<string>();
   for (const a of accounts) {
-    const v = idrValue(a.balance, a.currency_code, prices.value);
+    const v = idrValue(a.balance, a.currency_code, p);
     if (v === null) unpriced.set(a.currency_code, (unpriced.get(a.currency_code) ?? 0) + a.balance);
     else {
       total += v;
@@ -21,7 +23,7 @@ export function TotalBalance({ accounts }: { accounts: (Account & { balance: num
       }
     }
   }
-  const age = [...priced].map(c => priceAge(c)).find(Boolean);
+  const age = [...priced].map(c => priceAge(c, p)).find(Boolean);
   return (
     <div className="mx-4 mt-4">
       <div className="text-[15px] font-semibold text-muted">

@@ -1,20 +1,13 @@
 // Pick the account Home shows from a dealt hand; the joker is "all accounts".
-import { useEffect, useState } from 'react';
-import { call, client } from '../../lib/api';
-import { attempt } from '../../lib/run';
+import { useQuery } from '@tanstack/react-query';
 import { everyday, selectedAccount } from '../../lib/state';
+import { accountQueries } from '../../models/account';
 import { Sheet } from '../../ui/Sheet';
 import { AccountHand } from './AccountHand';
 
 export function AccountPicker({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [bal, setBal] = useState<Record<string, number>>({});
-  useEffect(() => {
-    if (!open) return;
-    attempt(async () => {
-      const b = await call(client.api.balances.$get());
-      setBal(Object.fromEntries(b.accounts.map(a => [a.id, a.balance])));
-    });
-  }, [open]);
+  const { data } = useQuery({ ...accountQueries.balances(), enabled: open });
+  const bal = Object.fromEntries((data?.accounts ?? []).map(a => [a.id, a.balance]));
   const pick = (id: string | null) => {
     selectedAccount.value = id;
     setTimeout(onClose, 380); // let the card finish lifting before the sheet goes

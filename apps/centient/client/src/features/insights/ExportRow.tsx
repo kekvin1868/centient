@@ -5,7 +5,7 @@
 import { Button } from 'konsta/react';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { client, OfflineError } from '../../lib/api';
+import { exportCsv } from '../../models/report';
 import { attempt } from '../../lib/run';
 import { shareFile } from '../../lib/share';
 import { Group, Row } from '../../ui/List';
@@ -65,20 +65,8 @@ export function ExportRow({
     });
   };
   const makeCsv = async (only: string | null) => {
-    let res: { ok: boolean; text(): Promise<string>; json(): Promise<unknown> };
-    try {
-      res = await client.api['export.csv'].$get({
-        query: { from: period.from, to: period.to, currency: only ?? undefined },
-      });
-    } catch {
-      throw new OfflineError();
-    }
-    if (!res.ok)
-      throw new Error(
-        ((await res.json().catch(() => null)) as { message?: string } | null)?.message ??
-          'Something went wrong',
-      );
-    return new File([await res.text()], exportName(period, only, 'csv'), { type: 'text/csv' });
+    const csv = await exportCsv({ from: period.from, to: period.to, currency: only ?? undefined });
+    return new File([csv], exportName(period, only, 'csv'), { type: 'text/csv' });
   };
 
   return (

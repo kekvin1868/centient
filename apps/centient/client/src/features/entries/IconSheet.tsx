@@ -3,16 +3,17 @@
 // also remembers it for the entry's merchant. Reset goes back to the category's emoji.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { call, client } from '../../lib/api';
 import { categoryEmoji, entryRow } from '../../lib/labels';
-import { attempt } from '../../lib/run';
 import { catalog } from '../../lib/state';
-import { refresh } from '../../models/workspace';
 import type { Entry } from './EntryList';
 import { ToggleRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
+import { entryApi, entryQueries } from '../../models/entry';
+import { pocketQueries } from '../../models/pocket';
+import { persist } from '../../models/query';
+import { reportQueries } from '../../models/report';
 
 const PICKS = [
   '☕',
@@ -53,18 +54,17 @@ export function IconSheet({ entry, onClose }: { entry: Entry | null; onClose: ()
   const [icon, setIcon] = useState(r?.emoji ?? '');
   const [forMerchant, setForMerchant] = useState(Boolean(merchant));
   if (!entry || !r) return null;
-  const save = (value: string | null) =>
-    attempt(async () => {
-      await call(
-        client.api.entries[':id'].icon.$patch({
-          param: { id: entry.id },
-          json: { icon: value, forMerchant: Boolean(merchant) && forMerchant },
-        }),
-      );
-      onClose();
-      showToast(value ? 'Icon saved' : 'Back to the category icon');
-      await refresh();
-    });
+  // An icon only changes how entries look: the lists that show entries refresh, nothing else.
+  const save = async (value: string | null) => {
+    const ok = await persist(
+      () =>
+        entryApi.setIcon(entry.id, { icon: value, forMerchant: Boolean(merchant) && forMerchant }),
+      [entryQueries.all(), pocketQueries.all(), reportQueries.all()],
+    );
+    if (!ok) return;
+    onClose();
+    showToast(value ? 'Icon saved' : 'Back to the category icon');
+  };
   const category = categoryEmoji(
     catalog.value.categories.find(c => c.id === entry.transactions[0]?.category_id)?.name,
     entry.command?.type,

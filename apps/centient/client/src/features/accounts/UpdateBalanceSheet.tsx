@@ -2,17 +2,16 @@
 import { Block, BlockFooter, Button } from 'konsta/react';
 import { useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
-import { call, client } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
 import { categoryEmoji } from '../../lib/labels';
-import { attempt } from '../../lib/run';
 import { active, catalog } from '../../lib/state';
-import { refresh } from '../../models/workspace';
 import { AmountField } from '../../ui/AmountField';
 import { BigMoney } from '../../ui/BigMoney';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
+import { accountApi } from '../../models/account';
+import { persist } from '../../models/query';
 
 export function UpdateBalanceSheet({
   account,
@@ -34,18 +33,10 @@ export function UpdateBalanceSheet({
 
   const save = async () => {
     if (actual === null) return;
-    const ok = await attempt(() =>
-      call(
-        client.api.accounts[':id'].balance.$post({
-          param: { id: account.id },
-          json: { actual, categoryId },
-        }),
-      ),
-    );
+    const ok = await persist(() => accountApi.checkBalance(account.id, { actual, categoryId }));
     if (ok) {
       onClose();
       showToast(diff === 0 ? 'Marked as checked' : 'Balance updated');
-      await refresh();
     }
   };
 

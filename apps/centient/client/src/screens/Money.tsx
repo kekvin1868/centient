@@ -2,7 +2,7 @@
 // here picks it on Home too), its free balance, actions, pockets and installments, then budgets.
 import { useQuery } from '@tanstack/react-query';
 import { BlockTitle } from 'konsta/react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AccountHand } from '../features/accounts/AccountHand';
 import { PickedAccount } from '../features/accounts/PickedAccount';
 import { TotalBalance } from '../features/accounts/TotalBalance';
@@ -12,16 +12,15 @@ import { takesInstallments } from '../features/installments/plans';
 import { AccountPockets } from '../features/pockets/AccountPockets';
 import { Page } from '../layouts/Page';
 import { formatMoney } from '../lib/format';
-import { idrValue, loadPrices, prices } from '../lib/prices';
-import { selectedAccount, version } from '../lib/state';
+import { idrValue } from '../lib/prices';
+import { usePrices } from '../models/price';
+import { selectedAccount } from '../lib/state';
 import { accountQueries } from '../models/account';
 
 export function Money({ onShowAccount }: { onShowAccount: () => void }) {
   const { data: bal } = useQuery(accountQueries.balances());
   const [picked, setPicked] = useState<string | null>(selectedAccount.value);
-  useEffect(() => {
-    loadPrices();
-  }, [version.value]);
+  const prices = usePrices();
   if (!bal) return <Page title="Money" />;
   const a =
     bal.accounts.find(x => x.id === picked) ??
@@ -50,8 +49,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
         onPick={pick}
         pickOnSettle
         cards={bal.accounts.map(x => {
-          const v =
-            x.currency_code === 'IDR' ? null : idrValue(x.balance, x.currency_code, prices.value);
+          const v = x.currency_code === 'IDR' ? null : idrValue(x.balance, x.currency_code, prices);
           return {
             id: x.id,
             name: x.name,

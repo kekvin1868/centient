@@ -1,11 +1,10 @@
 // Hidden accounts, pockets and categories, behind a toggle, each with Show to bring it back.
 import { Button, ListItem } from 'konsta/react';
 import { useState } from 'react';
-import { patchRow } from '../../lib/api';
-import { attempt } from '../../lib/run';
 import { catalog } from '../../lib/state';
-import { refresh } from '../../models/workspace';
 import { Group, Row } from '../../ui/List';
+import { patchRow } from '../../models/api';
+import { persist } from '../../models/query';
 
 type Table = 'accounts' | 'envelopes' | 'categories';
 
@@ -58,12 +57,7 @@ function ShowButton({ table, id }: { table: Table; id: string }) {
       clear
       inline
       small
-      onClick={() =>
-        attempt(async () => {
-          await patchRow(table, id, { archived: false });
-          await refresh();
-        })
-      }
+      onClick={() => persist(() => patchRow(table, id, { archived: false }))}
     >
       Show
     </Button>

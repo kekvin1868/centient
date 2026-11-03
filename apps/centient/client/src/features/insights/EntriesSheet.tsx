@@ -1,14 +1,14 @@
 // The entries behind one Insights row (a category or a merchant) in the period and currency on screen. Each row
 // shows its counted amount, with a split bill's shares or a transfer's fee explained under it, so the rows add up
 // to the number tapped. Tapping a row hands the whole entry to the screen, which opens it.
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import type { EntryView } from '../../../../src/repos/entries';
 import type { Command } from '../../../../src/lib/schemas';
-import { call, client } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
 import { entryRow } from '../../lib/labels';
-import { attempt } from '../../lib/run';
-import { catalog, version } from '../../lib/state';
+import { catalog } from '../../lib/state';
+import { entryQueries } from '../../models/entry';
 import { Sheet } from '../../ui/Sheet';
 import { counted, merchantKey } from './insights';
 
@@ -30,41 +30,20 @@ export function EntriesSheet({
   onClose: () => void;
   onOpen: (e: Entry) => void;
 }) {
-  const [items, setItems] = useState<Entry[] | null>(null);
   // The entry tapped opens once this sheet has gone, not on top of it.
   const [chosen, setChosen] = useState<Entry | null>(null);
-  useEffect(() => {
-    if (!pick) return;
-    let live = true;
-    setItems(null);
-    attempt(async () => {
-      // The whole period at once, so the total below is the row's total.
-      const all: Entry[] = [];
-      let cursor: string | undefined;
-      do {
-        const page = await call(
-          client.api.entries.$get({
-            query: {
-              type: 'EXPENSE',
-              category: pick.categoryId,
-              merchant: pick.merchant,
-              from,
-              to: last,
-              currency,
-              limit: '200',
-              cursor,
-            },
-          }),
-        );
-        all.push(...(page.items as Entry[]));
-        cursor = page.nextCursor ?? undefined;
-      } while (cursor);
-      if (live) setItems(all);
-    });
-    return () => {
-      live = false;
-    };
-  }, [pick, from, last, currency, version.value]);
+  const { data } = useQuery({
+    ...entryQueries.matching({
+      type: 'EXPENSE',
+      category: pick?.categoryId,
+      merchant: pick?.merchant,
+      from,
+      to: last,
+      currency,
+    }),
+    enabled: pick !== null,
+  });
+  const items: Entry[] | null = data ?? null;
 
   const cat = catalog.value;
   const inCurrency = (id: string) =>

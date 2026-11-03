@@ -8,7 +8,7 @@ import { Toast } from '../ui/Toast';
 import { attempt } from '../lib/run';
 import { Home } from '../screens/Home';
 import { me } from '../lib/state';
-import { loadBasics, seedBasics } from '../models/workspace';
+import { loadBasics, seedBasics, useBasicsLive } from '../models/workspace';
 import { randomFx, type Fx } from '../ui/night/tv';
 
 // Only Home is in the first download. The first run loads when it shows; the other tabs load while the phone is
@@ -31,6 +31,7 @@ export function App() {
 
   // Wait for the device's saved cache; when it holds the basics, render from it at once and refresh behind it.
   const restoring = useIsRestoring();
+  useBasicsLive(!restoring);
   useEffect(() => {
     if (restoring) return;
     if (seedBasics()) setReady(true);

@@ -4,17 +4,16 @@ import { X } from '@phosphor-icons/react';
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
-import { call, client } from '../../lib/api';
 import { formatMoney } from '../../lib/format';
-import { attempt } from '../../lib/run';
 import { active, catalog, me } from '../../lib/state';
-import { refresh } from '../../models/workspace';
 import { AmountField } from '../../ui/AmountField';
 import { InputRow, PickerRow, StepperRow, ToggleRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
+import { installmentApi } from '../../models/installment';
+import { persist } from '../../models/query';
 
 type Person = { key: number; name: string; share: number | null };
 
@@ -71,29 +70,24 @@ export function NewPlanSheet({
   const save = async () => {
     if (error || !amount) return;
     setBusy(true);
-    const ok = await attempt(() =>
-      call(
-        client.api.installments.$post({
-          json: {
-            accountId: account.id,
-            name: name.trim(),
-            amountPerInstallment: amount,
-            installments: count,
-            firstDue,
-            paidCount,
-            myShare: shares.mine,
-            others: people.map((p, k) => ({ name: p.name.trim(), share: shares.others[k] })),
-            alreadyInBalance: inBalance,
-            categoryId: !inBalance && categoryId ? categoryId : undefined,
-          },
-        }),
-      ),
+    const ok = await persist(() =>
+      installmentApi.create({
+        accountId: account.id,
+        name: name.trim(),
+        amountPerInstallment: amount,
+        installments: count,
+        firstDue,
+        paidCount,
+        myShare: shares.mine,
+        others: people.map((p, k) => ({ name: p.name.trim(), share: shares.others[k] })),
+        alreadyInBalance: inBalance,
+        categoryId: !inBalance && categoryId ? categoryId : undefined,
+      }),
     );
     setBusy(false);
     if (ok) {
       onClose();
       showToast('Installments added');
-      await refresh();
     }
   };
 

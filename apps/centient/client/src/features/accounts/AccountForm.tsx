@@ -1,14 +1,13 @@
 // Add an account: name, type, what's in it now. Currency stays rupiah unless you ask for another.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { call, client } from '../../lib/api';
-import { attempt } from '../../lib/run';
 import { ACCOUNT_KINDS } from '../../lib/format';
-import { refresh } from '../../models/workspace';
 import { AmountField } from '../../ui/AmountField';
 import { InputRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { CurrencyPicker } from '../../ui/CurrencyPicker';
+import { accountApi } from '../../models/account';
+import { persist } from '../../models/query';
 
 const KINDS = [
   'BANK',
@@ -36,22 +35,15 @@ export function AccountForm({
   const owes = kind === 'CREDIT_CARD' || kind === 'PAYLATER';
 
   const save = async () => {
-    const ok = await attempt(() =>
-      call(
-        client.api.accounts.$post({
-          json: {
-            name: name.trim(),
-            kind,
-            currency,
-            openingBalance: amount ? (owes ? -amount : amount) : undefined,
-          },
-        }),
-      ),
+    const ok = await persist(() =>
+      accountApi.create({
+        name: name.trim(),
+        kind,
+        currency,
+        openingBalance: amount ? (owes ? -amount : amount) : undefined,
+      }),
     );
-    if (ok) {
-      await refresh();
-      onDone();
-    }
+    if (ok) onDone();
   };
 
   return (

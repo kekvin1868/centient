@@ -3,17 +3,17 @@
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
 import type { Envelope } from '../../../../src/repos/envelopes';
-import { patchRow } from '../../lib/api';
 import { pocketColor, POCKET_COLORS } from '../../lib/pocketColors';
-import { attempt } from '../../lib/run';
 import { catalog } from '../../lib/state';
-import { refresh } from '../../models/workspace';
 import { AmountField } from '../../ui/AmountField';
 import { ColorPicker } from '../../ui/ColorPicker';
 import { InputRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
+import type { RowPatch } from '../../models/api';
+import { pocketApi } from '../../models/pocket';
+import { persist } from '../../models/query';
 
 export function EditPocketSheet({
   pocket: p,
@@ -42,13 +42,11 @@ export function EditPocketSheet({
   const [target, setTarget] = useState<number | null>(p?.target_amount ?? null);
   const [date, setDate] = useState(p?.target_date ?? '');
   if (!p || !account) return null;
-  const patch = (json: Record<string, unknown>, done: string) =>
-    attempt(async () => {
-      await patchRow('envelopes', p.id, json);
-      onClose();
-      showToast(done);
-      await refresh();
-    });
+  const patch = async (json: RowPatch, done: string) => {
+    if (!(await persist(() => pocketApi.update(p.id, json)))) return;
+    onClose();
+    showToast(done);
+  };
   const save = () =>
     patch(
       {

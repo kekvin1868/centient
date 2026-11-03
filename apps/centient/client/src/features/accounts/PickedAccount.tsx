@@ -6,7 +6,8 @@ import { useState, type ReactNode } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
 import type { Envelope } from '../../../../src/repos/envelopes';
 import { formatMoney } from '../../lib/format';
-import { idrValue, priceAge, prices } from '../../lib/prices';
+import { idrValue, priceAge } from '../../lib/prices';
+import { usePrices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 import { UpdateBalanceSheet } from './UpdateBalanceSheet';
 
@@ -83,8 +84,9 @@ export function PickedAccount({
 
 /** What a crypto balance is worth in rupiah, with how fresh the price is. */
 function CryptoValue({ account: a }: { account: Bal }) {
-  const v = idrValue(a.balance, a.currency_code, prices.value);
-  const age = priceAge(a.currency_code);
+  const p = usePrices();
+  const v = idrValue(a.balance, a.currency_code, p);
+  const age = priceAge(a.currency_code, p);
   if (v === null)
     return (
       <div className="mt-2 text-[14px] text-muted">
