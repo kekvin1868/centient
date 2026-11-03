@@ -514,6 +514,7 @@ test('the Budget forecast stays hidden until its start day, which is set on this
 
   // Settings: the row sits directly below "Month starts on day", with its footnote.
   await tab('Settings').tap();
+  await expect(page.getByRole('combobox', { name: 'Month starts on day' })).toBeVisible(); // loads on demand
   const names = await settingsCombos();
   expect(names[names.indexOf('Month starts on day') + 1]).toBe('Forecast starts on day');
   await expect(

@@ -12,7 +12,8 @@
     "dev": "npm run dev -w apps/centient",
     "e2e": "playwright test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "perf": "node scripts/perf.mjs"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261016.1",

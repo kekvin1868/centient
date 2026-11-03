@@ -18,12 +18,12 @@ import {
 } from '@phosphor-icons/react';
 import {
   animate,
-  motion,
   useMotionValue,
   useMotionValueEvent,
   useTransform,
   type MotionValue,
 } from 'motion/react';
+import * as m from 'motion/react-m';
 import {
   useEffect,
   useRef,
@@ -132,7 +132,7 @@ export function AccountHand({
     (e.currentTarget.querySelectorAll('button')[i] as HTMLButtonElement | undefined)?.focus();
   };
   return (
-    <motion.div
+    <m.div
       role="group"
       aria-label={label}
       onKeyDown={keys}
@@ -175,7 +175,7 @@ export function AccountHand({
           />
         </Slot>
       ))}
-    </motion.div>
+    </m.div>
   );
 }
 
@@ -197,7 +197,7 @@ function Slot({
     opacity = useTransform(d, v => pose(v).opacity),
     zIndex = useTransform(d, v => pose(v).zIndex);
   return (
-    <motion.div
+    <m.div
       data-slot
       className="absolute"
       style={{
@@ -215,7 +215,7 @@ function Slot({
       }}
     >
       {children}
-    </motion.div>
+    </m.div>
   );
 }
 

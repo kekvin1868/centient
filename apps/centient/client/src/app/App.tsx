@@ -6,14 +6,20 @@ import { BottomNav, type Screen } from '../layouts/BottomNav';
 import { Toast } from '../ui/Toast';
 import { attempt } from '../lib/run';
 import { Home } from '../screens/Home';
-import { Insights } from '../screens/Insights';
-import { Money } from '../screens/Money';
-import { Settings } from '../screens/Settings';
 import { loadBasics, me } from '../lib/state';
 import { randomFx, type Fx } from '../ui/night/tv';
 
-// The first run's screens load only when it shows.
+// Only Home is in the first download. The first run loads when it shows; the other tabs load while the phone is
+// idle after the first paint (or at once when tapped first).
 const FirstRun = lazy(() => import('../screens/FirstRun').then(m => ({ default: m.FirstRun })));
+const loadMoney = () => import('../screens/Money');
+const loadInsights = () => import('../screens/Insights');
+const loadSettings = () => import('../screens/Settings');
+const Money = lazy(() => loadMoney().then(m => ({ default: m.Money })));
+const Insights = lazy(() => loadInsights().then(m => ({ default: m.Insights })));
+const Settings = lazy(() => loadSettings().then(m => ({ default: m.Settings })));
+const whenIdle = (fn: () => void) =>
+  'requestIdleCallback' in window ? requestIdleCallback(fn) : setTimeout(fn, 1500);
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -23,6 +29,7 @@ export function App() {
 
   useEffect(() => {
     attempt(loadBasics).then(() => setReady(true));
+    whenIdle(() => void Promise.all([loadMoney(), loadInsights(), loadSettings()]));
   }, []);
   useEffect(() => {
     if (prev.current !== screen) {
@@ -41,10 +48,12 @@ export function App() {
       ) : (
         <>
           <div key={screen} className={fx ? `fx-in-${fx}` : ''}>
-            {screen === 'home' && <Home onGoMoney={() => setScreen('money')} />}
-            {screen === 'money' && <Money onShowAccount={() => setScreen('home')} />}
-            {screen === 'insights' && <Insights />}
-            {screen === 'settings' && <Settings />}
+            <Suspense fallback={null}>
+              {screen === 'home' && <Home onGoMoney={() => setScreen('money')} />}
+              {screen === 'money' && <Money onShowAccount={() => setScreen('home')} />}
+              {screen === 'insights' && <Insights />}
+              {screen === 'settings' && <Settings />}
+            </Suspense>
           </div>
           <BottomNav current={screen} onGo={setScreen} />
         </>

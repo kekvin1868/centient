@@ -3,7 +3,8 @@
 // The actions stay reachable without the gesture: focusing one (keyboard, screen reader) slides its row open.
 import autoAnimate from '@formkit/auto-animate';
 import { PencilSimple, Trash } from '@phosphor-icons/react';
-import { animate, motion, useMotionValue, useTransform } from 'motion/react';
+import { animate, useMotionValue, useTransform } from 'motion/react';
+import * as m from 'motion/react-m';
 import { useEffect, useRef, useState } from 'react';
 import type { EntryView } from '../../../../src/repos/entries';
 import type { Command } from '../../../../src/lib/schemas';
@@ -136,7 +137,7 @@ function EntryRow({
   return (
     <li className="entry-row relative overflow-hidden">
       <div className="absolute inset-y-0 right-0 flex items-center gap-2 pr-3">
-        <motion.button
+        <m.button
           type="button"
           style={{ scale: reveal, opacity: fade }}
           onFocus={() => onSwipe(true)}
@@ -148,8 +149,8 @@ function EntryRow({
           className="grid size-14 place-items-center rounded-2xl bg-[#86cecb] text-[#0b0f10] active:opacity-70"
         >
           <PencilSimple size={22} weight="bold" aria-hidden="true" />
-        </motion.button>
-        <motion.button
+        </m.button>
+        <m.button
           type="button"
           style={{ scale: reveal, opacity: fade }}
           onFocus={() => onSwipe(true)}
@@ -158,9 +159,9 @@ function EntryRow({
           className="grid size-14 place-items-center rounded-2xl bg-pink text-white active:opacity-70"
         >
           <Trash size={22} weight="bold" aria-hidden="true" />
-        </motion.button>
+        </m.button>
       </div>
-      <motion.div
+      <m.div
         style={{ x }}
         drag="x"
         dragConstraints={{ left: -ACTIONS, right: 0 }}
@@ -219,7 +220,7 @@ function EntryRow({
             )}
           </span>
         </button>
-      </motion.div>
+      </m.div>
     </li>
   );
 }

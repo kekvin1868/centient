@@ -21,6 +21,12 @@
     />
     <meta property="og:image" content="/icons/og-image-1200x630.png" />
     <title>Centient</title>
+    <!-- Start the first API calls while the script downloads (the app's fetches pick these up), so startup is
+         one round trip shorter. Keep in step with loadBasics (lib/state.ts) and Home's first queries. -->
+    <link rel="preload" href="/api/me" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="/api/catalog" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="/api/quickadd/context" as="fetch" crossorigin="anonymous" />
+    <link rel="preload" href="/api/balances" as="fetch" crossorigin="anonymous" />
     <!-- Konsta's dark: classes key off a .dark class; follow the device setting before first paint. -->
     <script>
       (function () {

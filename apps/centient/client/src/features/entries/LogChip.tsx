@@ -2,7 +2,8 @@
 // what was charged), and a flick up to log it.
 import { ArrowFatUp } from '@phosphor-icons/react';
 import { Button, List } from 'konsta/react';
-import { animate, motion, useMotionValue, useTransform } from 'motion/react';
+import { animate, useMotionValue, useTransform } from 'motion/react';
+import * as m from 'motion/react-m';
 import { useRef, useState } from 'react';
 import { formatMoney } from '../../lib/format';
 import { categoryEmoji, titleCase } from '../../lib/labels';
@@ -63,7 +64,7 @@ export function LogChip({
   };
 
   return (
-    <motion.div
+    <m.div
       style={{ y, opacity }}
       drag={ready ? 'y' : false}
       dragConstraints={{ bottom: 0 }}
@@ -145,6 +146,6 @@ export function LogChip({
           </div>
         )}
       </Chip>
-    </motion.div>
+    </m.div>
   );
 }

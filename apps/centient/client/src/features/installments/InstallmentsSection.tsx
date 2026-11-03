@@ -1,7 +1,8 @@
 // The plans list under a lifted pay later / credit card card: one card per plan, a sheet per plan with one
 // "Mark paid" per person per installment, and the form to add a plan.
 import { Plus } from '@phosphor-icons/react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
+import * as m from 'motion/react-m';
 import { useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
 import { formatMoney } from '../../lib/format';
@@ -33,7 +34,7 @@ export function InstallmentsSection({ account }: { account: Account }) {
       <div className="flex flex-col gap-2.5">
         <AnimatePresence initial={false}>
           {plans?.map(p => (
-            <motion.div
+            <m.div
               key={p.id}
               initial={reducedMotion() ? false : { opacity: 0, y: -50, rotate: -4, scale: 1.05 }}
               animate={{ opacity: 1, y: 0, rotate: 0, scale: 1 }}
@@ -46,7 +47,7 @@ export function InstallmentsSection({ account }: { account: Account }) {
               }}
             >
               <PlanCard plan={p} currency={account.currency_code} onOpen={() => setOpen(p.id)} />
-            </motion.div>
+            </m.div>
           ))}
         </AnimatePresence>
         {plans && !plans.length && (
