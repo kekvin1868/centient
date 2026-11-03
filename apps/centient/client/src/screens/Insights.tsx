@@ -115,7 +115,7 @@ export function Insights() {
           : <p className="mx-4 border border-dashed border-edge px-4 py-6 text-center text-sm text-muted">Shows here once a budget has run a full cycle.</p>}
       </section>)}
       </div>
-      <ExportRow period={data.period} currency={cur} report={() => screen.current}>
+      <ExportRow key={`export:${data.period.from}:${data.period.to}:${cur}`} period={data.period} currency={cur} report={() => screen.current}>
         <WinButton label="What the budget words mean" onClick={() => setGuide(true)}>?</WinButton>
       </ExportRow>
       <BudgetGuideSheet open={guide} onClose={() => setGuide(false)} />

@@ -17,7 +17,10 @@ export async function shareFile(file: File): Promise<Shared> {
     }
   }
   const url = URL.createObjectURL(file);
-  Object.assign(document.createElement('a'), { href: url, download: file.name }).click();
+  const a = Object.assign(document.createElement('a'), { href: url, download: file.name });
+  document.body.appendChild(a); // Firefox ignores a click on a link outside the page
+  a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
   return 'downloaded';
 }

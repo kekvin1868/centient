@@ -32,8 +32,10 @@ const dataUrl = async (url: string) => {
   return new Promise<string>((ok, fail) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = fail; r.readAsDataURL(blob); });
 };
 
-/** The two faces the screen uses, inlined: "Centient Digits" is added from code, so html-to-image would not find it. */
-async function fontCss() {
+/** The two faces the screen uses, inlined once: "Centient Digits" is added from code, so html-to-image would not find it. */
+let fonts: Promise<string> | null = null;
+const fontCss = () => (fonts ??= loadFonts().catch(e => { fonts = null; throw e; }));
+async function loadFonts() {
   const [dot, digits] = await Promise.all([dataUrl(dotUrl), dataUrl(digitsUrl)]);
   return `@font-face{font-family:"DotGothic16";src:url(${dot}) format("woff2");font-weight:400}`
     + `@font-face{font-family:"Centient Digits";src:url(${digits}) format("woff2");font-weight:100 900;unicode-range:U+0030-0039,U+002B-002E,U+0025,U+2212}`;
@@ -59,7 +61,6 @@ export async function makeReport(root: HTMLElement, o: { title: string; made: st
     for (const node of root.querySelectorAll<HTMLElement>('[data-report]')) {
       shots.push(await toCanvas(node, {
         pixelRatio: width / node.offsetWidth, backgroundColor: paper, fontEmbedCSS,
-        filter: n => !(n instanceof HTMLElement && n.dataset.noprint !== undefined),
       }));
     }
   } finally {

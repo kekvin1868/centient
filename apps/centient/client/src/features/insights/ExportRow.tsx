@@ -57,7 +57,7 @@ export function ExportRow({ period, currency, report, children }: {
   };
 
   return (
-    <div className="mx-4 mt-6 flex items-center gap-2" data-noprint>
+    <div className="mx-4 mt-6 flex items-center gap-2">
       <Button inline rounded tonal disabled={pdf.busy} onClick={() => (pdf.ready ? again(pdf, setPdf) : run(setPdf, makePdf))}>
         {pdf.busy ? 'Making PDF…' : pdf.ready ? 'Share PDF' : 'Report PDF'}
       </Button>
