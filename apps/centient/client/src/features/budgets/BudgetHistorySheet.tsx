@@ -1,32 +1,15 @@
 // Temporary budgets that ran to their end, newest first: dates, limit, spent and what was saved (or went over).
 // Opened by History beside the Budgets heading on Money.
-import { useEffect, useState } from 'react';
-import { call, client } from '../../lib/api';
+import { useQuery } from '@tanstack/react-query';
 import { formatMoney } from '../../lib/format';
-import { pocketLabel } from '../../lib/labels';
-import { attempt } from '../../lib/run';
-import { catalog, nameOf } from '../../lib/state';
+import { catalog } from '../../lib/state';
+import { budgetName, budgetQueries } from '../../models/budget';
+import { period } from '../../models/forecast';
 import { Group, Row } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
-import { period } from './forecast';
-
-type Ended = {
-  id: string;
-  categoryId: string | null;
-  envelopeId: string | null;
-  currency: string;
-  startsOn: string;
-  endsOn: string;
-  limit: number;
-  spent: number;
-  saved: number;
-};
 
 export function BudgetHistorySheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [rows, setRows] = useState<Ended[] | null>(null);
-  useEffect(() => {
-    if (open) attempt(async () => setRows(await call(client.api.budgets.history.$get())));
-  }, [open]);
+  const { data: rows } = useQuery({ ...budgetQueries.history(), enabled: open });
   const cat = catalog.value;
   return (
     <Sheet open={open} onClose={onClose} title="Temporary budgets">
@@ -41,12 +24,7 @@ export function BudgetHistorySheet({ open, onClose }: { open: boolean; onClose: 
           />
         )}
         {rows?.map(b => {
-          const name = [
-            b.categoryId && nameOf(cat.categories, b.categoryId),
-            b.envelopeId && pocketLabel(b.envelopeId),
-          ]
-            .filter(Boolean)
-            .join(' in ');
+          const name = budgetName(b, cat);
           return (
             <Row
               key={b.id}

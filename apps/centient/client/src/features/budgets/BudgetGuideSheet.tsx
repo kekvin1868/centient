@@ -2,7 +2,7 @@
 // beside the Budgets heading on Money (and on Insights).
 import { Group, Row } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
-import { STATUS_LABEL } from './forecast';
+import { STATUS_LABEL } from '../../models/forecast';
 
 const WORDS = [
   [STATUS_LABEL.ON_TRACK, 'At this rate, spending ends the month below the limit.'],

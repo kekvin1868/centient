@@ -23,6 +23,8 @@ import {
 import { SavingsBars } from '../features/insights/SavingsBars';
 import { PeriodBar, type Kind } from '../features/insights/PeriodBar';
 import { Page } from '../layouts/Page';
+import { budgetQueries, type SavingsQuery } from '../models/budget';
+import { queryClient } from '../models/query';
 import { call, client } from '../lib/api';
 import { formatMoney } from '../lib/format';
 import { categoryEmoji, pocketLabel, titleCase } from '../lib/labels';
@@ -34,8 +36,7 @@ import { WinButton } from '../ui/WinButton';
 
 const load = (q: { period: Kind; date?: string; currency?: string }) =>
   call(client.api.insights.$get({ query: q }));
-const loadSavings = (q: { period: Kind; date?: string; currency: string }) =>
-  call(client.api.budgets.savings.$get({ query: q }));
+const loadSavings = (q: SavingsQuery) => queryClient.fetchQuery(budgetQueries.savings(q));
 type Data = Awaited<ReturnType<typeof load>>;
 type Savings = Awaited<ReturnType<typeof loadSavings>>;
 type Entry = Data['biggest'][number]['entry'];

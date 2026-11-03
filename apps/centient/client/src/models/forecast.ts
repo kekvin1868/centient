@@ -1,7 +1,7 @@
 // What a budget row says about its Budget forecast, the device setting for when the forecast starts showing,
 // the Home headline's sum, and how temporary budgets write their dates. The server always sends the projection; this decides what the screen shows.
-import { shortMoney } from '../../lib/format';
-import { load, save } from '../../lib/storage';
+import { shortMoney } from '../lib/format';
+import { load, save } from '../lib/storage';
 
 export type BudgetStatus = 'ON_TRACK' | 'LIKELY_OVER' | 'OVER';
 export const STATUS_LABEL: Record<BudgetStatus, string> = {
