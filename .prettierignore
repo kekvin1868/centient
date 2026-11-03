@@ -1,0 +1,10 @@
+node_modules
+dist
+.wrangler
+.e2e-state
+test-results
+playwright-report
+planning
+package-lock.json
+*.sql
+apps/centient/client/public
