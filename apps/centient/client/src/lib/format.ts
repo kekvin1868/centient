@@ -26,6 +26,15 @@ export function dayLabel(day: string, today: string): string {
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 }
 
+/** The line under a goal's progress (Q38): what to put in each cycle and by when, or where it stands; null for none. */
+export function goalLine(g: { state: string; neededPerCycle: number | null; cyclesLeft: number | null; targetDate: string | null; currency: string }): string | null {
+  if (g.state === 'REACHED') return 'Goal reached';
+  if (g.state === 'PAST_TARGET_DATE') return 'Past target date';
+  if (g.neededPerCycle === null || !g.cyclesLeft || !g.targetDate) return null;
+  const by = new Date(`${g.targetDate}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return `${formatMoney(g.neededPerCycle, g.currency)} a cycle · by ${by} (${g.cyclesLeft} ${g.cyclesLeft === 1 ? 'cycle' : 'cycles'} left)`;
+}
+
 /** Short rupiah for tight spots (Rp150rb, Rp1,8jt, Rp2,5M); other currencies keep formatMoney. */
 export function shortMoney(minor: number, currency = 'IDR'): string {
   if (currency !== 'IDR') return formatMoney(minor, currency);

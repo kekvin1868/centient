@@ -45,9 +45,7 @@ export function PocketCards({ pockets, colorIndex, onOpen }: { pockets: Pocket[]
                 <span className="relative">
                   {goal !== null && (
                     <span className="mb-2 flex items-center gap-2 text-[12px] font-bold">
-                      <span className="flex flex-1 gap-0.5 rounded-[3px] border border-current/40 bg-black/10 p-0.5" aria-hidden="true">
-                        {Array.from({ length: 10 }, (_, k) => <span key={k} className={`h-2 flex-1 ${k < Math.round(goal * 10) ? 'bg-current' : ''}`} />)}
-                      </span>
+                      <GoalBar share={goal} />
                       {Math.round(goal * 100)}% of {formatMoney(p.target_amount!, p.currency_code)}
                     </span>
                   )}
@@ -59,5 +57,14 @@ export function PocketCards({ pockets, colorIndex, onOpen }: { pockets: Pocket[]
         })}
       </ul>
     </>
+  );
+}
+
+/** A goal's pixel bar: ten blocks, filled by the share saved (0-1). */
+export function GoalBar({ share }: { share: number }) {
+  return (
+    <span className="flex flex-1 gap-0.5 rounded-[3px] border border-current/40 bg-black/10 p-0.5" aria-hidden="true">
+      {Array.from({ length: 10 }, (_, k) => <span key={k} className={`h-2 flex-1 ${k < Math.round(share * 10) ? 'bg-current' : ''}`} />)}
+    </span>
   );
 }

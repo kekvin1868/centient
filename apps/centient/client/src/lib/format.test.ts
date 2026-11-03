@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayLabel, formatMoney, shortMoney } from './format';
+import { dayLabel, formatMoney, goalLine, shortMoney } from './format';
 
 describe('formatMoney', () => {
   it('formats rupiah the Indonesian way', () => {
@@ -31,5 +31,18 @@ describe('shortMoney', () => {
     expect([150_000, 1_000_000, 1_788_000, 29_500_000, 2_500_000_000, -1_788_000, 950].map(v => shortMoney(v)))
       .toEqual(['Rp150rb', 'Rp1jt', 'Rp1,8jt', 'Rp29,5jt', 'Rp2,5M', '-Rp1,8jt', 'Rp950']);
     expect(shortMoney(250_000, 'BTC')).toBe('BTC 0.0025');
+  });
+});
+
+describe('goalLine (T6.18)', () => {
+  const g = { state: 'ON_THE_WAY', neededPerCycle: 1_400_000, cyclesLeft: 5, targetDate: '2027-03-31', currency: 'IDR' };
+  it('says what to put in each cycle, by when and how many cycles are left', () => {
+    expect(goalLine(g)).toBe('Rp1.400.000 a cycle · by 31 Mar 2027 (5 cycles left)');
+    expect(goalLine({ ...g, cyclesLeft: 1, neededPerCycle: 7_000_000, targetDate: '2026-11-25' })).toBe('Rp7.000.000 a cycle · by 25 Nov 2026 (1 cycle left)');
+  });
+  it('names the state instead of a number, and has no line without a date', () => {
+    expect(goalLine({ ...g, state: 'PAST_TARGET_DATE', neededPerCycle: null, cyclesLeft: null })).toBe('Past target date');
+    expect(goalLine({ ...g, state: 'REACHED', neededPerCycle: null, cyclesLeft: null })).toBe('Goal reached');
+    expect(goalLine({ ...g, neededPerCycle: null, cyclesLeft: null, targetDate: null })).toBeNull();
   });
 });
