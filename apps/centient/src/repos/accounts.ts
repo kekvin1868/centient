@@ -1,4 +1,5 @@
 // Accounts: where money is held (bank, e-wallet, card, IOU, ...). Each has a Main pocket.
+import { currencyRow } from './currencies';
 import { all, uid, updateColumns } from './sql';
 
 export type Account = {
@@ -15,11 +16,12 @@ const storedKind = (kind: string) => (kind === 'DEBIT_CARD' ? { kind: 'BANK', su
 /** Columns a PATCH may touch. Anything else in the request is ignored. */
 const PATCHABLE = ['name', 'kind', 'subtype', 'provider', 'currency_code', 'default_envelope_id', 'due_day', 'reconciled_at', 'archived_at'];
 
-/** An account and its Main pocket (its default): account first, pocket, then the default link. */
+/** An account and its Main pocket (its default): currency row if new, account, pocket, then the default link. */
 export function accountInserts(db: D1Database, ws: string, id: string, a: NewAccount): D1PreparedStatement[] {
   const k = storedKind(a.kind);
   const main = `${id}:main`;
   return [
+    currencyRow(db, a.currency_code),
     db.prepare('INSERT INTO accounts (id, workspace_id, name, kind, subtype, provider, currency_code, due_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(id, ws, a.name, k.kind, k.subtype, a.provider, a.currency_code, a.due_day),
     db.prepare("INSERT INTO envelopes (id, workspace_id, account_id, name, currency_code, kind) VALUES (?, ?, ?, 'Main', ?, 'SPENDING')").bind(main, ws, id, a.currency_code),
@@ -42,8 +44,9 @@ export function accountsRepo(db: D1Database) {
     },
 
     /** Patches whitelisted columns; false when the account is not in this workspace. */
-    update(ws: string, id: string, patch: Record<string, unknown>) {
+    async update(ws: string, id: string, patch: Record<string, unknown>) {
       if (typeof patch.kind === 'string') patch = { ...patch, ...storedKind(patch.kind) };
+      if (typeof patch.currency_code === 'string') await currencyRow(db, patch.currency_code).run();
       return updateColumns(db, 'accounts', PATCHABLE, ws, id, patch, ' AND deleted_at IS NULL');
     },
 

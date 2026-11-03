@@ -1,7 +1,7 @@
 // Under a lifted account card: Move money, then its pockets as cards down the page (tap one for Add money / Back to
-// balance / Edit), and the sheets they open. Pockets live inside the account (like Jago's Kantong): its total is the sum of
+// balance / Edit, and Activity on a goal), and the sheets they open. Pockets live inside the account (like Jago's Kantong): its total is the sum of
 // its pockets; the Main pocket is the account's free balance and never shows as a pocket.
-import { ArrowsLeftRight, ArrowUUpLeft, PencilSimple, Plus } from '@phosphor-icons/react';
+import { ArrowsLeftRight, ArrowUUpLeft, ClockCounterClockwise, PencilSimple, Plus } from '@phosphor-icons/react';
 import { Button } from 'konsta/react';
 import { useRef, useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
@@ -9,8 +9,11 @@ import type { Envelope } from '../../../../src/repos/envelopes';
 import { formatMoney } from '../../lib/format';
 import { Group, Row } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
+import { EntrySheet } from '../entries/EntrySheet';
+import type { Entry } from '../entries/EntryList';
 import { AddPocketSheet } from './AddPocketSheet';
 import { EditPocketSheet } from './EditPocketSheet';
+import { GoalActivitySheet } from './GoalActivitySheet';
 import { MoveSheet, type Move } from './MoveSheet';
 import { PocketCards, type Pocket } from './PocketCards';
 
@@ -20,6 +23,10 @@ export function AccountPockets({ account: a, accounts, pockets }: { account: Bal
   const [move, setMove] = useState<Move | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Envelope | null>(null);
+  // The goal whose Activity shows; kept while the sheet plays its exit, so a tapped entry can open after it.
+  const [log, setLog] = useState<Pocket | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
+  const [entry, setEntry] = useState<Entry | null>(null);
   // The pocket whose actions show; it stays set while the sheet plays its exit. The action picked runs once the sheet
   // is gone, so the sheet it opens keeps focus.
   const [acting, setActing] = useState<Pocket | null>(null);
@@ -35,7 +42,7 @@ export function AccountPockets({ account: a, accounts, pockets }: { account: Bal
       </Button>
       <div className="mb-3 mt-6 flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-[17px] font-extrabold tracking-[-0.02em]">Pockets</h3>
+          <h3 className="section-title text-[17px] tracking-[-0.02em]">Pockets</h3>
           <p className="text-[13px] font-semibold text-muted">Inside {a.name}</p>
         </div>
         <button type="button" onClick={() => setAdding(true)}
@@ -49,12 +56,15 @@ export function AccountPockets({ account: a, accounts, pockets }: { account: Bal
             <Row title="Add money" media={<Plus size={20} weight="bold" />} onClick={() => act(() => setMove({ from: main, to: acting.id }))} />
             <Row title="Back to balance" media={<ArrowUUpLeft size={20} weight="bold" />} onClick={() => act(() => setMove({ from: acting.id, to: main }))} />
             <Row title="Edit" media={<PencilSimple size={20} weight="bold" />} onClick={() => act(() => setEditing(acting))} />
+            {acting.kind === 'GOAL' && <Row title="Activity" media={<ClockCounterClockwise size={20} weight="bold" />} onClick={() => act(() => { setLog(acting); setLogOpen(true); })} />}
           </Group>
         )}
       </Sheet>
       <MoveSheet key={`move:${move ? `${move.from}:${move.to}` : 'none'}`} preset={move} account={a} pockets={pockets} accounts={accounts} onClose={() => setMove(null)} />
       <AddPocketSheet key={`add-pocket:${adding}`} open={adding} account={a} onClose={() => setAdding(false)} />
       <EditPocketSheet key={`edit-pocket:${editing?.id ?? 'none'}`} pocket={editing} onClose={() => setEditing(null)} />
+      <GoalActivitySheet key={`goal-log:${log?.id ?? 'none'}`} pocket={log} open={logOpen} onClose={() => setLogOpen(false)} onOpen={setEntry} />
+      <EntrySheet key={`entry:${entry?.id ?? 'none'}`} entry={entry} onClose={() => setEntry(null)} />
     </section>
   );
 }

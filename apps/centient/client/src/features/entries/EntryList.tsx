@@ -16,7 +16,8 @@ import { deleteWithUndo } from './EntrySheet';
 import { IconSheet } from './IconSheet';
 import { Group } from '../../ui/List';
 
-export type Entry = EntryView & { command: Command | null };
+/** `pocket`: set in a goal's log, where a row shows what moved in or out of that pocket and its balance after. */
+export type Entry = EntryView & { command: Command | null; pocket?: { amount: number; balanceAfter: number; currency: string } };
 
 const ACTIONS = 136; // two 64px actions + gap: how far a row slides open
 
@@ -66,7 +67,9 @@ function EntryRow({ entry: e, open, onSwipe, onOpen, onDelete, onIcon }: {
   const settle = (to: number) => animate(x, to, reducedMotion() ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 36 });
   // Follow the list: another row opening (or an action) closes this one.
   useEffect(() => { settle(open ? -ACTIONS : 0); }, [open]);
-  const amount = `${r.tone === 'out' ? '-' : r.tone === 'in' ? '+' : ''}${formatMoney(r.amount, r.currency)}`;
+  const p = e.pocket;
+  const tone = p ? (p.amount < 0 ? 'out' : 'in') : r.tone;
+  const amount = `${tone === 'out' ? '-' : tone === 'in' ? '+' : ''}${formatMoney(p ? Math.abs(p.amount) : r.amount, p ? p.currency : r.currency)}`;
 
   return (
     <li className="entry-row relative overflow-hidden">
@@ -100,7 +103,10 @@ function EntryRow({ entry: e, open, onSwipe, onOpen, onDelete, onIcon }: {
             <span className="block truncate text-[17px]">{r.title}</span>
             {r.sub && <span className="block truncate text-[15px] text-muted">{r.sub}</span>}
           </span>
-          <span className={`num shrink-0 font-semibold ${r.tone === 'in' ? 'text-primary' : 'text-black dark:text-white'}`}>{amount}</span>
+          <span className="shrink-0 text-right">
+            <span className={`num block font-semibold ${tone === 'in' ? 'text-primary' : 'text-black dark:text-white'}`}>{amount}</span>
+            {p && <span className="num block text-[13px] text-muted">{formatMoney(p.balanceAfter, p.currency)}</span>}
+          </span>
         </button>
       </motion.div>
     </li>

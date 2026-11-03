@@ -1,8 +1,11 @@
 // End to end: first run (the night menu) with the three starting accounts, categories (ten broad ones, deleting one), list
 // borders, the account hand, pockets inside an account (a list; Move money between pockets and accounts), crypto accounts, pay later installments
-// with per-person payments and proof of payment, entry icons and swipe actions, and the receipt form.
+// with per-person payments and proof of payment, entry icons and swipe actions, the receipt form, accounts in any currency,
+// the Budget forecast, budgets per currency, and temporary budgets with their history.
 // One workspace (dev sign-in), so tests run in order.
 import { expect, test, type Page } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -15,7 +18,7 @@ test.afterAll(async () => page.close());
 
 const api = (path: string, init?: { method?: string; data?: unknown }) =>
   page.request.fetch(`/api${path}`, { method: init?.method ?? 'GET', data: init?.data });
-type Acc = { id: string; name: string; kind: string; default_envelope_id: string };
+type Acc = { id: string; name: string; kind: string; default_envelope_id: string; currency_code: string };
 const accounts = async () => (await (await api('/catalog')).json()).accounts as Acc[];
 const accountId = async (name: string) => (await accounts()).find(a => a.name === name)!.id;
 const balances = async () => (await (await api('/balances')).json()) as { accounts: { name: string; balance: number }[]; envelopes: { id: string; name: string; account_id: string; balance: number; color: string | null }[] };
@@ -317,5 +320,181 @@ test('a manual entry is a receipt: type the title, pick a pocket stamp, enter th
   await expect(edit.getByText('EDITING')).toBeVisible();
   await expect(edit.getByRole('textbox', { name: 'What was it?' })).toHaveValue('Sewa');
   await expect(edit.getByRole('group', { name: 'From pocket' }).getByRole('button', { name: 'RENT' })).toHaveAttribute('aria-pressed', 'true');
+  await page.keyboard.press('Escape');
+});
+
+test('an account can be in any currency: search "yen", and its balance has no decimals', async () => {
+  await tab('Settings').tap();
+  await page.getByRole('button', { name: 'Add account' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Add account' });
+  await sheet.getByRole('textbox', { name: 'Name' }).fill('Yen');
+  await sheet.getByRole('button', { name: 'Different currency' }).tap();
+  await sheet.getByRole('button', { name: /^Currency/ }).tap();
+  await sheet.getByRole('textbox', { name: 'Search' }).fill('yen');
+  await sheet.getByRole('button', { name: 'JPY · Japanese Yen' }).tap();
+  await expect(sheet.getByRole('button', { name: /^Currency/ })).toContainText('JPY · Japanese Yen');
+  await sheet.getByRole('textbox', { name: /How much is in it now/ }).fill('1500');
+  await sheet.getByRole('button', { name: 'Add account' }).tap();
+  await expect(sheet).toBeHidden();
+  expect((await accounts()).find(a => a.name === 'Yen')).toMatchObject({ currency_code: 'JPY' });
+  expect(await balance('Yen')).toBe(1500);
+
+  // Money: the yen balance prints whole, and the total keeps it apart (no rate is guessed).
+  await tab('Money').tap();
+  await expect(page.getByText('+ JPY 1,500 (not in the total)')).toBeVisible();
+  await pick('Yen');
+  await expect(page.getByText('JPY 1,500', { exact: true }).first()).toBeVisible();
+});
+
+// The server's clock can't be faked from the browser, so "day 2 of the cycle" comes from starting the month yesterday.
+const jakartaDay = (offset = 0) => new Date(Date.now() + 7 * 3600e3 + offset * 864e5).toISOString().slice(0, 10);
+const categoryId = async (name: string) => ((await (await api('/catalog')).json()).categories as { id: string; name: string }[]).find(c => c.name === name)!.id;
+const settingsCombos = async () => page.getByRole('combobox').evaluateAll(els => els.map(e => e.getAttribute('aria-label')));
+
+test('the Budget forecast stays hidden until its start day, which is set on this device', async () => {
+  await api('/workspace', { method: 'PATCH', data: { cycle_start_day: Number(jakartaDay(-1).slice(8)) } });
+  await api('/budgets', { method: 'PUT', data: { categoryId: await categoryId('Food & Drink'), limit: 50_000_000 } });
+  await page.reload();
+  await tab('Money').tap();
+  await expect(page.getByText('Forecast starts on day 3 · 1 day to go')).toBeVisible();
+
+  // Settings: the row sits directly below "Month starts on day", with its footnote.
+  await tab('Settings').tap();
+  const names = await settingsCombos();
+  expect(names[names.indexOf('Month starts on day') + 1]).toBe('Forecast starts on day');
+  await expect(page.getByText('Early in the month, a few purchases can make the forecast jump. It stays hidden until this day, every month.')).toBeVisible();
+  await page.getByRole('combobox', { name: 'Forecast starts on day' }).selectOption('5');
+  await page.reload();
+  await tab('Settings').tap();
+  await expect(page.getByRole('combobox', { name: 'Forecast starts on day' })).toHaveValue('5');
+  await tab('Money').tap();
+  await expect(page.getByText('Forecast starts on day 5 · 3 days to go')).toBeVisible();
+});
+
+test('budgets are grouped per currency, and the ? beside the heading explains the words', async () => {
+  await api('/budgets', { method: 'PUT', data: { categoryId: await categoryId('Food & Drink'), currency: 'USD', limit: 5_000 } });
+  await page.reload();
+  await tab('Money').tap();
+  const idr = page.getByText(/^Budgets in IDR · \d+ days? left$/);
+  await expect(idr).toBeVisible();
+  await expect(page.getByText('Budgets in USD', { exact: true })).toBeVisible();
+  await expect(page.getByText('USD 0.00 of USD 50.00')).toBeVisible();
+
+  const help = page.getByRole('button', { name: 'What the budget words mean' });
+  const [title, button] = [(await idr.boundingBox())!, (await help.boundingBox())!];
+  expect(Math.abs(title.y + title.height / 2 - (button.y + button.height / 2))).toBeLessThan(8); // same row
+  expect(button.x).toBeGreaterThan(title.x + title.width); // title left, button right
+  expect(page.viewportSize()!.width - (button.x + button.width)).toBeLessThan(40); // at the far right
+  await help.tap();
+  const guide = page.getByRole('dialog', { name: 'Budget words' });
+  for (const word of ['On track', 'Likely over', 'Over']) await expect(guide.getByText(word, { exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(guide).toBeHidden();
+  await expect(help).toBeFocused();
+});
+
+test('a pocket budget takes the pocket currency; a category budget picks one, rupiah first', async () => {
+  await page.getByRole('button', { name: 'Set a budget' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Set a budget' });
+  await sheet.getByRole('combobox', { name: 'Pocket' }).selectOption(`${await accountId('Yen')}:main`);
+  await expect(sheet.getByText('Currency').locator('..').locator('..')).toContainText('JPY');
+  await expect(sheet.getByRole('textbox', { name: 'Search' })).toHaveCount(0);
+  await sheet.getByRole('combobox', { name: 'Pocket' }).selectOption('');
+  await expect(sheet.getByRole('button', { name: /^Currency/ })).toContainText('IDR · Indonesian Rupiah');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  // Leave the workspace on a 1st-of-the-month cycle and the default start day for later specs.
+  await api('/workspace', { method: 'PATCH', data: { cycle_start_day: 1 } });
+  await page.evaluate(() => localStorage.removeItem('centient:forecastStartDay'));
+});
+
+// "Nov 24", as temporary budgets write their dates.
+const monthDay = (day: string) => new Date(Date.parse(day)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+test('a temporary budget: the switch asks for a start and a length, and its row says when it ends', async () => {
+  await page.reload();
+  await tab('Money').tap();
+  // Title left; History, then ?, on the right of the same row.
+  const title = (await page.getByText(/^Budgets in IDR/).boundingBox())!;
+  const history = page.getByRole('button', { name: 'Temporary budgets that ended' });
+  const [h, q] = [(await history.boundingBox())!, (await page.getByRole('button', { name: 'What the budget words mean' }).boundingBox())!];
+  expect(Math.abs(h.y - q.y)).toBeLessThan(2);
+  expect(h.x).toBeGreaterThan(title.x + title.width);
+  expect(q.x).toBeGreaterThan(h.x + h.width);
+  await expect(history).toHaveText('History');
+  await history.tap();
+  const sheet = page.getByRole('dialog', { name: 'Temporary budgets' });
+  await expect(sheet.getByText('Nothing here yet. Temporary budgets move here when they end.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  await page.getByRole('button', { name: 'Set a budget' }).tap();
+  const form = page.getByRole('dialog', { name: 'Set a budget' });
+  await form.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Food & Drink' });
+  await form.getByText('Temporary', { exact: true }).tap();
+  await expect(form.getByLabel('Starts')).toHaveValue(jakartaDay());
+  await expect(form.getByRole('combobox', { name: 'Lasts' })).toHaveValue('14');
+  await expect(form.getByText(`Ends ${monthDay(jakartaDay(14))} at 00:00`)).toBeVisible();
+  await expect(form.getByRole('textbox', { name: 'Limit for these 14 days' })).toBeVisible();
+  await form.getByRole('combobox', { name: 'Lasts' }).selectOption('7');
+  await expect(form.getByText(`Ends ${monthDay(jakartaDay(7))} at 00:00`)).toBeVisible();
+  await form.getByRole('textbox', { name: 'Limit for these 7 days' }).fill('500000');
+  await form.getByRole('button', { name: 'Save' }).tap();
+  await expect(form).toBeHidden();
+
+  // Under the cycle budget, tagged; the cycle one has no tag. An upcoming one says when it starts.
+  await api('/budgets', { method: 'PUT', data: { categoryId: await categoryId('Food & Drink'), limit: 300_000, startsOn: jakartaDay(30), days: 3 } });
+  await page.reload();
+  await tab('Money').tap();
+  // Rupiah cycle, its temporary ones, then the dollar budget.
+  const rows = page.getByRole('listitem').filter({ hasText: 'Food & Drink' });
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(0)).not.toContainText('Temporary');
+  await expect(rows.nth(1)).toContainText(`Temporary Ends ${monthDay(jakartaDay(7))}`);
+  await expect(rows.nth(2)).toContainText(`Temporary Starts ${monthDay(jakartaDay(30))}`);
+});
+
+test('an overlapping temporary budget is refused in a warning popup; back to back saves', async () => {
+  await page.getByRole('button', { name: 'Set a budget' }).tap();
+  const form = page.getByRole('dialog', { name: 'Set a budget' });
+  await form.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Food & Drink' });
+  await form.getByText('Temporary', { exact: true }).tap();
+  await form.getByRole('textbox', { name: 'Limit for these 14 days' }).fill('400000');
+  await form.getByRole('button', { name: 'Save' }).tap();
+  const message = `You already have a temporary Food & Drink budget from ${monthDay(jakartaDay())} to ${monthDay(jakartaDay(6))}.`;
+  const popup = page.getByRole('dialog').filter({ hasText: message });
+  await expect(popup).toBeVisible();
+  await expect(popup.getByRole('button').filter({ hasText: /\w/ })).toHaveText(['OK']); // one button, beside the title bar's close
+  await expect(page.getByRole('status')).not.toContainText(message);
+  await popup.getByRole('button', { name: 'OK' }).tap();
+  await expect(popup).toBeHidden();
+  // The form is as it was.
+  await expect(form.getByRole('combobox', { name: 'Category' })).toHaveValue(await categoryId('Food & Drink'));
+  await expect(form.getByRole('textbox', { name: 'Limit for these 14 days' })).toHaveValue(/400/);
+  await form.getByLabel('Starts').fill(jakartaDay(7));
+  await form.getByRole('button', { name: 'Save' }).tap();
+  await expect(form).toBeHidden();
+  expect((await (await api('/budgets')).json()).budgets.filter((b: { startsOn: string | null }) => b.startsOn).length).toBe(3);
+});
+
+test('ended temporary budgets move to History with what was saved', async () => {
+  const shopping = await categoryId('Shopping');
+  for (const days of [2, 3]) await api('/budgets', { method: 'PUT', data: { categoryId: shopping, limit: 100_000 * days, startsOn: jakartaDay(40 + days * 5), days } });
+  // The server's clock can't move, so their dates move back instead: two runs that ended 10 and 5 days ago.
+  const state = resolve(import.meta.dirname, '..', '.e2e-state');
+  const shift = (from: number, to: number) => `UPDATE budgets SET starts_on = date(starts_on, '${to - from} days'), ends_on = date(ends_on, '${to - from} days') WHERE category_id = '${shopping}' AND starts_on = '${jakartaDay(from)}';`;
+  execFileSync('npx', ['wrangler', 'd1', 'execute', 'DB', '--local', '--persist-to', state, '--command', shift(50, -12) + shift(55, -8)], { cwd: resolve(import.meta.dirname, '..', 'apps/centient'), stdio: 'ignore' });
+  await api('/transactions', { method: 'POST', data: { type: 'EXPENSE', accountId: await accountId('Dailies'), categoryId: shopping, amount: 350_000, date: jakartaDay(-7) } });
+
+  await page.getByRole('button', { name: 'Temporary budgets that ended' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Temporary budgets' });
+  const rows = sheet.locator('li');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText(`Shopping · ${monthDay(jakartaDay(-8))}–`);
+  await expect(rows.nth(0)).toContainText('Rp350.000 of Rp300.000');
+  await expect(rows.nth(0)).toContainText('Rp50.000 over');
+  await expect(rows.nth(1)).toContainText(`Shopping · ${monthDay(jakartaDay(-12))}–`);
+  await expect(rows.nth(1)).toContainText('Rp0 of Rp200.000');
+  await expect(rows.nth(1)).toContainText('Rp200.000 saved');
   await page.keyboard.press('Escape');
 });

@@ -28,6 +28,49 @@ describe('http', () => {
     expect(await call('PATCH', '/api/budgets/x', { name: 'n' })).toMatchObject({ status: 404, body: { code: 'NOT_FOUND' } });
   });
 
+  it('refuses an unlisted currency without writing, and lets the client format every listed one', async () => {
+    for (const currency of ['XXX', 'ABC', '']) {
+      expect(await call('POST', '/api/accounts', { name: `Bad ${currency}`, kind: 'BANK', currency })).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    }
+    const { body: catalog } = await call('GET', '/api/catalog');
+    expect(catalog.accounts.some((a: { name: string }) => a.name.startsWith('Bad'))).toBe(false);
+    expect((await env.DB.prepare("SELECT code FROM currencies WHERE code IN ('XXX', 'ABC')").all()).results).toEqual([]);
+    const food = catalog.categories.find((c: { name: string }) => c.name === 'Food & Drink').id;
+    expect(await call('PUT', '/api/budgets', { categoryId: food, currency: 'XXX', limit: 500 })).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    const { body: me } = await call('GET', '/api/me');
+    expect(me.currencies).toMatchObject({ JPY: 0, KWD: 3, IDR: 0, USD: 2, USDT: 6, BTC: 8 });
+  });
+
+  it('checks temporary budget input', async () => {
+    expect((await app.request('https://example.com/api/budgets/history', {}, env)).status).toBe(401);
+    const { body: catalog } = await call('GET', '/api/catalog');
+    const food = catalog.categories.find((c: { name: string }) => c.name === 'Food & Drink').id;
+    for (const startsOn of ['2099-02-31', '2099-13-01', '1/12/2099']) {
+      expect(await call('PUT', '/api/budgets', { categoryId: food, limit: 500, startsOn, days: 14 })).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    }
+    for (const days of [1, 91, 2.5, '14']) {
+      expect(await call('PUT', '/api/budgets', { categoryId: food, limit: 500, startsOn: '2099-01-01', days })).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    }
+    expect(await call('DELETE', '/api/budgets/nope')).toMatchObject({ status: 404, body: { code: 'NOT_FOUND' } });
+    expect(await call('GET', '/api/budgets/history')).toMatchObject({ status: 200, body: [] });
+  });
+
+  it('T4.24 checks Insights input', async () => {
+    expect(await call('GET', '/api/insights?period=month')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect(await call('GET', '/api/insights?date=2026-13-45')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect(await call('GET', '/api/insights?date=nov')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect(await call('GET', '/api/insights?currency=XXX')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect((await app.request('https://example.com/api/insights', {}, env)).status).toBe(401);
+    expect(await call('GET', '/api/insights?period=year&currency=USD')).toMatchObject({ status: 200, body: { currency: 'USD', period: { kind: 'year' } } });
+  });
+
+  it('T5.19 checks the savings history input', async () => {
+    expect(await call('GET', '/api/budgets/savings?currency=IDR&period=year&date=2026-11-10')).toMatchObject({ status: 200, body: [] });
+    expect(await call('GET', '/api/budgets/savings?currency=XXX')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect(await call('GET', '/api/budgets/savings?date=2026-02-31')).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    expect((await app.request('https://example.com/api/budgets/savings', {}, env)).status).toBe(401);
+  });
+
   it('logs, edits, updates a balance and deletes through the API', async () => {
     const { body: catalog } = await call('GET', '/api/catalog');
     const { body: { today } } = await call('GET', '/api/me');
@@ -51,6 +94,28 @@ describe('http', () => {
     expect(ctx.accounts.some((a: { id: string }) => a.id === account.id)).toBe(true);
     const { body: balances } = await call('GET', '/api/balances');
     expect(balances.accounts.find((a: { id: string }) => a.id === account.id).balance).toBe(90_000);
+  });
+
+  it('serves a goal\'s activity and checks its input (T6.17)', async () => {
+    const { body: acc } = await call('POST', '/api/accounts', { name: 'Seabank', kind: 'BANK', openingBalance: 5_000 });
+    const { body: goal } = await call('POST', '/api/envelopes', { accountId: acc.id, name: 'Trip', kind: 'GOAL', targetAmount: 10_000 });
+    expect((await app.request(`https://example.com/api/envelopes/${goal.id}/activity`, {}, env)).status).toBe(401);
+    expect(await call('GET', `/api/envelopes/${goal.id}/activity`)).toMatchObject({ status: 200, body: { goal: { balance: 0, progress: 0 }, items: [], nextCursor: null } });
+    expect(await call('GET', '/api/envelopes/nope/activity')).toMatchObject({ status: 404, body: { code: 'NOT_FOUND' } });
+    expect(await call('GET', `/api/envelopes/${acc.default_envelope_id}/activity`)).toMatchObject({ status: 400, body: { code: 'NOT_A_GOAL' } });
+    expect(await call('GET', `/api/envelopes/${goal.id}/activity?cursor=oops`)).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+  });
+
+  it('exports CSV for a period and currency, and checks the options (T7.8)', async () => {
+    expect((await app.request('https://example.com/api/export.csv?currency=IDR', {}, env)).status).toBe(401);
+    const res = await app.request('http://localhost/api/export.csv?from=2026-11-01&to=2026-12-01&currency=IDR', {}, env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toBe('text/csv; charset=utf-8');
+    expect(res.headers.get('Content-Disposition')).toMatch(/^attachment;/);
+    expect((await res.text()).split('\n')[0]).toBe('date,type,account,amount,currency,envelope,category,merchant,note');
+    for (const q of ['currency=XXX', 'from=2026-02-31', 'from=1/11/2026', 'from=2026-11-10&to=2026-11-10', 'from=2026-12-01&to=2026-11-01']) {
+      expect(await call('GET', `/api/export.csv?${q}`)).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+    }
   });
 
   it('deletes an account, downloads a backup and resets', async () => {

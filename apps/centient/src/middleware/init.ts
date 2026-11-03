@@ -10,6 +10,7 @@ import { createInstallmentsService } from '../modules/installments/service';
 import { createLedgerService } from '../modules/ledger/service';
 import { createPocketsService } from '../modules/pockets/service';
 import { createQuickaddService } from '../modules/quickadd/service';
+import { createReportsService } from '../modules/reports/service';
 import { createWorkspaceService } from '../modules/workspace/service';
 import { accountsRepo } from '../repos/accounts';
 import { aliasesRepo } from '../repos/aliases';
@@ -20,13 +21,14 @@ import { envelopesRepo } from '../repos/envelopes';
 import { filesRepo, r2Files, type FileStore } from '../repos/files';
 import { installmentsRepo } from '../repos/installments';
 import { pricesRepo } from '../repos/prices';
+import { reportsRepo } from '../repos/reports';
 import { workspacesRepo } from '../repos/workspaces';
 
 export function createRepos(db: D1Database, store?: FileStore) {
   return {
     workspaces: workspacesRepo(db), accounts: accountsRepo(db), envelopes: envelopesRepo(db), categories: categoriesRepo(db),
     aliases: aliasesRepo(db), budgets: budgetsRepo(db), entries: entriesRepo(db), prices: pricesRepo(db),
-    installments: installmentsRepo(db), files: filesRepo(db, store),
+    installments: installmentsRepo(db), files: filesRepo(db, store), reports: reportsRepo(db),
     /** One atomic write across repos (D1 runs a batch as one transaction). */
     batch: (stmts: D1PreparedStatement[]) => db.batch(stmts),
   };
@@ -43,6 +45,7 @@ export function createServices(o: { repos: Repos; ws: string; now: () => number;
     pockets: createPocketsService(base),
     categories: createCategoriesService(base),
     budgets: createBudgetsService(base),
+    reports: createReportsService(base),
     quickadd: createQuickaddService({ ...base, ledger }),
     installments: createInstallmentsService({ ...base, ledger }),
     workspace: createWorkspaceService({ ...base, ledger, fetch: o.fetch }),

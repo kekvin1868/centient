@@ -12,6 +12,7 @@ import { installmentsRoutes } from './modules/installments/routes';
 import { ledgerRoutes } from './modules/ledger/routes';
 import { pocketsRoutes } from './modules/pockets/routes';
 import { quickaddRoutes } from './modules/quickadd/routes';
+import { reportsRoutes } from './modules/reports/routes';
 import { workspaceRoutes } from './modules/workspace/routes';
 
 export const app = new Hono<AppEnv>();
@@ -27,7 +28,8 @@ const routes = app
   .route('/api/categories', categoriesRoutes)
   .route('/api/budgets', budgetsRoutes)
   .route('/api/quickadd', quickaddRoutes)
-  .route('/api', installmentsRoutes);
+  .route('/api', installmentsRoutes)
+  .route('/api', reportsRoutes);
 
 app.all('/api/*', c => c.json({ code: 'NOT_FOUND', message: 'No such endpoint' }, 404));
 

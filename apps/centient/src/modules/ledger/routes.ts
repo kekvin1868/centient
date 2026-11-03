@@ -2,15 +2,17 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../../context';
-import { command, day, id, json, query } from '../../lib/schemas';
+import { command, currency, day, id, json, query } from '../../lib/schemas';
 
 const txQuery = z.object({
   from: day.optional(), to: day.optional(), account: id.optional(), envelope: id.optional(), category: id.optional(),
-  type: z.enum(['INCOME', 'EXPENSE', 'TRANSFER', 'ALLOCATE']).optional(), cursor: z.string().max(200).optional(),
+  type: z.enum(['INCOME', 'EXPENSE', 'TRANSFER', 'ALLOCATE']).optional(), merchant: z.string().trim().min(1).max(120).optional(),
+  currency: currency.optional(), cursor: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
 const toFilter = (q: z.infer<typeof txQuery>) => ({
-  from: q.from, to: q.to, accountId: q.account, envelopeId: q.envelope, categoryId: q.category, type: q.type, cursor: q.cursor, limit: q.limit,
+  from: q.from, to: q.to, accountId: q.account, envelopeId: q.envelope, categoryId: q.category, type: q.type,
+  merchant: q.merchant, currency: q.currency, cursor: q.cursor, limit: q.limit,
 });
 
 export const ledgerRoutes = new Hono<AppEnv>()

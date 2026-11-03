@@ -1,13 +1,14 @@
-// Three screens in a game-menu tab bar: icon over a display-font label, the current screen on a slanted
+// Four screens in a game-menu tab bar: icon over a display-font label, the current screen on a slanted
 // Miku plate (Borderlands menu tabs). Every tab has the same box, so nothing shifts between screens.
-import { GearSix, House, Wallet, type Icon } from '@phosphor-icons/react';
+import { ChartBar, GearSix, House, Wallet, type Icon } from '@phosphor-icons/react';
 import { buzz } from '../lib/motion';
 
-export type Screen = 'home' | 'money' | 'settings';
+export type Screen = 'home' | 'money' | 'insights' | 'settings';
 
 const TABS: { screen: Screen; label: string; icon: Icon }[] = [
   { screen: 'home', label: 'Home', icon: House },
   { screen: 'money', label: 'Money', icon: Wallet },
+  { screen: 'insights', label: 'Insights', icon: ChartBar },
   { screen: 'settings', label: 'Settings', icon: GearSix },
 ];
 

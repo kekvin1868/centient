@@ -1,7 +1,7 @@
 // Workspace use cases: who am I, settings, the catalog, crypto prices, backup / CSV export, reset.
 import { DECIMALS } from '@centient/money';
 import type { ServiceDeps } from '../../context';
-import { cycleStart, jakartaToday, nextCycleStart } from '../../domain/cycle';
+import { addDays, cycleStart, jakartaToday, nextCycleStart } from '../../domain/cycle';
 import type { Price } from '../../repos/prices';
 import type { LedgerService } from '../ledger/service';
 
@@ -75,14 +75,19 @@ export function createWorkspaceService({ ws, now, repos, catalog, ledger, fetch 
       return { format: 'centient-backup', version: 1, exported_at: stamp(), workspace, accounts, envelopes, categories, budgets, aliases, entries };
     },
 
-    async csv(): Promise<string> {
+    /**
+     * The ledger as CSV, one row per account line (an ALLOCATE: per pocket line). Optional `from` (included) and `to`
+     * (excluded) Jakarta days, and `currency`, which keeps only rows in that currency (a cross-currency transfer keeps
+     * the matching leg). No options: the whole workspace, as before.
+     */
+    async csv(f: { from?: string; to?: string; currency?: string } = {}): Promise<string> {
       const c = await catalog.load();
       const name = (rows: { id: string; name: string }[], id: string | null) => rows.find(r => r.id === id)?.name ?? '';
       const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
       const lines = ['date,type,account,amount,currency,envelope,category,merchant,note'];
       let cursor: string | undefined;
       do {
-        const page = await repos.entries.list(ws, { limit: 500, cursor });
+        const page = await repos.entries.list(ws, { limit: 500, cursor, from: f.from, to: f.to && addDays(f.to, -1) }); // the filter's `to` is inclusive
         for (const t of page.items) {
           const envelopes = t.allocations.map(a => name(c.envelopes, a.envelope_id)).join(' > ');
           // One row per account line; an ALLOCATE has none, so it gets one row per envelope line.
@@ -90,6 +95,7 @@ export function createWorkspaceService({ ws, now, repos, catalog, ledger, fetch 
             ? t.entries.map(e => { const acc = c.accounts.find(a => a.id === e.account_id); return [acc?.name ?? '', e.amount, acc?.currency_code ?? '', envelopes]; })
             : t.allocations.map(a => { const env = c.envelopes.find(x => x.id === a.envelope_id); return ['', a.amount, env?.currency_code ?? '', env?.name ?? '']; });
           for (const [account, amount, currency, envelope] of rows) {
+            if (f.currency && currency !== f.currency) continue;
             lines.push([t.occurred_at, t.type, String(account), String(amount), String(currency), String(envelope), name(c.categories, t.category_id), t.merchant ?? '', t.note ?? ''].map(cell).join(','));
           }
         }

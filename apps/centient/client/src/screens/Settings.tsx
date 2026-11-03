@@ -5,6 +5,7 @@ import type { Account } from '../../../src/repos/accounts';
 import type { Category } from '../../../src/repos/categories';
 import type { Envelope } from '../../../src/repos/envelopes';
 import { AccountForm } from '../features/accounts/AccountForm';
+import { ForecastStart } from '../features/budgets/ForecastStart';
 import { EditAccountSheet } from '../features/accounts/EditAccountSheet';
 import { AddCategorySheet } from '../features/categories/AddCategorySheet';
 import { EditCategorySheet } from '../features/categories/EditCategorySheet';
@@ -54,6 +55,7 @@ export function Settings() {
 
       <HiddenItems />
       <MonthStart />
+      <ForecastStart />
 
       <Group label="Your data">
         <Row title="Download all as spreadsheet (CSV)" chevron onClick={() => location.assign('/api/export.csv')} />

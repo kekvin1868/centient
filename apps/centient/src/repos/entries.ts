@@ -1,5 +1,6 @@
 // The ledger: entries (what the user logged) -> transactions -> account lines (entries) + pocket lines (allocations).
 import type { NewTransaction } from '../domain/ledger';
+import { currencyRow } from './currencies';
 import { uid } from './sql';
 
 export type TxView = {
@@ -22,6 +23,10 @@ export type NewEntry = { kind: EntryKind; command: unknown | null; txs: NewTrans
 
 export type TxFilter = {
   from?: string; to?: string; accountId?: string; envelopeId?: string; categoryId?: string; type?: string;
+  /** Merchant name, matched ignoring case and outer spaces (as Insights groups them). */
+  merchant?: string;
+  /** Only transactions with a pocket line in this currency. */
+  currency?: string;
   cursor?: string; limit: number;
 };
 
@@ -31,6 +36,7 @@ export function entriesRepo(db: D1Database) {
   function txStatements(ws: string, groupId: string, t: NewTransaction): D1PreparedStatement[] {
     const id = uid();
     return [
+      ...(t.originalCurrency ? [currencyRow(db, t.originalCurrency)] : []),
       db.prepare('INSERT INTO transactions (id, workspace_id, group_id, type, occurred_at, category_id, merchant, note, original_amount, original_currency, spread_cycles) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(id, ws, groupId, t.type, t.occurredAt, t.categoryId, t.merchant, t.note, t.originalAmount ?? null, t.originalCurrency ?? null, t.spreadCycles ?? 1),
       ...t.entries.map(e => db.prepare('INSERT INTO entries (transaction_id, account_id, amount) VALUES (?, ?, ?)').bind(id, e.accountId, e.amount)),
@@ -143,6 +149,42 @@ export function entriesRepo(db: D1Database) {
       return { items, nextCursor: rows.length > f.limit && last ? `${last.occurred_at}|${last.id}` : null };
     },
 
+    /**
+     * One pocket's entries, newest first, each with its net amount in the pocket and the pocket's balance after it.
+     * The running sum is taken over the pocket's whole history, so a later page continues where the last one stopped.
+     * Entries that net to zero in the pocket are left out. Cursor `occurred_at|entryId`, as the entry list. `balance` is the
+     * pocket's balance now.
+     * ponytail: the running sum scans the pocket's whole history per page; fine for one person's goal, cache it if a log grows huge.
+     */
+    async pocketLog(ws: string, envelopeId: string, cursor: string | undefined, limit: number) {
+      const [at, id] = cursor ? cursor.split('|') : [null, null];
+      const [log, total] = await db.batch<GroupRow & { at: string; amount: number; balance_after: number }>([db.prepare(`WITH lines AS (
+          SELECT g.id, MIN(t.occurred_at) AS at, SUM(a.amount) AS amount
+          FROM entry_groups g JOIN transactions t ON t.group_id = g.id AND t.deleted_at IS NULL
+          JOIN allocations a ON a.transaction_id = t.id AND a.envelope_id = ?
+          WHERE g.workspace_id = ? AND g.deleted_at IS NULL
+          GROUP BY g.id HAVING SUM(a.amount) <> 0
+        ), running AS (
+          SELECT id, at, amount, SUM(amount) OVER (ORDER BY at, id ROWS UNBOUNDED PRECEDING) AS balance_after FROM lines
+        )
+        SELECT r.id, r.at, r.amount, r.balance_after, g.kind, g.command, g.icon
+        FROM running r JOIN entry_groups g ON g.id = r.id
+        WHERE ? IS NULL OR (r.at, r.id) < (?, ?)
+        ORDER BY r.at DESC, r.id DESC LIMIT ?`).bind(envelopeId, ws, at, at, id, limit + 1),
+        db.prepare(`SELECT COALESCE(SUM(a.amount), 0) AS amount FROM allocations a JOIN transactions t ON t.id = a.transaction_id
+          WHERE a.envelope_id = ? AND t.workspace_id = ? AND t.deleted_at IS NULL`).bind(envelopeId, ws),
+      ]);
+      const rows = log.results;
+      const page = rows.slice(0, limit);
+      const views = await withTransactions(ws, page);
+      const items = views.map(v => {
+        const r = page.find(x => x.id === v.id)!;
+        return { ...v, pocket: { amount: r.amount, balanceAfter: r.balance_after } };
+      });
+      const last = page.at(-1);
+      return { balance: total.results[0]?.amount ?? 0, items, nextCursor: rows.length > limit && last ? `${last.at}|${last.id}` : null };
+    },
+
     async hasTransactions(ws: string, accountId: string) {
       const r = await db.prepare(`SELECT 1 AS yes FROM entries e JOIN transactions t ON t.id = e.transaction_id
         WHERE t.workspace_id = ? AND e.account_id = ? AND t.deleted_at IS NULL LIMIT 1`).bind(ws, accountId).first<{ yes: number }>();
@@ -174,15 +216,15 @@ export function entriesRepo(db: D1Database) {
       return { accounts: map(acc.results), envelopes: map(env.results) };
     },
 
-    /** IDR spent in [from, to) on EXPENSE allocations matching the category and/or envelope. */
-    async spent(ws: string, q: { categoryId: string | null; envelopeId: string | null; from: string; to: string }) {
+    /** Spent in one currency in [from, to) on EXPENSE allocations matching the category and/or envelope. */
+    async spent(ws: string, q: { categoryId: string | null; envelopeId: string | null; currency: string; from: string; to: string }) {
       // ponytail: spread_cycles (0% instalments) not applied yet; the full amount counts in the purchase cycle.
       const r = await db.prepare(`SELECT COALESCE(SUM(-a.amount), 0) AS spent
-        FROM transactions t JOIN allocations a ON a.transaction_id = t.id JOIN envelopes e ON e.id = a.envelope_id AND e.currency_code = 'IDR'
+        FROM transactions t JOIN allocations a ON a.transaction_id = t.id JOIN envelopes e ON e.id = a.envelope_id AND e.currency_code = ?
         WHERE t.workspace_id = ? AND t.deleted_at IS NULL AND t.type = 'EXPENSE'
           AND substr(t.occurred_at, 1, 10) >= ? AND substr(t.occurred_at, 1, 10) < ?
           AND (? IS NULL OR t.category_id = ?) AND (? IS NULL OR a.envelope_id = ?)`)
-        .bind(ws, q.from, q.to, q.categoryId, q.categoryId, q.envelopeId, q.envelopeId).first<{ spent: number }>();
+        .bind(q.currency, ws, q.from, q.to, q.categoryId, q.categoryId, q.envelopeId, q.envelopeId).first<{ spent: number }>();
       return r?.spent ?? 0;
     },
 
@@ -226,5 +268,7 @@ function txWhere(ws: string, f: TxFilter) {
   if (f.categoryId) { where.push('t.category_id = ?'); args.push(f.categoryId); }
   if (f.accountId) { where.push('EXISTS (SELECT 1 FROM entries e WHERE e.transaction_id = t.id AND e.account_id = ?)'); args.push(f.accountId); }
   if (f.envelopeId) { where.push('EXISTS (SELECT 1 FROM allocations a WHERE a.transaction_id = t.id AND a.envelope_id = ?)'); args.push(f.envelopeId); }
+  if (f.merchant) { where.push('lower(trim(t.merchant)) = lower(trim(?))'); args.push(f.merchant); }
+  if (f.currency) { where.push('EXISTS (SELECT 1 FROM allocations a JOIN envelopes e ON e.id = a.envelope_id WHERE a.transaction_id = t.id AND e.currency_code = ?)'); args.push(f.currency); }
   return { where, args };
 }

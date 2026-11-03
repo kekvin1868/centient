@@ -77,15 +77,17 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
         const row = (await repos.accounts.list(ws)).find(a => a.id === id);
         if (row && (row.kind === 'IOU') !== (rest.kind === 'IOU')) throw new DomainError('KIND_LOCKED', '"Friends owe you" accounts keep their type');
       }
-      if (typeof rest.currency_code === 'string') {
-        if (await repos.entries.hasTransactions(ws, id)) throw new DomainError('CURRENCY_LOCKED', 'This account already has entries. Add a new account for the other currency.');
+      const currency = typeof rest.currency_code === 'string' ? rest.currency_code : null;
+      if (currency && await repos.entries.hasTransactions(ws, id)) throw new DomainError('CURRENCY_LOCKED', 'This account already has entries. Add a new account for the other currency.');
+      if (archived !== undefined) rest.archived_at = archived ? stamp() : null;
+      // The account goes first: its update adds a first-use currency row the pockets then point at.
+      if (!(await repos.accounts.update(ws, id, rest))) throw new DomainError('NOT_FOUND', 'Not found');
+      if (currency) {
         // Its pockets are empty too (no entries), so they simply follow the account's new currency.
         for (const e of (await repos.envelopes.list(ws)).filter(x => x.account_id === id)) {
-          await repos.envelopes.update(ws, e.id, { currency_code: rest.currency_code });
+          await repos.envelopes.update(ws, e.id, { currency_code: currency });
         }
       }
-      if (archived !== undefined) rest.archived_at = archived ? stamp() : null;
-      if (!(await repos.accounts.update(ws, id, rest))) throw new DomainError('NOT_FOUND', 'Not found');
       catalog.invalidate();
     },
 

@@ -223,6 +223,9 @@ body::after { content: ""; position: fixed; inset: 0; z-index: 9999; pointer-eve
 @keyframes strike { 0% { transform: translateY(-5px) scale(1.15); opacity: 0.2; filter: blur(1px); } 60% { transform: translateY(1px); } 100% { transform: none; opacity: 1; filter: none; } }
 .strike { animation: strike 0.16s ease-out; }
 @keyframes blink { 50% { opacity: 0; } }
+/* NuclearSign: an alarm lamp, lit 4.5 s then dark 0.5 s, hard on/off. */
+.alarm { animation: alarm 5s steps(1, end) infinite; }
+@keyframes alarm { 0%, 89.99% { opacity: 1; } 90%, 100% { opacity: 0; } }
 .typewriter-caret { display: inline-block; width: 0.55em; height: 0.8em; margin-left: 1px; vertical-align: -0.08em; background: var(--paper-ink); animation: blink 1s steps(1) infinite; }
 .receipt-stamp-btn { border: 2px solid currentColor; border-radius: 6px; padding: 3px 10px; font-weight: 700; font-size: 13px; letter-spacing: 0.04em; color: var(--paper-faint); }
 .receipt-stamp-btn[aria-pressed="true"] { color: var(--sc); background: color-mix(in oklab, var(--sc) 12%, transparent); animation: thunk 0.22s ease-out; }
@@ -239,3 +242,11 @@ body::after { content: ""; position: fixed; inset: 0; z-index: 9999; pointer-eve
 .coin3d.paused .coin3d-spin, .coin3d.paused::before { animation-play-state: paused; }
 @keyframes coin3d-turn { from { transform: rotateX(-10deg) rotateY(0); } to { transform: rotateX(-10deg) rotateY(360deg); } }
 @keyframes coin3d-glow { 25%, 75% { opacity: .5; } }
+
+/* Insights report sections (step 7) hold their headings' margins, so each one's picture has its whole content. */
+[data-report] { display: flow-root; }
+
+/* Section titles (Q46). The pixel face has one weight and fake bold is off (it smears), so these titles draw each
+   letter twice 1px apart (a crisp pixel bold), with NieR's pink ◆ in front and a staff line under them. */
+.section-title { text-shadow: 1px 0 0 currentColor; border-bottom: 2px solid currentColor; padding-bottom: 6px; }
+.section-title::before { content: "◆ " / ""; color: var(--n-pink); }

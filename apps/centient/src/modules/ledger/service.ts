@@ -5,7 +5,8 @@ import type { Snapshot } from '../../lib/catalog';
 import type { Command } from '../../lib/schemas';
 import { toOccurredAt } from '../../domain/cycle';
 import { allocate, assertBalanced, DomainError, expense, income, splitShares, transfer, type NewTransaction } from '../../domain/ledger';
-import type { EntryView, NewEntry, TxFilter, TxView } from '../../repos/entries';
+import { commandOf } from '../../lib/entryCommand';
+import type { NewEntry, TxFilter } from '../../repos/entries';
 
 export type LedgerService = ReturnType<typeof createLedgerService>;
 
@@ -139,41 +140,3 @@ function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] {
 }
 
 /** The saved command, or one read back from a single transaction saved before entries existed. */
-function commandOf(e: EntryView): Command | null {
-  if (e.command) return e.command as Command;
-  return e.kind === 'USER' && e.transactions.length === 1 ? commandFromTx(e.transactions[0]) : null;
-}
-
-function commandFromTx(t: TxView): Command | null {
-  const date = t.occurred_at.slice(0, 10);
-  const note = t.note ?? undefined;
-  const out = <T>(rows: T[], pick: (r: T) => number) => rows.find(r => pick(r) < 0);
-  const inn = <T>(rows: T[], pick: (r: T) => number) => rows.find(r => pick(r) > 0);
-  switch (t.type) {
-    case 'EXPENSE':
-    case 'INCOME': {
-      const [e] = t.entries, [a] = t.allocations;
-      if (!e || !a || !t.category_id) return null;
-      return {
-        type: t.type, accountId: e.account_id, envelopeId: a.envelope_id, categoryId: t.category_id, amount: Math.abs(e.amount), date,
-        merchant: t.merchant ?? undefined, note,
-        ...(t.type === 'EXPENSE' && t.original_amount ? { originalAmount: t.original_amount, originalCurrency: t.original_currency ?? undefined } : {}),
-      };
-    }
-    case 'TRANSFER': {
-      const from = out(t.entries, x => x.amount), to = inn(t.entries, x => x.amount);
-      if (!from || !to) return null;
-      return {
-        type: 'TRANSFER', fromAccountId: from.account_id, toAccountId: to.account_id, amount: -from.amount,
-        toAmount: to.amount !== -from.amount ? to.amount : undefined, date, note,
-        fromEnvelopeId: out(t.allocations, x => x.amount)?.envelope_id, toEnvelopeId: inn(t.allocations, x => x.amount)?.envelope_id,
-      };
-    }
-    case 'ALLOCATE': {
-      const from = out(t.allocations, x => x.amount), to = inn(t.allocations, x => x.amount);
-      if (!from || !to) return null;
-      return { type: 'ALLOCATE', fromEnvelopeId: from.envelope_id, toEnvelopeId: to.envelope_id, amount: -from.amount, date, note };
-    }
-  }
-  return null;
-}
