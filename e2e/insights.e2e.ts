@@ -49,6 +49,13 @@ test('T4.33 an empty workspace shows the empty state', async () => {
   await expect(page.getByRole('radiogroup', { name: 'Currency' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Previous period' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Next period' })).toBeDisabled();
+  // Q45: nothing to export yet. Q44: the ? sits by the title.
+  await expect(page.getByRole('button', { name: 'Report PDF' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'CSV', exact: true })).toBeDisabled();
+  const title = await page.getByRole('heading', { name: 'Insights', level: 1 }).boundingBox();
+  const help = await page.getByRole('button', { name: 'What the budget words mean' }).boundingBox();
+  expect(Math.abs(help!.y + help!.height / 2 - (title!.y + title!.height / 2))).toBeLessThan(title!.height / 2);
+  expect(help!.x).toBeGreaterThan(title!.x + title!.width);
   expect(errors).toEqual([]);
 });
 

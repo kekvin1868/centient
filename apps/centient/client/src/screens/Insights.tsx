@@ -1,7 +1,8 @@
 // Insights: the ledger read back for one period and one currency. Period bar, currency chips, the headline card
 // (spending, comparison, income, savings rate), where it went, the trend, Daily Wallet Spending, top merchants,
 // biggest expenses, Budgets over time. A category or merchant row opens its entries; an entry opens the entry sheet.
-// The export row makes a report PDF of the sections marked `data-report`, or a CSV (step 7); `?` explains the budget words.
+// The export row makes a report PDF of the sections marked `data-report`, or a CSV (step 7); the `?` by the title
+// explains the budget words.
 import { useEffect, useRef, useState } from 'react';
 import { BudgetGuideSheet } from '../features/budgets/BudgetGuideSheet';
 import { EntrySheet } from '../features/entries/EntrySheet';
@@ -59,7 +60,8 @@ export function Insights() {
     return () => { live = false; };
   }, [kind, date, currency, version.value]);
 
-  if (!data) return <Page title="Insights" />;
+  const help = <WinButton label="What the budget words mean" onClick={() => setGuide(true)}>?</WinButton>;
+  if (!data) return <Page title="Insights" action={help}><BudgetGuideSheet open={guide} onClose={() => setGuide(false)} /></Page>;
   const cur = data.currency;
   const cats = catalog.value.categories;
   const span = periodLabel(data.period).replace(/ cycle$/, '');
@@ -69,7 +71,7 @@ export function Insights() {
     name: [b.categoryId && nameOf(cats, b.categoryId), b.envelopeId && pocketLabel(b.envelopeId)].filter(Boolean).join(' · '),
   }));
   return (
-    <Page title="Insights">
+    <Page title="Insights" action={help}>
       <PeriodBar kind={kind} span={data.period} oldest={data.oldest} onKind={setKind} onGo={setDate} />
       <CurrencyChips currencies={data.currencies} value={cur} onChange={setCurrency} />
       <div ref={screen}>
@@ -115,9 +117,8 @@ export function Insights() {
           : <p className="mx-4 border border-dashed border-edge px-4 py-6 text-center text-sm text-muted">Shows here once a budget has run a full cycle.</p>}
       </section>)}
       </div>
-      <ExportRow key={`export:${data.period.from}:${data.period.to}:${cur}`} period={data.period} currency={cur} report={() => screen.current}>
-        <WinButton label="What the budget words mean" onClick={() => setGuide(true)}>?</WinButton>
-      </ExportRow>
+      <ExportRow key={`export:${data.period.from}:${data.period.to}:${cur}`} period={data.period} currency={cur} report={() => screen.current}
+        empty={data.spending === 0 && data.income === 0} />
       <BudgetGuideSheet open={guide} onClose={() => setGuide(false)} />
       <EntriesSheet pick={pick} from={data.period.from} last={data.period.last} currency={cur} onClose={() => setPick(null)}
         onOpen={setEntry} />

@@ -1,9 +1,9 @@
-// The export row at the bottom of Insights (Q41): "Report PDF" and "CSV" for the period and currency on screen, then
-// the `?`. CSV asks "IDR only" or "All currencies". Both files go to the share sheet, else download (Q42). When iOS
+// The export row at the bottom of Insights (Q41): "Report PDF" and "CSV" for the period and currency on screen; both
+// are off when the period has no spending or income in that currency (Q45). CSV asks "IDR only" or "All currencies". Both files go to the share sheet, else download (Q42). When iOS
 // refuses to share because making the file took too long, the button turns into "Share PDF" / "Share CSV" and the
 // next tap shares the file already made (Q40).
 import { Button } from 'konsta/react';
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { client, OfflineError } from '../../lib/api';
 import { attempt } from '../../lib/run';
@@ -16,8 +16,8 @@ import { makeReport } from './report';
 type Job = { busy: boolean; ready: File | null };
 const idle: Job = { busy: false, ready: null };
 
-export function ExportRow({ period, currency, report, children }: {
-  period: Span & { from: string; to: string }; currency: string; report: () => HTMLElement | null; children?: ReactNode;
+export function ExportRow({ period, currency, report, empty }: {
+  period: Span & { from: string; to: string }; currency: string; report: () => HTMLElement | null; empty: boolean;
 }) {
   const [pdf, setPdf] = useState<Job>(idle);
   const [csv, setCsv] = useState<Job>(idle);
@@ -58,14 +58,12 @@ export function ExportRow({ period, currency, report, children }: {
 
   return (
     <div className="mx-4 mt-6 flex items-center gap-2">
-      <Button inline rounded tonal disabled={pdf.busy} onClick={() => (pdf.ready ? again(pdf, setPdf) : run(setPdf, makePdf))}>
+      <Button inline rounded tonal disabled={empty || pdf.busy} onClick={() => (pdf.ready ? again(pdf, setPdf) : run(setPdf, makePdf))}>
         {pdf.busy ? 'Making PDF…' : pdf.ready ? 'Share PDF' : 'Report PDF'}
       </Button>
-      <Button inline rounded tonal disabled={csv.busy} onClick={() => (csv.ready ? again(csv, setCsv) : setAsking(true))}>
+      <Button inline rounded tonal disabled={empty || csv.busy} onClick={() => (csv.ready ? again(csv, setCsv) : setAsking(true))}>
         {csv.busy ? 'Making CSV…' : csv.ready ? 'Share CSV' : 'CSV'}
       </Button>
-      <span className="flex-1" />
-      {children}
       <Sheet open={asking} onClose={() => setAsking(false)} title={`Export CSV · ${label.replace(/ cycle$/, '')}`}>
         <Group>
           <Row title={`${currency} only`} chevron onClick={() => { setAsking(false); run(setCsv, () => makeCsv(currency)); }} />
