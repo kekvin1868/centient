@@ -96,6 +96,16 @@ describe('http', () => {
     expect(balances.accounts.find((a: { id: string }) => a.id === account.id).balance).toBe(90_000);
   });
 
+  it('serves a goal\'s activity and checks its input (T6.17)', async () => {
+    const { body: acc } = await call('POST', '/api/accounts', { name: 'Seabank', kind: 'BANK', openingBalance: 5_000 });
+    const { body: goal } = await call('POST', '/api/envelopes', { accountId: acc.id, name: 'Trip', kind: 'GOAL', targetAmount: 10_000 });
+    expect((await app.request(`https://example.com/api/envelopes/${goal.id}/activity`, {}, env)).status).toBe(401);
+    expect(await call('GET', `/api/envelopes/${goal.id}/activity`)).toMatchObject({ status: 200, body: { goal: { balance: 0, progress: 0 }, items: [], nextCursor: null } });
+    expect(await call('GET', '/api/envelopes/nope/activity')).toMatchObject({ status: 404, body: { code: 'NOT_FOUND' } });
+    expect(await call('GET', `/api/envelopes/${acc.default_envelope_id}/activity`)).toMatchObject({ status: 400, body: { code: 'NOT_A_GOAL' } });
+    expect(await call('GET', `/api/envelopes/${goal.id}/activity?cursor=oops`)).toMatchObject({ status: 400, body: { code: 'VALIDATION' } });
+  });
+
   it('deletes an account, downloads a backup and resets', async () => {
     const { body: acc } = await call('POST', '/api/accounts', { name: 'Jago', kind: 'BANK', openingBalance: 5_000 });
     expect(await call('PATCH', `/api/accounts/${acc.id}`, { kind: 'EWALLET', due_day: 5 })).toMatchObject({ status: 200 });

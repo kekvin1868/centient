@@ -149,6 +149,37 @@ export function entriesRepo(db: D1Database) {
       return { items, nextCursor: rows.length > f.limit && last ? `${last.occurred_at}|${last.id}` : null };
     },
 
+    /**
+     * One pocket's entries, newest first, each with its net amount in the pocket and the pocket's balance after it.
+     * The running sum is taken over the pocket's whole history, so a later page continues where the last one stopped.
+     * Entries that net to zero in the pocket are left out. Cursor `occurred_at|entryId`, as the entry list.
+     */
+    async pocketLog(ws: string, envelopeId: string, cursor: string | undefined, limit: number) {
+      const [at, id] = cursor ? cursor.split('|') : [null, null];
+      const rows = (await db.prepare(`WITH lines AS (
+          SELECT g.id, MIN(t.occurred_at) AS at, SUM(a.amount) AS amount
+          FROM entry_groups g JOIN transactions t ON t.group_id = g.id AND t.deleted_at IS NULL
+          JOIN allocations a ON a.transaction_id = t.id AND a.envelope_id = ?
+          WHERE g.workspace_id = ? AND g.deleted_at IS NULL
+          GROUP BY g.id HAVING SUM(a.amount) <> 0
+        ), running AS (
+          SELECT id, at, amount, SUM(amount) OVER (ORDER BY at, id ROWS UNBOUNDED PRECEDING) AS balance_after FROM lines
+        )
+        SELECT r.id, r.at, r.amount, r.balance_after, g.kind, g.command, g.icon
+        FROM running r JOIN entry_groups g ON g.id = r.id
+        WHERE ? IS NULL OR (r.at, r.id) < (?, ?)
+        ORDER BY r.at DESC, r.id DESC LIMIT ?`).bind(envelopeId, ws, at, at, id, limit + 1)
+        .all<GroupRow & { at: string; amount: number; balance_after: number }>()).results;
+      const page = rows.slice(0, limit);
+      const views = await withTransactions(ws, page);
+      const items = views.map(v => {
+        const r = page.find(x => x.id === v.id)!;
+        return { ...v, pocket: { amount: r.amount, balanceAfter: r.balance_after } };
+      });
+      const last = page.at(-1);
+      return { items, nextCursor: rows.length > limit && last ? `${last.at}|${last.id}` : null };
+    },
+
     async hasTransactions(ws: string, accountId: string) {
       const r = await db.prepare(`SELECT 1 AS yes FROM entries e JOIN transactions t ON t.id = e.transaction_id
         WHERE t.workspace_id = ? AND e.account_id = ? AND t.deleted_at IS NULL LIMIT 1`).bind(ws, accountId).first<{ yes: number }>();
