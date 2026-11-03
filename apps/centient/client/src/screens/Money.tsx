@@ -1,9 +1,8 @@
 // Money: the total, accounts as cards (one is always picked: Home's account, else the first everyday one; picking
 // here picks it on Home too), its free balance, actions, pockets and installments, then budgets.
+import { useQuery } from '@tanstack/react-query';
 import { BlockTitle } from 'konsta/react';
 import { useEffect, useState } from 'react';
-import type { Account } from '../../../src/repos/accounts';
-import type { Envelope } from '../../../src/repos/envelopes';
 import { AccountHand } from '../features/accounts/AccountHand';
 import { PickedAccount } from '../features/accounts/PickedAccount';
 import { TotalBalance } from '../features/accounts/TotalBalance';
@@ -12,28 +11,16 @@ import { InstallmentsSection } from '../features/installments/InstallmentsSectio
 import { takesInstallments } from '../features/installments/plans';
 import { AccountPockets } from '../features/pockets/AccountPockets';
 import { Page } from '../layouts/Page';
-import { call, client } from '../lib/api';
 import { formatMoney } from '../lib/format';
 import { idrValue, loadPrices, prices } from '../lib/prices';
-import { attempt } from '../lib/run';
 import { selectedAccount, version } from '../lib/state';
-
-type Bal = {
-  accounts: (Account & { balance: number })[];
-  envelopes: (Envelope & { balance: number })[];
-};
-// Last data shown, so coming back to Money shows it at once while it refreshes.
-let cache: Bal | null = null;
+import { accountQueries } from '../models/account';
 
 export function Money({ onShowAccount }: { onShowAccount: () => void }) {
-  const [bal, setBal] = useState<Bal | null>(cache);
+  const { data: bal } = useQuery(accountQueries.balances());
   const [picked, setPicked] = useState<string | null>(selectedAccount.value);
   useEffect(() => {
     loadPrices();
-    attempt(async () => {
-      cache = (await call(client.api.balances.$get())) as Bal;
-      setBal(cache);
-    });
   }, [version.value]);
   if (!bal) return <Page title="Money" />;
   const a =

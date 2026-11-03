@@ -1,26 +1,14 @@
 // A goal's Activity (step 6): how it stands (pixel bar, saved of target, what to put in each cycle and by when, or
 // "Goal reached" / "Past target date"), then every entry that moved money in or out of it, newest first, with the
 // goal's balance after each. 50 at a time; edits and deletes anywhere reload it.
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { Block, Button } from 'konsta/react';
-import { useEffect, useState } from 'react';
-import { call, client } from '../../lib/api';
+import { useState } from 'react';
 import { formatMoney, goalLine } from '../../lib/format';
-import { attempt } from '../../lib/run';
-import { version } from '../../lib/state';
+import { activityRows, pocketQueries } from '../../models/pocket';
 import { Sheet } from '../../ui/Sheet';
 import { EntryList, type Entry } from '../entries/EntryList';
 import { GoalBar, type Pocket } from './PocketCards';
-
-type Goal = {
-  currency: string;
-  balance: number;
-  target: number;
-  targetDate: string | null;
-  progress: number;
-  state: string;
-  cyclesLeft: number | null;
-  neededPerCycle: number | null;
-};
 
 export function GoalActivitySheet({
   pocket,
@@ -33,31 +21,14 @@ export function GoalActivitySheet({
   onClose: () => void;
   onOpen: (e: Entry) => void;
 }) {
-  const [goal, setGoal] = useState<Goal | null>(null);
-  const [items, setItems] = useState<Entry[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
+  const log = useInfiniteQuery({
+    ...pocketQueries.activity(pocket?.id ?? ''),
+    enabled: open && pocket !== null,
+  });
+  const goal = log.data?.pages[0]?.goal ?? null;
+  const items: Entry[] = log.data ? activityRows(log.data.pages) : [];
   // The entry tapped opens once this sheet has gone, not on top of it.
   const [chosen, setChosen] = useState<Entry | null>(null);
-  const load = (more: boolean) =>
-    pocket &&
-    attempt(async () => {
-      const page = await call(
-        client.api.envelopes[':id'].activity.$get({
-          param: { id: pocket.id },
-          query: { cursor: more && cursor ? cursor : undefined },
-        }),
-      );
-      const rows = (page.items as Entry[]).map(e => ({
-        ...e,
-        pocket: { ...e.pocket!, currency: page.goal.currency },
-      }));
-      setGoal(page.goal);
-      setItems(more ? [...items, ...rows] : rows);
-      setCursor(page.nextCursor);
-    });
-  useEffect(() => {
-    if (open) load(false);
-  }, [open, pocket?.id, version.value]);
   const line = goal && goalLine(goal);
   return (
     <Sheet
@@ -94,9 +65,9 @@ export function GoalActivitySheet({
             }}
             empty="Nothing has moved in or out yet."
           />
-          {cursor && (
+          {log.hasNextPage && (
             <Block>
-              <Button large rounded tonal onClick={() => load(true)}>
+              <Button large rounded tonal onClick={() => void log.fetchNextPage()}>
                 Load more
               </Button>
             </Block>

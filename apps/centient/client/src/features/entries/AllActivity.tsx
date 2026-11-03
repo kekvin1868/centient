@@ -1,7 +1,7 @@
 // Every entry, filtered by type, account and dates, 50 at a time.
 import { Block, Button } from 'konsta/react';
-import { useEffect, useState } from 'react';
-import { everyday, selectedAccount, version } from '../../lib/state';
+import { useState } from 'react';
+import { everyday, selectedAccount } from '../../lib/state';
 import { InputRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Segmented } from '../../ui/Segmented';
@@ -29,10 +29,7 @@ export function AllActivity({
   const [account, setAccount] = useState<string | null>(selectedAccount.value);
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const { items, more, load } = useEntries({ account, type, from, to }, 50);
-  useEffect(() => {
-    if (open) load(false);
-  }, [open, type, account, from, to, version.value]);
+  const { items, more, loadMore } = useEntries({ account, type, from, to }, 50, open);
   return (
     <Sheet open={open} onClose={onClose} title="All activity">
       <Segmented label="Show" value={type} onChange={setType} options={TYPE_FILTERS} />
@@ -57,7 +54,7 @@ export function AllActivity({
       />
       {more && (
         <Block>
-          <Button large rounded tonal onClick={() => load(true)}>
+          <Button large rounded tonal onClick={loadMore}>
             Load more
           </Button>
         </Block>

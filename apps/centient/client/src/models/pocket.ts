@@ -1,0 +1,32 @@
+// Pockets: a goal's Activity (its movements with the balance after each, 50 a page, and how it stands).
+// (Creating, editing and moving money between pockets move here in their own step.)
+import { infiniteQueryOptions } from '@tanstack/react-query';
+import { call, client, type Res } from './api';
+
+type ActivityPage = Res<(typeof client.api.envelopes)[':id']['activity']['$get']>;
+/** Progress, state and what to put in each cycle (models the server's goalOutlook). */
+export type GoalOutlook = ActivityPage['goal'];
+
+export const pocketQueries = {
+  all: () => ['pockets'] as const,
+  activity: (id: string) =>
+    infiniteQueryOptions({
+      queryKey: [...pocketQueries.all(), 'activity', id],
+      queryFn: ({ pageParam }) =>
+        call(
+          client.api.envelopes[':id'].activity.$get({
+            param: { id },
+            query: { cursor: pageParam ?? undefined },
+          }),
+        ),
+      // The first page has no cursor. Kept on the device as JSON, it comes back as null, so null means none too.
+      initialPageParam: null as string | null,
+      getNextPageParam: last => last.nextCursor,
+    }),
+};
+
+/** The log's rows: each entry carries this goal's +/- and the balance after, in the goal's currency. */
+export const activityRows = (pages: ActivityPage[]) =>
+  pages.flatMap(p =>
+    p.items.map(e => ({ ...e, pocket: { ...e.pocket, currency: p.goal.currency } })),
+  );
