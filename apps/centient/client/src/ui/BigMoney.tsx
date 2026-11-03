@@ -3,7 +3,19 @@
 import { formatMoney } from '../lib/format';
 import { useCountUp } from '../lib/motion';
 
-export function BigMoney({ minor, currency = 'IDR', max = 56, inset = 32, className = '' }: { minor: number; currency?: string; max?: number; inset?: number; className?: string }) {
+export function BigMoney({
+  minor,
+  currency = 'IDR',
+  max = 56,
+  inset = 32,
+  className = '',
+}: {
+  minor: number;
+  currency?: string;
+  max?: number;
+  inset?: number;
+  className?: string;
+}) {
   const shown = useCountUp(minor);
   // Sized from the final amount, so the size holds still while the digits roll.
   const len = formatMoney(minor, currency).length;
@@ -13,10 +25,17 @@ export function BigMoney({ minor, currency = 'IDR', max = 56, inset = 32, classN
   return (
     <span className={`money-big block whitespace-nowrap ${className}`} style={{ fontSize: fit }}>
       <span className="sr-only">{formatMoney(minor, currency)}</span>
-      <span key={minor} className="inline-block origin-left [animation:pop_.45s_steps(1)]" aria-hidden="true">
-        <span className="cur">{sign && '−'}{cur.trim()}</span>{digits}
+      <span
+        key={minor}
+        className="inline-block origin-left [animation:pop_.45s_steps(1)]"
+        aria-hidden="true"
+      >
+        <span className="cur">
+          {sign && '−'}
+          {cur.trim()}
+        </span>
+        {digits}
       </span>
     </span>
   );
 }
-

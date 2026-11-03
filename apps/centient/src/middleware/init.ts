@@ -26,9 +26,17 @@ import { workspacesRepo } from '../repos/workspaces';
 
 export function createRepos(db: D1Database, store?: FileStore) {
   return {
-    workspaces: workspacesRepo(db), accounts: accountsRepo(db), envelopes: envelopesRepo(db), categories: categoriesRepo(db),
-    aliases: aliasesRepo(db), budgets: budgetsRepo(db), entries: entriesRepo(db), prices: pricesRepo(db),
-    installments: installmentsRepo(db), files: filesRepo(db, store), reports: reportsRepo(db),
+    workspaces: workspacesRepo(db),
+    accounts: accountsRepo(db),
+    envelopes: envelopesRepo(db),
+    categories: categoriesRepo(db),
+    aliases: aliasesRepo(db),
+    budgets: budgetsRepo(db),
+    entries: entriesRepo(db),
+    prices: pricesRepo(db),
+    installments: installmentsRepo(db),
+    files: filesRepo(db, store),
+    reports: reportsRepo(db),
     /** One atomic write across repos (D1 runs a batch as one transaction). */
     batch: (stmts: D1PreparedStatement[]) => db.batch(stmts),
   };
@@ -36,7 +44,12 @@ export function createRepos(db: D1Database, store?: FileStore) {
 export type Repos = ReturnType<typeof createRepos>;
 
 /** One workspace's services. Lower ones are passed into higher ones (ledger into quick add, installments, workspace). */
-export function createServices(o: { repos: Repos; ws: string; now: () => number; fetch: typeof globalThis.fetch }) {
+export function createServices(o: {
+  repos: Repos;
+  ws: string;
+  now: () => number;
+  fetch: typeof globalThis.fetch;
+}) {
   const base = { ws: o.ws, now: o.now, repos: o.repos, catalog: createCatalog(o.ws, o.repos) };
   const ledger = createLedgerService(base);
   return {
@@ -56,6 +69,14 @@ export type Services = ReturnType<typeof createServices>;
 export const init = (): MiddlewareHandler<AppEnv> => async (c, next) => {
   const repos = createRepos(c.env.DB, c.env.FILES && r2Files(c.env.FILES));
   const { workspaceId } = await repos.workspaces.ensure(c.var.email);
-  c.set('services', createServices({ repos, ws: workspaceId, now: Date.now, fetch: (input, init) => fetch(input, init) }));
+  c.set(
+    'services',
+    createServices({
+      repos,
+      ws: workspaceId,
+      now: Date.now,
+      fetch: (input, init) => fetch(input, init),
+    }),
+  );
   await next();
 };

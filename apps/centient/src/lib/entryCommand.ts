@@ -16,27 +16,54 @@ function commandFromTx(t: TxView): Command | null {
   switch (t.type) {
     case 'EXPENSE':
     case 'INCOME': {
-      const [e] = t.entries, [a] = t.allocations;
+      const [e] = t.entries,
+        [a] = t.allocations;
       if (!e || !a || !t.category_id) return null;
       return {
-        type: t.type, accountId: e.account_id, envelopeId: a.envelope_id, categoryId: t.category_id, amount: Math.abs(e.amount), date,
-        merchant: t.merchant ?? undefined, note,
-        ...(t.type === 'EXPENSE' && t.original_amount ? { originalAmount: t.original_amount, originalCurrency: t.original_currency ?? undefined } : {}),
+        type: t.type,
+        accountId: e.account_id,
+        envelopeId: a.envelope_id,
+        categoryId: t.category_id,
+        amount: Math.abs(e.amount),
+        date,
+        merchant: t.merchant ?? undefined,
+        note,
+        ...(t.type === 'EXPENSE' && t.original_amount
+          ? {
+              originalAmount: t.original_amount,
+              originalCurrency: t.original_currency ?? undefined,
+            }
+          : {}),
       };
     }
     case 'TRANSFER': {
-      const from = out(t.entries, x => x.amount), to = inn(t.entries, x => x.amount);
+      const from = out(t.entries, x => x.amount),
+        to = inn(t.entries, x => x.amount);
       if (!from || !to) return null;
       return {
-        type: 'TRANSFER', fromAccountId: from.account_id, toAccountId: to.account_id, amount: -from.amount,
-        toAmount: to.amount !== -from.amount ? to.amount : undefined, date, note,
-        fromEnvelopeId: out(t.allocations, x => x.amount)?.envelope_id, toEnvelopeId: inn(t.allocations, x => x.amount)?.envelope_id,
+        type: 'TRANSFER',
+        fromAccountId: from.account_id,
+        toAccountId: to.account_id,
+        amount: -from.amount,
+        toAmount: to.amount !== -from.amount ? to.amount : undefined,
+        date,
+        note,
+        fromEnvelopeId: out(t.allocations, x => x.amount)?.envelope_id,
+        toEnvelopeId: inn(t.allocations, x => x.amount)?.envelope_id,
       };
     }
     case 'ALLOCATE': {
-      const from = out(t.allocations, x => x.amount), to = inn(t.allocations, x => x.amount);
+      const from = out(t.allocations, x => x.amount),
+        to = inn(t.allocations, x => x.amount);
       if (!from || !to) return null;
-      return { type: 'ALLOCATE', fromEnvelopeId: from.envelope_id, toEnvelopeId: to.envelope_id, amount: -from.amount, date, note };
+      return {
+        type: 'ALLOCATE',
+        fromEnvelopeId: from.envelope_id,
+        toEnvelopeId: to.envelope_id,
+        amount: -from.amount,
+        date,
+        note,
+      };
     }
   }
   return null;

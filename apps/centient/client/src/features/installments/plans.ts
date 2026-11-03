@@ -11,7 +11,15 @@ export const takesInstallments = (kind: string) => kind === 'PAYLATER' || kind =
 export function usePlans(accountId?: string) {
   const [plans, setPlans] = useState<PlanView[] | null>(null);
   useEffect(() => {
-    attempt(async () => setPlans((await call(client.api.installments.$get({ query: accountId ? { account: accountId } : {} }))).plans as PlanView[]));
+    attempt(async () =>
+      setPlans(
+        (
+          await call(
+            client.api.installments.$get({ query: accountId ? { account: accountId } : {} }),
+          )
+        ).plans as PlanView[],
+      ),
+    );
   }, [accountId, version.value]);
   return plans;
 }
@@ -19,5 +27,7 @@ export function usePlans(accountId?: string) {
 /** The plans with something due within 3 days (or overdue), soonest first. */
 export function dueSoon(plans: PlanView[], today: string) {
   const soon = new Date(Date.parse(`${today}T00:00:00Z`) + 3 * 864e5).toISOString().slice(0, 10);
-  return plans.filter(p => p.next && p.next.due <= soon).sort((a, b) => a.next!.due.localeCompare(b.next!.due));
+  return plans
+    .filter(p => p.next && p.next.due <= soon)
+    .sort((a, b) => a.next!.due.localeCompare(b.next!.due));
 }

@@ -6,12 +6,17 @@ export const client = hc<AppType>('/');
 
 /** The request never reached the server (offline, tunnel down). The caller keeps the user's input. */
 export class OfflineError extends Error {
-  constructor() { super('No connection'); }
+  constructor() {
+    super('No connection');
+  }
 }
 
 /** Renames, hides (`archived`) or changes one field of an account, pocket or category. */
-export const patchRow = (table: 'accounts' | 'envelopes' | 'categories', id: string, json: Record<string, unknown>) =>
-  call(client.api[table][':id'].$patch({ param: { id }, json }));
+export const patchRow = (
+  table: 'accounts' | 'envelopes' | 'categories',
+  id: string,
+  json: Record<string, unknown>,
+) => call(client.api[table][':id'].$patch({ param: { id }, json }));
 
 /** Awaits a client call and returns its JSON, throwing the server's plain-language message (and its `code`) on failure. */
 export async function call<T>(req: Promise<{ ok: boolean; json(): Promise<T> }>): Promise<T> {

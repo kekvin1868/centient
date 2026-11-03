@@ -7,13 +7,26 @@ export function NoticeSheet({ message, onClose }: { message: string | null; onCl
   const { mounted, gen, unmount } = usePresence(message !== null);
   if (!mounted) return null;
   return createPortal(
-    <NightSheet key={gen} fixed open={message !== null} place="mid" fx="glitch" label={message ?? ''} title="WARNING"
-      onClose={() => { unmount(); onClose(); }}>
+    <NightSheet
+      key={gen}
+      fixed
+      open={message !== null}
+      place="mid"
+      fx="glitch"
+      label={message ?? ''}
+      title="WARNING"
+      onClose={() => {
+        unmount();
+        onClose();
+      }}
+    >
       {close => (
         <>
           <p className="c-msg">{message}</p>
           <div className="k-acts" style={{ gridTemplateColumns: '1fr' }}>
-            <button type="button" className="n-go" onClick={close}>OK</button>
+            <button type="button" className="n-go" onClick={close}>
+              OK
+            </button>
           </div>
         </>
       )}

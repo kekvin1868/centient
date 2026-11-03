@@ -18,11 +18,21 @@ const BITMAP = [
 ];
 
 // One rectangle per run of lit pixels.
-const PATH = BITMAP.flatMap((row, y) => [...row.matchAll(/#+/g)].map(m => `M${m.index} ${y}h${m[0].length}v1h-${m[0].length}z`)).join('');
+const PATH = BITMAP.flatMap((row, y) =>
+  [...row.matchAll(/#+/g)].map(m => `M${m.index} ${y}h${m[0].length}v1h-${m[0].length}z`),
+).join('');
 
 export function NuclearSign({ label, size = 28 }: { label: string; size?: number }) {
   return (
-    <svg className="alarm inline-block shrink-0" width={size} height={size} viewBox="0 0 14 14" shapeRendering="crispEdges" role="img" aria-label={label}>
+    <svg
+      className="alarm inline-block shrink-0"
+      width={size}
+      height={size}
+      viewBox="0 0 14 14"
+      shapeRendering="crispEdges"
+      role="img"
+      aria-label={label}
+    >
       <path d={PATH} fill="currentColor" />
     </svg>
   );

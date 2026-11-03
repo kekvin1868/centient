@@ -17,16 +17,35 @@ async function setup(email: string) {
   const { workspaceId: ws } = await w.repos.workspaces.ensure(email);
   const categories = await w.repos.categories.list(ws);
   const cat = (n: string) => categories.find(c => c.name === n)!.id;
-  const bca = await svc(ws).accounts.create({ name: 'BCA', kind: 'BANK', provider: 'bca', openingBalance: 10_000_000 });
-  const gopay = await svc(ws).accounts.create({ name: 'GoPay', kind: 'EWALLET', provider: 'gopay' });
+  const bca = await svc(ws).accounts.create({
+    name: 'BCA',
+    kind: 'BANK',
+    provider: 'bca',
+    openingBalance: 10_000_000,
+  });
+  const gopay = await svc(ws).accounts.create({
+    name: 'GoPay',
+    kind: 'EWALLET',
+    provider: 'gopay',
+  });
   const friends = await svc(ws).accounts.create({ name: 'Friends', kind: 'IOU' });
-  return { ws, cat, bca: bca.id, gopay: gopay.id, friends: friends.id, main: (account: string) => `${account}:main` };
+  return {
+    ws,
+    cat,
+    bca: bca.id,
+    gopay: gopay.id,
+    friends: friends.id,
+    main: (account: string) => `${account}:main`,
+  };
 }
 
 /** Every account's balance equals the sum of its pockets. */
 async function pocketsAddUp(ws: string) {
   const b = await svc(ws).ledger.balances();
-  for (const a of b.accounts) expect(b.envelopes.filter(e => e.account_id === a.id).reduce((s, e) => s + e.balance, 0)).toBe(a.balance);
+  for (const a of b.accounts)
+    expect(b.envelopes.filter(e => e.account_id === a.id).reduce((s, e) => s + e.balance, 0)).toBe(
+      a.balance,
+    );
 }
 
 const sum = (xs: { balance: number }[]) => xs.reduce((s, x) => s + x.balance, 0);
@@ -35,9 +54,30 @@ describe('tracker', () => {
   it('records expenses, transfers with fees and split bills, and stays balanced', async () => {
     const t = await setup('a@test');
     await svc(t.ws).ledger.record([
-      { type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 100_000, date: '2026-10-17', merchant: 'Pizza Hut', split: { people: 3, iouAccountId: t.friends } },
-      { type: 'TRANSFER', fromAccountId: t.bca, toAccountId: t.gopay, amount: 500_000, fee: 2_500, date: '2026-10-17' },
-      { type: 'EXPENSE', accountId: t.gopay, categoryId: t.cat('Food & Drink'), amount: 25_000, date: '2026-10-16' },
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: t.cat('Food & Drink'),
+        amount: 100_000,
+        date: '2026-10-17',
+        merchant: 'Pizza Hut',
+        split: { people: 3, iouAccountId: t.friends },
+      },
+      {
+        type: 'TRANSFER',
+        fromAccountId: t.bca,
+        toAccountId: t.gopay,
+        amount: 500_000,
+        fee: 2_500,
+        date: '2026-10-17',
+      },
+      {
+        type: 'EXPENSE',
+        accountId: t.gopay,
+        categoryId: t.cat('Food & Drink'),
+        amount: 25_000,
+        date: '2026-10-16',
+      },
     ]);
     const b = await svc(t.ws).ledger.balances();
     const bal = (id: string) => b.accounts.find(a => a.id === id)!.balance;
@@ -52,47 +92,124 @@ describe('tracker', () => {
   it('keeps workspaces apart', async () => {
     const a = await setup('owner-a@test');
     const b = await setup('owner-b@test');
-    await svc(a.ws).ledger.record([{ type: 'EXPENSE', accountId: a.bca, categoryId: a.cat('Food & Drink'), amount: 30_000, date: '2026-10-17' }]);
+    await svc(a.ws).ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: a.bca,
+        categoryId: a.cat('Food & Drink'),
+        amount: 30_000,
+        date: '2026-10-17',
+      },
+    ]);
     // B cannot spend from A's account, nor read or delete A's transactions.
-    await expect(svc(b.ws).ledger.record([{ type: 'EXPENSE', accountId: a.bca, categoryId: b.cat('Food & Drink'), amount: 1, date: '2026-10-17' }]))
-      .rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(
+      svc(b.ws).ledger.record([
+        {
+          type: 'EXPENSE',
+          accountId: a.bca,
+          categoryId: b.cat('Food & Drink'),
+          amount: 1,
+          date: '2026-10-17',
+        },
+      ]),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
     const aList = await svc(a.ws).ledger.listEntries({ limit: 50 });
     const bList = await svc(b.ws).ledger.listEntries({ limit: 50 });
     expect(bList.items.some(x => aList.items.some(y => y.id === x.id))).toBe(false);
-    await expect(svc(b.ws).ledger.remove(aList.items[0].id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await expect(svc(b.ws).ledger.edit(aList.items[0].id, { type: 'EXPENSE', accountId: b.bca, categoryId: b.cat('Food & Drink'), amount: 1, date: '2026-10-17' }))
-      .rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await expect(svc(b.ws).accounts.reconcile(a.bca, { actual: 0 })).rejects.toMatchObject({ code: 'NOT_FOUND' });
-    await expect(svc(b.ws).accounts.update(a.bca, { name: 'stolen' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(svc(b.ws).ledger.remove(aList.items[0].id)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(
+      svc(b.ws).ledger.edit(aList.items[0].id, {
+        type: 'EXPENSE',
+        accountId: b.bca,
+        categoryId: b.cat('Food & Drink'),
+        amount: 1,
+        date: '2026-10-17',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    await expect(svc(b.ws).accounts.reconcile(a.bca, { actual: 0 })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(svc(b.ws).accounts.update(a.bca, { name: 'stolen' })).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
   });
 
   it('reports budget status with a safe amount per day', async () => {
     const t = await setup('budget@test');
     await svc(t.ws).budgets.set({ categoryId: t.cat('Food & Drink'), limit: 1_500_000 });
     await svc(t.ws).ledger.record([
-      { type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 250_000, date: '2026-10-05' },
-      { type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 99_000, date: '2026-09-30' }, // previous cycle
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: t.cat('Food & Drink'),
+        amount: 250_000,
+        date: '2026-10-05',
+      },
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: t.cat('Food & Drink'),
+        amount: 99_000,
+        date: '2026-09-30',
+      }, // previous cycle
     ]);
     const s = await svc(t.ws).budgets.status();
     expect(s.cycle).toEqual({ from: '2026-10-01', to: '2026-11-01', daysLeft: 15 });
-    expect(s.budgets[0]).toMatchObject({ limit: 1_500_000, spent: 250_000, remaining: 1_250_000, percent: 17, safePerDay: 83_333 });
+    expect(s.budgets[0]).toMatchObject({
+      limit: 1_500_000,
+      spent: 250_000,
+      remaining: 1_250_000,
+      percent: 17,
+      safePerDay: 83_333,
+    });
   });
 
   it('parses quick add with history and learns corrected merchants', async () => {
     const t = await setup('quick@test');
     const [draft] = await svc(t.ws).quickadd.parse('mkn ph 100 bg 3');
-    expect(draft).toMatchObject({ amount: 100_000, needsConfirm: true, merchant: 'Pizza Hut', split: 3, accountId: t.bca });
-    await svc(t.ws).quickadd.save([{
-      command: { type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 85_000, date: '2026-10-17', merchant: 'Warkop Bang Ali' },
-      rawMerchant: 'warkop', suggestedMerchant: 'Warkop',
-    }]);
+    expect(draft).toMatchObject({
+      amount: 100_000,
+      needsConfirm: true,
+      merchant: 'Pizza Hut',
+      split: 3,
+      accountId: t.bca,
+    });
+    await svc(t.ws).quickadd.save([
+      {
+        command: {
+          type: 'EXPENSE',
+          accountId: t.bca,
+          categoryId: t.cat('Food & Drink'),
+          amount: 85_000,
+          date: '2026-10-17',
+          merchant: 'Warkop Bang Ali',
+        },
+        rawMerchant: 'warkop',
+        suggestedMerchant: 'Warkop',
+      },
+    ]);
     const [next] = await svc(t.ws).quickadd.parse('warkop 90');
-    expect(next).toMatchObject({ merchant: 'Warkop Bang Ali', categoryId: t.cat('Food & Drink'), amount: 90_000 });
+    expect(next).toMatchObject({
+      merchant: 'Warkop Bang Ali',
+      categoryId: t.cat('Food & Drink'),
+      amount: 90_000,
+    });
   });
 
   it('soft-deletes and exports', async () => {
     const t = await setup('csv@test');
-    const [id] = await svc(t.ws).ledger.record([{ type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 20_000, date: '2026-10-17', merchant: 'Kopi, "Tuku"' }]);
+    const [id] = await svc(t.ws).ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: t.cat('Food & Drink'),
+        amount: 20_000,
+        date: '2026-10-17',
+        merchant: 'Kopi, "Tuku"',
+      },
+    ]);
     expect(await svc(t.ws).workspace.csv()).toContain('"kopi, ""tuku"""');
     await svc(t.ws).ledger.remove(id);
     const b = await svc(t.ws).ledger.balances();
@@ -101,7 +218,15 @@ describe('tracker', () => {
 
   it('keeps a split bill as one entry, and editing rebuilds or collapses it', async () => {
     const t = await setup('edit@test');
-    const split = { type: 'EXPENSE' as const, accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 90_000, date: '2026-10-16', merchant: 'Pizza Hut', split: { people: 3, iouAccountId: t.friends } };
+    const split = {
+      type: 'EXPENSE' as const,
+      accountId: t.bca,
+      categoryId: t.cat('Food & Drink'),
+      amount: 90_000,
+      date: '2026-10-16',
+      merchant: 'Pizza Hut',
+      split: { people: 3, iouAccountId: t.friends },
+    };
     const [id] = await svc(t.ws).ledger.record([split]);
     const before = await w.repos.entries.get(t.ws, id);
     expect(before?.transactions.map(x => x.type)).toEqual(['EXPENSE', 'TRANSFER']);
@@ -122,13 +247,29 @@ describe('tracker', () => {
     expect(bal(t.bca)).toBe(10_000_000 - 50_000);
     expect(bal(t.friends)).toBe(0);
 
-    await expect(svc(t.ws).ledger.edit(id, { type: 'INCOME', accountId: t.bca, categoryId: t.cat('Salary'), amount: 1, date: '2026-10-16' }))
-      .rejects.toMatchObject({ code: 'TYPE_LOCKED' });
+    await expect(
+      svc(t.ws).ledger.edit(id, {
+        type: 'INCOME',
+        accountId: t.bca,
+        categoryId: t.cat('Salary'),
+        amount: 1,
+        date: '2026-10-16',
+      }),
+    ).rejects.toMatchObject({ code: 'TYPE_LOCKED' });
   });
 
   it('keeps a transfer fee with its transfer, and deleting the entry removes both', async () => {
     const t = await setup('fee@test');
-    const [id] = await svc(t.ws).ledger.record([{ type: 'TRANSFER', fromAccountId: t.bca, toAccountId: t.gopay, amount: 100_000, fee: 2_500, date: '2026-10-17' }]);
+    const [id] = await svc(t.ws).ledger.record([
+      {
+        type: 'TRANSFER',
+        fromAccountId: t.bca,
+        toAccountId: t.gopay,
+        amount: 100_000,
+        fee: 2_500,
+        date: '2026-10-17',
+      },
+    ]);
     const { items } = await svc(t.ws).ledger.listEntries({ limit: 50 });
     const entry = items.find(e => e.id === id)!;
     expect(entry.transactions).toHaveLength(2);
@@ -136,17 +277,30 @@ describe('tracker', () => {
     await svc(t.ws).ledger.remove(id);
     const b = await svc(t.ws).ledger.balances();
     expect(b.accounts.find(a => a.id === t.bca)!.balance).toBe(10_000_000);
-    expect((await svc(t.ws).ledger.listEntries({ limit: 50 })).items.some(e => e.id === id)).toBe(false);
+    expect((await svc(t.ws).ledger.listEntries({ limit: 50 })).items.some(e => e.id === id)).toBe(
+      false,
+    );
     await expect(svc(t.ws).ledger.remove(id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('pages entries by date with a cursor and filters by account', async () => {
     const t = await setup('page@test');
-    await svc(t.ws).ledger.record(['2026-10-10', '2026-10-11', '2026-10-12'].map(date =>
-      ({ type: 'EXPENSE' as const, accountId: t.gopay, categoryId: t.cat('Food & Drink'), amount: 10_000, date })));
+    await svc(t.ws).ledger.record(
+      ['2026-10-10', '2026-10-11', '2026-10-12'].map(date => ({
+        type: 'EXPENSE' as const,
+        accountId: t.gopay,
+        categoryId: t.cat('Food & Drink'),
+        amount: 10_000,
+        date,
+      })),
+    );
     const first = await svc(t.ws).ledger.listEntries({ limit: 2, accountId: t.gopay });
     expect(first.items.map(e => e.occurred_at.slice(0, 10))).toEqual(['2026-10-12', '2026-10-11']);
-    const second = await svc(t.ws).ledger.listEntries({ limit: 2, accountId: t.gopay, cursor: first.nextCursor! });
+    const second = await svc(t.ws).ledger.listEntries({
+      limit: 2,
+      accountId: t.gopay,
+      cursor: first.nextCursor!,
+    });
     expect(second.items.map(e => e.occurred_at.slice(0, 10))).toEqual(['2026-10-10']);
     expect(second.nextCursor).toBeNull();
   });
@@ -155,9 +309,15 @@ describe('tracker', () => {
     const t = await setup('balance@test');
     await svc(t.ws).budgets.set({ categoryId: t.cat('Food & Drink'), limit: 1_000_000 });
     const spentFood = async () => (await svc(t.ws).budgets.status()).budgets[0].spent;
-    const balance = async () => (await svc(t.ws).ledger.balances()).accounts.find(a => a.id === t.bca)!.balance;
+    const balance = async () =>
+      (await svc(t.ws).ledger.balances()).accounts.find(a => a.id === t.bca)!.balance;
 
-    expect(await svc(t.ws).accounts.reconcile(t.bca, { actual: 9_950_000, categoryId: t.cat('Food & Drink') })).toMatchObject({ balance: 9_950_000 });
+    expect(
+      await svc(t.ws).accounts.reconcile(t.bca, {
+        actual: 9_950_000,
+        categoryId: t.cat('Food & Drink'),
+      }),
+    ).toMatchObject({ balance: 9_950_000 });
     expect(await balance()).toBe(9_950_000);
     expect(await spentFood()).toBe(50_000);
 
@@ -165,18 +325,34 @@ describe('tracker', () => {
     expect(await balance()).toBe(9_900_000);
     expect(await spentFood()).toBe(50_000);
 
-    await svc(t.ws).accounts.reconcile(t.bca, { actual: 9_920_000, categoryId: t.cat('Interest & cashback') });
+    await svc(t.ws).accounts.reconcile(t.bca, {
+      actual: 9_920_000,
+      categoryId: t.cat('Interest & cashback'),
+    });
     expect(await balance()).toBe(9_920_000);
 
     await svc(t.ws).accounts.reconcile(t.bca, { actual: 9_920_000 }); // no gap: nothing recorded
-    const corrections = (await svc(t.ws).ledger.listEntries({ limit: 50 })).items.filter(e => e.kind === 'CORRECTION');
+    const corrections = (await svc(t.ws).ledger.listEntries({ limit: 50 })).items.filter(
+      e => e.kind === 'CORRECTION',
+    );
     expect(corrections).toHaveLength(3);
     expect(corrections.every(e => e.command === null)).toBe(true);
-    expect((await w.repos.accounts.list(t.ws)).find(a => a.id === t.bca)!.reconciled_at).toBe(new Date(NOW).toISOString());
+    expect((await w.repos.accounts.list(t.ws)).find(a => a.id === t.bca)!.reconciled_at).toBe(
+      new Date(NOW).toISOString(),
+    );
 
-    await expect(svc(t.ws).accounts.reconcile(t.bca, { actual: 1, categoryId: t.cat('Salary') })).rejects.toMatchObject({ code: 'WRONG_CATEGORY_KIND' });
-    await expect(svc(t.ws).ledger.edit(corrections[0].id, { type: 'INCOME', accountId: t.bca, categoryId: t.cat('Salary'), amount: 1, date: '2026-10-17' }))
-      .rejects.toMatchObject({ code: 'NOT_EDITABLE' });
+    await expect(
+      svc(t.ws).accounts.reconcile(t.bca, { actual: 1, categoryId: t.cat('Salary') }),
+    ).rejects.toMatchObject({ code: 'WRONG_CATEGORY_KIND' });
+    await expect(
+      svc(t.ws).ledger.edit(corrections[0].id, {
+        type: 'INCOME',
+        accountId: t.bca,
+        categoryId: t.cat('Salary'),
+        amount: 1,
+        date: '2026-10-17',
+      }),
+    ).rejects.toMatchObject({ code: 'NOT_EDITABLE' });
     const b = await svc(t.ws).ledger.balances();
     expect(sum(b.accounts)).toBe(sum(b.envelopes));
   });
@@ -185,9 +361,16 @@ describe('tracker', () => {
     const t = await setup('currency@test');
     const wise = await svc(t.ws).accounts.create({ name: 'Wise', kind: 'BANK' });
     await svc(t.ws).accounts.update(wise.id, { currency_code: 'USD' });
-    expect((await w.repos.accounts.list(t.ws)).find(a => a.id === wise.id)).toMatchObject({ currency_code: 'USD', default_envelope_id: `${wise.id}:main` });
-    expect((await w.repos.envelopes.list(t.ws)).find(e => e.id === `${wise.id}:main`)!.currency_code).toBe('USD');
-    await expect(svc(t.ws).accounts.update(t.bca, { currency_code: 'USD' })).rejects.toMatchObject({ code: 'CURRENCY_LOCKED' });
+    expect((await w.repos.accounts.list(t.ws)).find(a => a.id === wise.id)).toMatchObject({
+      currency_code: 'USD',
+      default_envelope_id: `${wise.id}:main`,
+    });
+    expect(
+      (await w.repos.envelopes.list(t.ws)).find(e => e.id === `${wise.id}:main`)!.currency_code,
+    ).toBe('USD');
+    await expect(svc(t.ws).accounts.update(t.bca, { currency_code: 'USD' })).rejects.toMatchObject({
+      code: 'CURRENCY_LOCKED',
+    });
   });
 });
 
@@ -195,8 +378,21 @@ describe('deleting and resetting', () => {
   it('deletes an account with every entry that touches it, keeping the ledger balanced', async () => {
     const t = await setup('delete@test');
     await svc(t.ws).ledger.record([
-      { type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 90_000, date: '2026-10-17', split: { people: 3, iouAccountId: t.friends } },
-      { type: 'EXPENSE', accountId: t.gopay, categoryId: t.cat('Food & Drink'), amount: 20_000, date: '2026-10-17' },
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: t.cat('Food & Drink'),
+        amount: 90_000,
+        date: '2026-10-17',
+        split: { people: 3, iouAccountId: t.friends },
+      },
+      {
+        type: 'EXPENSE',
+        accountId: t.gopay,
+        categoryId: t.cat('Food & Drink'),
+        amount: 20_000,
+        date: '2026-10-17',
+      },
     ]);
     await svc(t.ws).accounts.remove(t.bca);
     expect((await w.repos.accounts.list(t.ws)).some(a => a.id === t.bca)).toBe(false);
@@ -214,21 +410,37 @@ describe('deleting and resetting', () => {
     const t = await setup('kind@test');
     await svc(t.ws).accounts.update(t.gopay, { kind: 'CASH' });
     expect((await w.repos.accounts.list(t.ws)).find(a => a.id === t.gopay)!.kind).toBe('CASH');
-    await expect(svc(t.ws).accounts.update(t.friends, { kind: 'BANK' })).rejects.toMatchObject({ code: 'KIND_LOCKED' });
+    await expect(svc(t.ws).accounts.update(t.friends, { kind: 'BANK' })).rejects.toMatchObject({
+      code: 'KIND_LOCKED',
+    });
   });
 
   it('backs up everything, then a reset starts a fresh workspace and keeps the old one flagged', async () => {
     const t = await setup('reset@test');
-    await svc(t.ws).ledger.record([{ type: 'EXPENSE', accountId: t.bca, categoryId: t.cat('Food & Drink'), amount: 30_000, date: '2026-10-17' }]);
+    await svc(t.ws).ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: t.cat('Food & Drink'),
+        amount: 30_000,
+        date: '2026-10-17',
+      },
+    ]);
     const b = await svc(t.ws).workspace.backup();
     expect(b).toMatchObject({ format: 'centient-backup', version: 1, workspace: { id: t.ws } });
-    expect(b.accounts.map(a => a.name)).toEqual(expect.arrayContaining(['BCA', 'GoPay', 'Friends']));
+    expect(b.accounts.map(a => a.name)).toEqual(
+      expect.arrayContaining(['BCA', 'GoPay', 'Friends']),
+    );
     expect(b.entries.map(e => e.kind).sort()).toEqual(['OPENING', 'USER']);
 
     await svc(t.ws).workspace.reset();
     const { workspaceId: fresh } = await w.repos.workspaces.ensure('reset@test');
     expect(fresh).not.toBe(t.ws);
-    expect((await w.repos.accounts.list(fresh)).map(a => [a.name, a.kind])).toEqual([['Dailies', 'EWALLET'], ['Main Account', 'BANK'], ['Miscs', 'DEBIT_CARD']]);
+    expect((await w.repos.accounts.list(fresh)).map(a => [a.name, a.kind])).toEqual([
+      ['Dailies', 'EWALLET'],
+      ['Main Account', 'BANK'],
+      ['Miscs', 'DEBIT_CARD'],
+    ]);
     expect((await svc(fresh).ledger.listEntries({ limit: 50 })).items).toHaveLength(0);
     // Soft delete: the old workspace and its data are still there.
     expect((await svc(t.ws).ledger.listEntries({ limit: 50 })).items).toHaveLength(2);
@@ -251,8 +463,20 @@ describe('migration 0002', () => {
     const old = world({ db, now: () => NOW });
     const [entry] = (await old.svc('w').ledger.listEntries({ limit: 10 })).items;
     // 0007 moved the money into the account's own Main pocket.
-    expect(entry).toMatchObject({ id: 't1', kind: 'USER', command: { type: 'EXPENSE', accountId: 'acc', envelopeId: 'acc:main', amount: 20000, date: '2026-10-01' } });
-    await old.svc('w').ledger.edit('t1', { ...(entry.command as Command & { type: 'EXPENSE' }), amount: 25000 });
+    expect(entry).toMatchObject({
+      id: 't1',
+      kind: 'USER',
+      command: {
+        type: 'EXPENSE',
+        accountId: 'acc',
+        envelopeId: 'acc:main',
+        amount: 20000,
+        date: '2026-10-01',
+      },
+    });
+    await old
+      .svc('w')
+      .ledger.edit('t1', { ...(entry.command as Command & { type: 'EXPENSE' }), amount: 25000 });
     expect((await old.svc('w').ledger.balances()).accounts[0].balance).toBe(-25000);
     expect((await old.repos.categories.list('w')).find(c => c.id === 'adj')!.kind).toBe('INCOME');
   });
@@ -279,18 +503,33 @@ describe('migration 0004', () => {
     const db = testD1(`${before}\n${seed}\n-- Merge legacy categories:${merge}`);
     const old = world({ db, now: () => NOW });
     const cats = await old.repos.categories.list('w');
-    const live = cats.filter(c => !c.archived_at).map(c => c.name).sort();
+    const live = cats
+      .filter(c => !c.archived_at)
+      .map(c => c.name)
+      .sort();
     expect(live).toEqual(['Food & Drink', 'Home & Bills', 'Snacks']);
-    expect(cats.filter(c => c.archived_at).map(c => c.name).sort()).toEqual(['Coffee', 'Groceries', 'Housing']);
+    expect(
+      cats
+        .filter(c => c.archived_at)
+        .map(c => c.name)
+        .sort(),
+    ).toEqual(['Coffee', 'Groceries', 'Housing']);
     const [entry] = (await old.svc('w').ledger.listEntries({ limit: 10 })).items;
     expect(entry.transactions[0].category_id).toBe('food');
     expect(entry.command).toMatchObject({ categoryId: 'food' });
     const budgets = await old.repos.budgets.list('w');
     expect(budgets).toHaveLength(1);
-    expect(budgets[0]).toMatchObject({ category_id: 'food', limits: [{ effective_from: '2026-10-01', amount: 300000 }] });
-    expect(await old.repos.aliases.list('w')).toEqual([{ alias: 'kopi', kind: 'CATEGORY', value: 'food' }]);
+    expect(budgets[0]).toMatchObject({
+      category_id: 'food',
+      limits: [{ effective_from: '2026-10-01', amount: 300000 }],
+    });
+    expect(await old.repos.aliases.list('w')).toEqual([
+      { alias: 'kopi', kind: 'CATEGORY', value: 'food' },
+    ]);
     // The moved entry still edits: its saved command points at a live category.
-    await old.svc('w').ledger.edit('g1', { ...(entry.command as Command & { type: 'EXPENSE' }), amount: 30000 });
+    await old
+      .svc('w')
+      .ledger.edit('g1', { ...(entry.command as Command & { type: 'EXPENSE' }), amount: 30000 });
     expect((await old.svc('w').ledger.balances()).accounts[0].balance).toBe(-30000);
   });
 });
@@ -312,13 +551,18 @@ describe('crypto prices', () => {
     expect(await p.svc(ws).workspace.prices()).toEqual({}); // no crypto account, no call
     expect(calls).toBe(0);
     await p.svc(ws).accounts.create({ name: 'TokoCrypto', kind: 'EXCHANGE', currency: 'BTC' });
-    expect(await p.svc(ws).workspace.prices()).toEqual({ BTC: { idrPerUnit: 1_650_000_000, fetchedAt: new Date(NOW).toISOString() } });
+    expect(await p.svc(ws).workspace.prices()).toEqual({
+      BTC: { idrPerUnit: 1_650_000_000, fetchedAt: new Date(NOW).toISOString() },
+    });
     clock = NOW + 5 * 60_000;
     await p.svc(ws).workspace.prices();
     expect(calls).toBe(1); // still fresh
     clock = NOW + 30 * 60_000;
     up = false;
-    expect((await p.svc(ws).workspace.prices()).BTC).toEqual({ idrPerUnit: 1_650_000_000, fetchedAt: new Date(NOW).toISOString() });
+    expect((await p.svc(ws).workspace.prices()).BTC).toEqual({
+      idrPerUnit: 1_650_000_000,
+      fetchedAt: new Date(NOW).toISOString(),
+    });
     expect(calls).toBe(2);
   });
 });
@@ -327,21 +571,59 @@ describe('pockets inside accounts', () => {
   it('starts a workspace with three everyday accounts, each with a Main pocket, and no IOU', async () => {
     const { workspaceId: ws } = await w.repos.workspaces.ensure('seed@test');
     const accounts = await w.repos.accounts.list(ws);
-    expect(accounts.map(a => [a.name, a.kind])).toEqual([['Dailies', 'EWALLET'], ['Main Account', 'BANK'], ['Miscs', 'DEBIT_CARD']]);
+    expect(accounts.map(a => [a.name, a.kind])).toEqual([
+      ['Dailies', 'EWALLET'],
+      ['Main Account', 'BANK'],
+      ['Miscs', 'DEBIT_CARD'],
+    ]);
     const pockets = await w.repos.envelopes.list(ws);
-    expect(pockets.map(e => [accounts.find(a => a.id === e.account_id)!.name, e.name]).sort()).toEqual([['Dailies', 'Main'], ['Main Account', 'Main'], ['Miscs', 'Main']]);
+    expect(
+      pockets.map(e => [accounts.find(a => a.id === e.account_id)!.name, e.name]).sort(),
+    ).toEqual([
+      ['Dailies', 'Main'],
+      ['Main Account', 'Main'],
+      ['Miscs', 'Main'],
+    ]);
     expect(accounts.every(a => pockets.some(e => e.id === a.default_envelope_id))).toBe(true);
     expect((await w.repos.workspaces.get(ws)).onboarded_at).toBeNull();
   });
 
   it("keeps an account's balance as the sum of its pockets, and moves money only within one account", async () => {
     const t = await setup('pockets@test');
-    const rent = await svc(t.ws).pockets.create({ accountId: t.bca, name: 'Rent', kind: 'SAVINGS' });
-    const holiday = await svc(t.ws).pockets.create({ accountId: t.gopay, name: 'Rent', kind: 'SPENDING' }); // same name, other account: fine
+    const rent = await svc(t.ws).pockets.create({
+      accountId: t.bca,
+      name: 'Rent',
+      kind: 'SAVINGS',
+    });
+    const holiday = await svc(t.ws).pockets.create({
+      accountId: t.gopay,
+      name: 'Rent',
+      kind: 'SPENDING',
+    }); // same name, other account: fine
     await svc(t.ws).ledger.record([
-      { type: 'ALLOCATE', fromEnvelopeId: t.main(t.bca), toEnvelopeId: rent.id, amount: 3_000_000, date: '2026-10-17' },
-      { type: 'EXPENSE', accountId: t.bca, envelopeId: rent.id, categoryId: t.cat('Home & Bills'), amount: 2_500_000, date: '2026-10-17' },
-      { type: 'TRANSFER', fromAccountId: t.bca, toAccountId: t.gopay, toEnvelopeId: holiday.id, amount: 100_000, date: '2026-10-17' },
+      {
+        type: 'ALLOCATE',
+        fromEnvelopeId: t.main(t.bca),
+        toEnvelopeId: rent.id,
+        amount: 3_000_000,
+        date: '2026-10-17',
+      },
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        envelopeId: rent.id,
+        categoryId: t.cat('Home & Bills'),
+        amount: 2_500_000,
+        date: '2026-10-17',
+      },
+      {
+        type: 'TRANSFER',
+        fromAccountId: t.bca,
+        toAccountId: t.gopay,
+        toEnvelopeId: holiday.id,
+        amount: 100_000,
+        date: '2026-10-17',
+      },
     ]);
     const b = await svc(t.ws).ledger.balances();
     const pocket = (id: string) => b.envelopes.find(e => e.id === id)!.balance;
@@ -349,13 +631,38 @@ describe('pockets inside accounts', () => {
     expect(pocket(t.main(t.bca))).toBe(10_000_000 - 3_000_000 - 100_000);
     expect(pocket(holiday.id)).toBe(100_000);
     await pocketsAddUp(t.ws);
-    await expect(svc(t.ws).ledger.record([{ type: 'ALLOCATE', fromEnvelopeId: rent.id, toEnvelopeId: holiday.id, amount: 1, date: '2026-10-17' }]))
-      .rejects.toMatchObject({ code: 'POCKET_ACCOUNT' });
-    await expect(svc(t.ws).ledger.record([{ type: 'EXPENSE', accountId: t.gopay, envelopeId: rent.id, categoryId: t.cat('Food & Drink'), amount: 1, date: '2026-10-17' }]))
-      .rejects.toMatchObject({ code: 'POCKET_ACCOUNT' });
-    await expect(svc(t.ws).pockets.update(rent.id, { archived: true })).rejects.toMatchObject({ code: 'POCKET_NOT_EMPTY' });
-    await expect(svc(t.ws).pockets.update(t.main(t.bca), { archived: true })).rejects.toMatchObject({ code: 'MAIN_POCKET' });
-    await expect(svc(t.ws).pockets.create({ accountId: t.friends, name: 'X', kind: 'SPENDING' })).rejects.toMatchObject({ code: 'IOU_POCKETS' });
+    await expect(
+      svc(t.ws).ledger.record([
+        {
+          type: 'ALLOCATE',
+          fromEnvelopeId: rent.id,
+          toEnvelopeId: holiday.id,
+          amount: 1,
+          date: '2026-10-17',
+        },
+      ]),
+    ).rejects.toMatchObject({ code: 'POCKET_ACCOUNT' });
+    await expect(
+      svc(t.ws).ledger.record([
+        {
+          type: 'EXPENSE',
+          accountId: t.gopay,
+          envelopeId: rent.id,
+          categoryId: t.cat('Food & Drink'),
+          amount: 1,
+          date: '2026-10-17',
+        },
+      ]),
+    ).rejects.toMatchObject({ code: 'POCKET_ACCOUNT' });
+    await expect(svc(t.ws).pockets.update(rent.id, { archived: true })).rejects.toMatchObject({
+      code: 'POCKET_NOT_EMPTY',
+    });
+    await expect(svc(t.ws).pockets.update(t.main(t.bca), { archived: true })).rejects.toMatchObject(
+      { code: 'MAIN_POCKET' },
+    );
+    await expect(
+      svc(t.ws).pockets.create({ accountId: t.friends, name: 'X', kind: 'SPENDING' }),
+    ).rejects.toMatchObject({ code: 'IOU_POCKETS' });
   });
 
   it('creates "Friends" on the first split bill, and sets a first balance as the opening balance', async () => {
@@ -364,7 +671,16 @@ describe('pockets inside accounts', () => {
     const main = accounts.find(a => a.name === 'Main Account')!;
     await svc(ws).accounts.reconcile(main.id, { actual: 2_000_000 });
     const food = (await w.repos.categories.list(ws)).find(c => c.name === 'Food & Drink')!.id;
-    await svc(ws).ledger.record([{ type: 'EXPENSE', accountId: main.id, categoryId: food, amount: 90_000, date: '2026-10-17', split: { people: 3 } }]);
+    await svc(ws).ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: main.id,
+        categoryId: food,
+        amount: 90_000,
+        date: '2026-10-17',
+        split: { people: 3 },
+      },
+    ]);
     const friends = (await w.repos.accounts.list(ws)).find(a => a.kind === 'IOU')!;
     expect(friends.name).toBe('Friends');
     const b = await svc(ws).ledger.balances();
@@ -386,7 +702,15 @@ describe('deleting a category', () => {
   it('moves its entries, budget and quick-add words to another category, then frees its name', async () => {
     const t = await setup('delcat@test');
     const snacks = await w.repos.categories.create(t.ws, { name: 'Snacks', kind: 'EXPENSE' });
-    const [id] = await svc(t.ws).ledger.record([{ type: 'EXPENSE', accountId: t.bca, categoryId: snacks.id, amount: 15_000, date: '2026-10-17' }]);
+    const [id] = await svc(t.ws).ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: snacks.id,
+        amount: 15_000,
+        date: '2026-10-17',
+      },
+    ]);
     await svc(t.ws).budgets.set({ categoryId: snacks.id, limit: 100_000 });
     await w.repos.aliases.save(t.ws, { alias: 'chiki', kind: 'CATEGORY', value: snacks.id });
     await svc(t.ws).categories.remove(snacks.id, t.cat('Food & Drink'));
@@ -394,31 +718,48 @@ describe('deleting a category', () => {
     const entry = (await svc(t.ws).ledger.listEntries({ limit: 10 })).items.find(e => e.id === id)!;
     expect(entry.transactions[0].category_id).toBe(t.cat('Food & Drink'));
     expect(entry.command).toMatchObject({ categoryId: t.cat('Food & Drink') });
-    expect((await svc(t.ws).budgets.status()).budgets).toMatchObject([{ categoryId: t.cat('Food & Drink'), spent: 15_000 }]);
-    expect(await w.repos.aliases.list(t.ws)).toEqual([{ alias: 'chiki', kind: 'CATEGORY', value: t.cat('Food & Drink') }]);
+    expect((await svc(t.ws).budgets.status()).budgets).toMatchObject([
+      { categoryId: t.cat('Food & Drink'), spent: 15_000 },
+    ]);
+    expect(await w.repos.aliases.list(t.ws)).toEqual([
+      { alias: 'chiki', kind: 'CATEGORY', value: t.cat('Food & Drink') },
+    ]);
     await w.repos.categories.create(t.ws, { name: 'Snacks', kind: 'EXPENSE' }); // name is free
-    await expect(svc(t.ws).categories.remove(t.cat('Fees'), t.cat('Other'))).rejects.toMatchObject({ code: 'BUILT_IN' });
-    await expect(svc(t.ws).categories.remove(t.cat('Food & Drink'), t.cat('Salary'))).rejects.toMatchObject({ code: 'WRONG_CATEGORY_KIND' });
+    await expect(svc(t.ws).categories.remove(t.cat('Fees'), t.cat('Other'))).rejects.toMatchObject({
+      code: 'BUILT_IN',
+    });
+    await expect(
+      svc(t.ws).categories.remove(t.cat('Food & Drink'), t.cat('Salary')),
+    ).rejects.toMatchObject({ code: 'WRONG_CATEGORY_KIND' });
   });
 });
 
 describe('crypto accounts', () => {
   it('have their own Main pocket in their currency, so a BTC balance can be set and updated', async () => {
     const t = await setup('btc@test');
-    const btc = await svc(t.ws).accounts.create({ name: 'TokoCrypto', kind: 'EXCHANGE', currency: 'BTC', openingBalance: 250_000 });
+    const btc = await svc(t.ws).accounts.create({
+      name: 'TokoCrypto',
+      kind: 'EXCHANGE',
+      currency: 'BTC',
+      openingBalance: 250_000,
+    });
     const pocket = (await w.repos.envelopes.list(t.ws)).find(e => e.currency_code === 'BTC')!;
     expect(pocket).toMatchObject({ name: 'Main', account_id: btc.id });
     await svc(t.ws).accounts.reconcile(btc.id, { actual: 300_000 });
     const b = await svc(t.ws).ledger.balances();
     expect(b.accounts.find(a => a.id === btc.id)!.balance).toBe(300_000);
     expect(b.envelopes.find(e => e.id === pocket.id)!.balance).toBe(300_000);
-    expect((await w.repos.envelopes.list(t.ws)).filter(e => e.currency_code === 'BTC')).toHaveLength(1);
+    expect(
+      (await w.repos.envelopes.list(t.ws)).filter(e => e.currency_code === 'BTC'),
+    ).toHaveLength(1);
   });
 });
 
 describe('first sign-in', () => {
   it('seeds exactly one workspace when several requests arrive at once', async () => {
-    const ids = await Promise.all(Array.from({ length: 5 }, () => w.repos.workspaces.ensure('rush@test')));
+    const ids = await Promise.all(
+      Array.from({ length: 5 }, () => w.repos.workspaces.ensure('rush@test')),
+    );
     expect(new Set(ids.map(x => x.workspaceId)).size).toBe(1);
     expect(await w.repos.accounts.list(ids[0].workspaceId)).toHaveLength(3);
   });
@@ -428,11 +769,39 @@ describe('personal touches', () => {
   it('gives an entry its own emoji and remembers it for the merchant', async () => {
     const t = await setup('icon@test');
     const food = t.cat('Food & Drink');
-    const [first] = await svc(t.ws).ledger.record([{ type: 'EXPENSE', accountId: t.bca, categoryId: food, amount: 35_000, date: '2026-10-17', merchant: 'Kopi' }]);
+    const [first] = await svc(t.ws).ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: food,
+        amount: 35_000,
+        date: '2026-10-17',
+        merchant: 'Kopi',
+      },
+    ]);
     await svc(t.ws).ledger.setIcon(first, { icon: '☕', forMerchant: true });
-    const [second] = await svc(t.ws).ledger.record([{ type: 'EXPENSE', accountId: t.bca, categoryId: food, amount: 30_000, date: '2026-10-17', merchant: 'kopi' }]);
-    const [other] = await svc(t.ws).ledger.record([{ type: 'EXPENSE', accountId: t.bca, categoryId: food, amount: 20_000, date: '2026-10-17', merchant: 'Warteg' }]);
-    const icon = async (id: string) => (await svc(t.ws).ledger.listEntries({ limit: 50 })).items.find(e => e.id === id)!.icon;
+    const [second] = await svc(t.ws).ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: food,
+        amount: 30_000,
+        date: '2026-10-17',
+        merchant: 'kopi',
+      },
+    ]);
+    const [other] = await svc(t.ws).ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: food,
+        amount: 20_000,
+        date: '2026-10-17',
+        merchant: 'Warteg',
+      },
+    ]);
+    const icon = async (id: string) =>
+      (await svc(t.ws).ledger.listEntries({ limit: 50 })).items.find(e => e.id === id)!.icon;
     expect(await icon(first)).toBe('☕');
     expect(await icon(second)).toBe('☕'); // same merchant
     expect(await icon(other)).toBeNull(); // category emoji
@@ -441,13 +810,22 @@ describe('personal touches', () => {
     expect(await icon(first)).toBe('☕');
     await svc(t.ws).ledger.setIcon(first, { icon: null, forMerchant: true });
     expect(await icon(first)).toBeNull();
-    await expect(svc(t.ws).ledger.setIcon(first, { icon: 'kopi', forMerchant: false })).rejects.toMatchObject({ code: 'NOT_AN_EMOJI' });
-    await expect(svc(t.ws).ledger.setIcon(first, { icon: '☕☕', forMerchant: false })).rejects.toMatchObject({ code: 'NOT_AN_EMOJI' });
+    await expect(
+      svc(t.ws).ledger.setIcon(first, { icon: 'kopi', forMerchant: false }),
+    ).rejects.toMatchObject({ code: 'NOT_AN_EMOJI' });
+    await expect(
+      svc(t.ws).ledger.setIcon(first, { icon: '☕☕', forMerchant: false }),
+    ).rejects.toMatchObject({ code: 'NOT_AN_EMOJI' });
   });
 
   it('keeps a pocket color', async () => {
     const t = await setup('color@test');
-    const p = await svc(t.ws).pockets.create({ accountId: t.bca, name: 'Food', kind: 'SPENDING', color: '#ff8cc6' });
+    const p = await svc(t.ws).pockets.create({
+      accountId: t.bca,
+      name: 'Food',
+      kind: 'SPENDING',
+      color: '#ff8cc6',
+    });
     expect(p.color).toBe('#ff8cc6');
     await svc(t.ws).pockets.update(p.id, { color: '#c3b1ff' });
     expect((await w.repos.envelopes.list(t.ws)).find(e => e.id === p.id)!.color).toBe('#c3b1ff');
@@ -456,7 +834,8 @@ describe('personal touches', () => {
 
   it('gives every pocket in an account its own pattern, reusing one only after its pocket is hidden', async () => {
     const t = await setup('pattern@test');
-    const make = (name: string) => svc(t.ws).pockets.create({ accountId: t.bca, name, kind: 'SPENDING' });
+    const make = (name: string) =>
+      svc(t.ws).pockets.create({ accountId: t.bca, name, kind: 'SPENDING' });
     const [a, b] = [await make('A'), await make('B')];
     const live = (await w.repos.envelopes.list(t.ws)).filter(e => e.account_id === t.bca);
     expect(new Set(live.map(e => e.pattern)).size).toBe(live.length); // Main + A + B, all different

@@ -12,12 +12,22 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   plugins: [
     react(),
-    babel({ include: /[\\/]client[\\/]src[\\/].*\.tsx?$/, plugins: [['module:@preact/signals-react-transform']] }),
+    babel({
+      include: /[\\/]client[\\/]src[\\/].*\.tsx?$/,
+      plugins: [['module:@preact/signals-react-transform']],
+    }),
     tailwindcss(),
-     cloudflare({ persistState: process.env.CENTIENT_STATE ? { path: process.env.CENTIENT_STATE } : true }),
+    cloudflare({
+      persistState: process.env.CENTIENT_STATE ? { path: process.env.CENTIENT_STATE } : true,
+    }),
   ],
   publicDir: 'client/public',
   // 8787 keeps the README, the spec and the ngrok steps valid; host: true serves the LAN for phone testing.
   // ngrok domains reach the dev server; signing in still needs the host in DEV_HOSTS (middleware/auth.ts).
-  server: { port: Number(process.env.PORT ?? 8787), host: true, strictPort: true, allowedHosts: ['.ngrok-free.app', '.ngrok-free.dev', '.ngrok.app'] },
+  server: {
+    port: Number(process.env.PORT ?? 8787),
+    host: true,
+    strictPort: true,
+    allowedHosts: ['.ngrok-free.app', '.ngrok-free.dev', '.ngrok.app'],
+  },
 });

@@ -18,7 +18,10 @@ import { idrValue, loadPrices, prices } from '../lib/prices';
 import { attempt } from '../lib/run';
 import { selectedAccount, version } from '../lib/state';
 
-type Bal = { accounts: (Account & { balance: number })[]; envelopes: (Envelope & { balance: number })[] };
+type Bal = {
+  accounts: (Account & { balance: number })[];
+  envelopes: (Envelope & { balance: number })[];
+};
 // Last data shown, so coming back to Money shows it at once while it refreshes.
 let cache: Bal | null = null;
 
@@ -27,10 +30,17 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
   const [picked, setPicked] = useState<string | null>(selectedAccount.value);
   useEffect(() => {
     loadPrices();
-    attempt(async () => { cache = (await call(client.api.balances.$get())) as Bal; setBal(cache); });
+    attempt(async () => {
+      cache = (await call(client.api.balances.$get())) as Bal;
+      setBal(cache);
+    });
   }, [version.value]);
   if (!bal) return <Page title="Money" />;
-  const a = bal.accounts.find(x => x.id === picked) ?? bal.accounts.find(x => x.kind !== 'IOU') ?? bal.accounts[0] ?? null;
+  const a =
+    bal.accounts.find(x => x.id === picked) ??
+    bal.accounts.find(x => x.kind !== 'IOU') ??
+    bal.accounts[0] ??
+    null;
   const pockets = a ? bal.envelopes.filter(e => e.account_id === a.id && !e.archived_at) : [];
   // Tapping the picked card again asks to drop it (null); Money always keeps one. Home has no IOU accounts.
   const pick = (id: string | null) => {
@@ -42,16 +52,48 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
   return (
     <Page title="Money">
       <TotalBalance accounts={bal.accounts} />
-      <BlockTitle medium className="!pl-4 !text-[22px] !font-extrabold !leading-none !tracking-[-0.03em]">Accounts</BlockTitle>
-      <AccountHand selected={a?.id ?? null} onPick={pick} pickOnSettle
+      <BlockTitle
+        medium
+        className="!pl-4 !text-[22px] !font-extrabold !leading-none !tracking-[-0.03em]"
+      >
+        Accounts
+      </BlockTitle>
+      <AccountHand
+        selected={a?.id ?? null}
+        onPick={pick}
+        pickOnSettle
         cards={bal.accounts.map(x => {
-          const v = x.currency_code === 'IDR' ? null : idrValue(x.balance, x.currency_code, prices.value);
-          return { id: x.id, name: x.name, kind: x.kind, balance: x.balance, currency: x.currency_code, note: v !== null ? `≈ ${formatMoney(v)}` : undefined };
-        })} />
-      <PickedAccount account={a} pockets={pockets}
-        onShow={x => { selectedAccount.value = x.id; onShowAccount(); }}>
-        {a && a.kind !== 'IOU' && <AccountPockets key={`pockets:${a.id}`} account={a} accounts={bal.accounts} pockets={pockets} />}
-        {a && takesInstallments(a.kind) && <InstallmentsSection key={`plans:${a.id}`} account={a} />}
+          const v =
+            x.currency_code === 'IDR' ? null : idrValue(x.balance, x.currency_code, prices.value);
+          return {
+            id: x.id,
+            name: x.name,
+            kind: x.kind,
+            balance: x.balance,
+            currency: x.currency_code,
+            note: v !== null ? `≈ ${formatMoney(v)}` : undefined,
+          };
+        })}
+      />
+      <PickedAccount
+        account={a}
+        pockets={pockets}
+        onShow={x => {
+          selectedAccount.value = x.id;
+          onShowAccount();
+        }}
+      >
+        {a && a.kind !== 'IOU' && (
+          <AccountPockets
+            key={`pockets:${a.id}`}
+            account={a}
+            accounts={bal.accounts}
+            pockets={pockets}
+          />
+        )}
+        {a && takesInstallments(a.kind) && (
+          <InstallmentsSection key={`plans:${a.id}`} account={a} />
+        )}
       </PickedAccount>
       <Budgets />
     </Page>

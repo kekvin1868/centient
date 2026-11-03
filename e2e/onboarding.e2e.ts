@@ -16,8 +16,15 @@ test.afterAll(async () => {
 });
 
 type Acc = { id: string; name: string; kind: string };
-const catalog = async () => (await (await page.request.get('/api/catalog')).json()) as { accounts: (Acc & { archived_at: string | null })[] };
-const balances = async () => (await (await page.request.get('/api/balances')).json()) as { accounts: { name: string; balance: number }[]; envelopes: { name: string; balance: number }[] };
+const catalog = async () =>
+  (await (await page.request.get('/api/catalog')).json()) as {
+    accounts: (Acc & { archived_at: string | null })[];
+  };
+const balances = async () =>
+  (await (await page.request.get('/api/balances')).json()) as {
+    accounts: { name: string; balance: number }[];
+    envelopes: { name: string; balance: number }[];
+  };
 const menu = () => page.getByRole('listbox', { name: 'Accounts' });
 
 test('title, date card, then straight into the menu', async () => {
@@ -27,20 +34,31 @@ test('title, date card, then straight into the menu', async () => {
 });
 
 test('rename, retype, set balances, add a pocket, drop and undo', async () => {
-  await expect(menu().getByRole('option')).toHaveText([/Main Account/, /Dailies/, /Miscs/, /ADD ACCOUNT/]);
+  await expect(menu().getByRole('option')).toHaveText([
+    /Main Account/,
+    /Dailies/,
+    /Miscs/,
+    /ADD ACCOUNT/,
+  ]);
   // Tap the picked row again to rename it.
-  await menu().getByRole('option', { name: /Main Account/ }).tap();
+  await menu()
+    .getByRole('option', { name: /Main Account/ })
+    .tap();
   await page.getByRole('textbox', { name: 'Account name' }).fill('BCA');
   await page.keyboard.press('Enter');
   await expect(menu().getByRole('option').first()).toContainText('BCA');
 
   await page.getByRole('button', { name: 'TYPE ▾' }).tap();
-  await page.getByRole('dialog', { name: 'Type of BCA' }).getByRole('option', { name: /DEBIT CARD/ }).tap();
+  await page
+    .getByRole('dialog', { name: 'Type of BCA' })
+    .getByRole('option', { name: /DEBIT CARD/ })
+    .tap();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await page.getByRole('button', { name: /^Balance/ }).tap();
   const pad = page.getByRole('dialog', { name: 'Balance in BCA' });
-  for (const k of ['5', '000', '000']) await pad.getByRole('button', { name: k, exact: true }).tap();
+  for (const k of ['5', '000', '000'])
+    await pad.getByRole('button', { name: k, exact: true }).tap();
   await expect(pad.locator('.k-amt')).toHaveText('Rp5.000.000');
   await pad.getByRole('button', { name: 'SET ▸' }).tap();
   await expect(pad).toBeHidden();
@@ -112,7 +130,12 @@ test('confirm saves names, types, balances and pockets, then Home', async () => 
   await expect(page.getByRole('img', { name: 'Centient' })).toBeVisible();
 
   const live = (await catalog()).accounts.filter(a => !a.archived_at).map(a => [a.name, a.kind]);
-  expect(live).toEqual(expect.arrayContaining([['BCA', 'DEBIT_CARD'], ['Dailies', 'EWALLET']]));
+  expect(live).toEqual(
+    expect.arrayContaining([
+      ['BCA', 'DEBIT_CARD'],
+      ['Dailies', 'EWALLET'],
+    ]),
+  );
   expect(live.map(a => a[0])).not.toContain('Miscs');
   const b = await balances();
   expect(b.accounts.find(a => a.name === 'BCA')!.balance).toBe(7_000_000);

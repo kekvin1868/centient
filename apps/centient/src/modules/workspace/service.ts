@@ -9,7 +9,14 @@ import type { LedgerService } from '../ledger/service';
 const COINGECKO: Record<string, string> = { BTC: 'bitcoin', USDT: 'tether' };
 const PRICE_TTL_MS = 10 * 60_000;
 
-export function createWorkspaceService({ ws, now, repos, catalog, ledger, fetch }: ServiceDeps & { ledger: LedgerService; fetch: typeof globalThis.fetch }) {
+export function createWorkspaceService({
+  ws,
+  now,
+  repos,
+  catalog,
+  ledger,
+  fetch,
+}: ServiceDeps & { ledger: LedgerService; fetch: typeof globalThis.fetch }) {
   const stamp = () => new Date(now()).toISOString();
 
   return {
@@ -17,7 +24,12 @@ export function createWorkspaceService({ ws, now, repos, catalog, ledger, fetch 
       const w = await repos.workspaces.get(ws);
       const today = jakartaToday(now());
       const from = cycleStart(today, w.cycle_start_day);
-      return { workspace: w, today, cycle: { from, to: nextCycleStart(from, w.cycle_start_day) }, currencies: DECIMALS };
+      return {
+        workspace: w,
+        today,
+        cycle: { from, to: nextCycleStart(from, w.cycle_start_day) },
+        currencies: DECIMALS,
+      };
     },
 
     async update(i: { name?: string; cycle_start_day?: number; onboarded?: true }) {
@@ -39,31 +51,57 @@ export function createWorkspaceService({ ws, now, repos, catalog, ledger, fetch 
      * Add an API key (or a second source) only if prices go missing.
      */
     async prices(): Promise<Record<string, { idrPerUnit: number; fetchedAt: string }>> {
-      const held = [...new Set((await repos.accounts.list(ws)).filter(a => !a.archived_at).map(a => a.currency_code))].filter(c => COINGECKO[c]);
+      const held = [
+        ...new Set(
+          (await repos.accounts.list(ws)).filter(a => !a.archived_at).map(a => a.currency_code),
+        ),
+      ].filter(c => COINGECKO[c]);
       const at = now();
       let rows = await repos.prices.get(held);
-      const stale = held.filter(c => { const r = rows.find(x => x.currency_code === c); return !r || at - Date.parse(r.fetched_at) > PRICE_TTL_MS; });
+      const stale = held.filter(c => {
+        const r = rows.find(x => x.currency_code === c);
+        return !r || at - Date.parse(r.fetched_at) > PRICE_TTL_MS;
+      });
       if (stale.length) {
         try {
           const url = `https://api.coingecko.com/api/v3/simple/price?vs_currencies=idr&ids=${stale.map(c => COINGECKO[c]).join(',')}`;
-          const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': 'Centient/1.0 (personal finance app)' }, signal: AbortSignal.timeout(4000) });
+          const res = await fetch(url, {
+            headers: {
+              accept: 'application/json',
+              'user-agent': 'Centient/1.0 (personal finance app)',
+            },
+            signal: AbortSignal.timeout(4000),
+          });
           if (!res.ok) throw new Error(`price service ${res.status}`);
-          const body = await res.json() as Record<string, { idr?: number }>;
+          const body = (await res.json()) as Record<string, { idr?: number }>;
           const fetchedAt = new Date(at).toISOString();
-          const fresh: Price[] = stale.flatMap(c => { const idr = body[COINGECKO[c]]?.idr; return idr && idr > 0 ? [{ currency_code: c, idr_per_unit: Math.round(idr), fetched_at: fetchedAt }] : []; });
+          const fresh: Price[] = stale.flatMap(c => {
+            const idr = body[COINGECKO[c]]?.idr;
+            return idr && idr > 0
+              ? [{ currency_code: c, idr_per_unit: Math.round(idr), fetched_at: fetchedAt }]
+              : [];
+          });
           await repos.prices.save(fresh);
-          rows = [...rows.filter(r => !fresh.some(f => f.currency_code === r.currency_code)), ...fresh];
+          rows = [
+            ...rows.filter(r => !fresh.some(f => f.currency_code === r.currency_code)),
+            ...fresh,
+          ];
         } catch (e) {
           console.warn('price refresh failed; serving last known prices', e);
         }
       }
-      return Object.fromEntries(rows.map(r => [r.currency_code, { idrPerUnit: r.idr_per_unit, fetchedAt: r.fetched_at }]));
+      return Object.fromEntries(
+        rows.map(r => [r.currency_code, { idrPerUnit: r.idr_per_unit, fetchedAt: r.fetched_at }]),
+      );
     },
 
     /** Everything in the workspace as one JSON document: what a backup download contains. */
     async backup() {
       const [workspace, { accounts, envelopes, categories }, budgets, aliases] = await Promise.all([
-        repos.workspaces.get(ws), catalog.load(), repos.budgets.list(ws), repos.aliases.list(ws),
+        repos.workspaces.get(ws),
+        catalog.load(),
+        repos.budgets.list(ws),
+        repos.aliases.list(ws),
       ]);
       const entries = [];
       let cursor: string | undefined;
@@ -72,7 +110,18 @@ export function createWorkspaceService({ ws, now, repos, catalog, ledger, fetch 
         entries.push(...page.items);
         cursor = page.nextCursor ?? undefined;
       } while (cursor);
-      return { format: 'centient-backup', version: 1, exported_at: stamp(), workspace, accounts, envelopes, categories, budgets, aliases, entries };
+      return {
+        format: 'centient-backup',
+        version: 1,
+        exported_at: stamp(),
+        workspace,
+        accounts,
+        envelopes,
+        categories,
+        budgets,
+        aliases,
+        entries,
+      };
     },
 
     /**
@@ -82,21 +131,47 @@ export function createWorkspaceService({ ws, now, repos, catalog, ledger, fetch 
      */
     async csv(f: { from?: string; to?: string; currency?: string } = {}): Promise<string> {
       const c = await catalog.load();
-      const name = (rows: { id: string; name: string }[], id: string | null) => rows.find(r => r.id === id)?.name ?? '';
+      const name = (rows: { id: string; name: string }[], id: string | null) =>
+        rows.find(r => r.id === id)?.name ?? '';
       const cell = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
       const lines = ['date,type,account,amount,currency,envelope,category,merchant,note'];
       let cursor: string | undefined;
       do {
-        const page = await repos.entries.list(ws, { limit: 500, cursor, from: f.from, to: f.to && addDays(f.to, -1) }); // the filter's `to` is inclusive
+        const page = await repos.entries.list(ws, {
+          limit: 500,
+          cursor,
+          from: f.from,
+          to: f.to && addDays(f.to, -1),
+        }); // the filter's `to` is inclusive
         for (const t of page.items) {
           const envelopes = t.allocations.map(a => name(c.envelopes, a.envelope_id)).join(' > ');
           // One row per account line; an ALLOCATE has none, so it gets one row per envelope line.
           const rows = t.entries.length
-            ? t.entries.map(e => { const acc = c.accounts.find(a => a.id === e.account_id); return [acc?.name ?? '', e.amount, acc?.currency_code ?? '', envelopes]; })
-            : t.allocations.map(a => { const env = c.envelopes.find(x => x.id === a.envelope_id); return ['', a.amount, env?.currency_code ?? '', env?.name ?? '']; });
+            ? t.entries.map(e => {
+                const acc = c.accounts.find(a => a.id === e.account_id);
+                return [acc?.name ?? '', e.amount, acc?.currency_code ?? '', envelopes];
+              })
+            : t.allocations.map(a => {
+                const env = c.envelopes.find(x => x.id === a.envelope_id);
+                return ['', a.amount, env?.currency_code ?? '', env?.name ?? ''];
+              });
           for (const [account, amount, currency, envelope] of rows) {
             if (f.currency && currency !== f.currency) continue;
-            lines.push([t.occurred_at, t.type, String(account), String(amount), String(currency), String(envelope), name(c.categories, t.category_id), t.merchant ?? '', t.note ?? ''].map(cell).join(','));
+            lines.push(
+              [
+                t.occurred_at,
+                t.type,
+                String(account),
+                String(amount),
+                String(currency),
+                String(envelope),
+                name(c.categories, t.category_id),
+                t.merchant ?? '',
+                t.note ?? '',
+              ]
+                .map(cell)
+                .join(','),
+            );
           }
         }
         cursor = page.nextCursor ?? undefined;

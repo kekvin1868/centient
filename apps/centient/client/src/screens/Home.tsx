@@ -19,7 +19,9 @@ export function Home({ onGoMoney }: { onGoMoney: () => void }) {
   return (
     <Page>
       <div className="flex items-center justify-between gap-3 px-4 pt-1">
-        <h1><Logo height={30} className="text-ink" /></h1>
+        <h1>
+          <Logo height={30} className="text-ink" />
+        </h1>
         <AccountChip onOpen={() => setPicking(true)} />
       </div>
       <Headline onGoMoney={onGoMoney} />

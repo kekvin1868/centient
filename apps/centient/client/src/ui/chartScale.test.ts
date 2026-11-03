@@ -15,8 +15,9 @@ describe('barScale (T4.26)', () => {
 describe('describeSeries (T4.27)', () => {
   const p = (label: string, value: number) => ({ label, value, shown: `Rp${value}` });
   it('names the highest and the lowest', () => {
-    expect(describeSeries('Spending by category', [p('Food', 550), p('Shopping', 800), p('Fees', 2)]))
-      .toBe('Spending by category: highest Shopping (Rp800), lowest Fees (Rp2).');
+    expect(
+      describeSeries('Spending by category', [p('Food', 550), p('Shopping', 800), p('Fees', 2)]),
+    ).toBe('Spending by category: highest Shopping (Rp800), lowest Fees (Rp2).');
   });
   it('one point, or nothing', () => {
     expect(describeSeries('Spending', [p('Food', 5)])).toBe('Spending: only Food (Rp5).');

@@ -2,12 +2,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { reducedMotion } from '../../lib/motion';
 
-export const wait = (ms: number) => new Promise<void>(r => setTimeout(r, reducedMotion() ? Math.min(ms, 30) : ms));
+export const wait = (ms: number) =>
+  new Promise<void>(r => setTimeout(r, reducedMotion() ? Math.min(ms, 30) : ms));
 
 /** Exit animation before unmount: render with `leaving` (a TV switch-off class), await leave(), then go. */
 export function useLeave(ms = 340) {
   const [leaving, setLeaving] = useState(false);
-  const leave = useCallback(async () => { setLeaving(true); await wait(ms); }, [ms]);
+  const leave = useCallback(async () => {
+    setLeaving(true);
+    await wait(ms);
+  }, [ms]);
   return [leaving, leave] as const;
 }
 
@@ -34,7 +38,10 @@ export function usePresence(open: boolean) {
   const was = useRef(open);
   // Only a real reopening starts fresh; remounting right after the first show would steal a field's focus.
   useEffect(() => {
-    if (open && !was.current) { setMounted(true); setGen(g => g + 1); }
+    if (open && !was.current) {
+      setMounted(true);
+      setGen(g => g + 1);
+    }
     was.current = open;
   }, [open]);
   return { mounted, gen, unmount: useCallback(() => setMounted(false), []) };

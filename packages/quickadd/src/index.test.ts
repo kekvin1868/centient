@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { parseQuickAdd, type QAContext } from './index';
 
-const cat = (id: string, name: string, kind: 'EXPENSE' | 'INCOME' = 'EXPENSE') => ({ id, name, kind });
+const cat = (id: string, name: string, kind: 'EXPENSE' | 'INCOME' = 'EXPENSE') => ({
+  id,
+  name,
+  kind,
+});
 const ctx: QAContext = {
   today: '2026-10-17', // a Saturday
   accounts: [
@@ -12,21 +16,40 @@ const ctx: QAContext = {
     { id: 'friends', name: 'Friends', kind: 'IOU', provider: null },
   ],
   categories: [
-    cat('food', 'Food & Drink'), cat('transport', 'Transport'),
-    cat('bills', 'Home & Bills'), cat('shopping', 'Shopping'), cat('giving', 'Family & Giving'), cat('other', 'Other'),
-    cat('salary', 'Salary', 'INCOME'), cat('angpao', 'Angpao & THR', 'INCOME'), cat('other-in', 'Other income', 'INCOME'),
+    cat('food', 'Food & Drink'),
+    cat('transport', 'Transport'),
+    cat('bills', 'Home & Bills'),
+    cat('shopping', 'Shopping'),
+    cat('giving', 'Family & Giving'),
+    cat('other', 'Other'),
+    cat('salary', 'Salary', 'INCOME'),
+    cat('angpao', 'Angpao & THR', 'INCOME'),
+    cat('other-in', 'Other income', 'INCOME'),
   ],
   lastAccountId: 'bca',
 };
 
 describe('parseQuickAdd', () => {
   it('reads a line with no money words as spending: family words go to Family & Giving, the rest to Other', () => {
-    expect(parseQuickAdd('For mom 2,2jt', ctx)[0]).toMatchObject({ type: 'EXPENSE', amount: 2_200_000, categoryId: 'giving', merchant: 'Mom', accountId: 'bca' });
-    expect(parseQuickAdd('xyz 50rb', ctx)[0]).toMatchObject({ type: 'EXPENSE', amount: 50_000, categoryId: 'other' });
+    expect(parseQuickAdd('For mom 2,2jt', ctx)[0]).toMatchObject({
+      type: 'EXPENSE',
+      amount: 2_200_000,
+      categoryId: 'giving',
+      merchant: 'Mom',
+      accountId: 'bca',
+    });
+    expect(parseQuickAdd('xyz 50rb', ctx)[0]).toMatchObject({
+      type: 'EXPENSE',
+      amount: 50_000,
+      categoryId: 'other',
+    });
   });
 
   it('splits a line into several entries with accounts and categories', () => {
-    const d = parseQuickAdd('kopi susu 25rb pakai gopay dan parkir 5rb cash dan bayar listrik 300rb dari BCA', ctx);
+    const d = parseQuickAdd(
+      'kopi susu 25rb pakai gopay dan parkir 5rb cash dan bayar listrik 300rb dari BCA',
+      ctx,
+    );
     expect(d.map(x => [x.amount, x.accountId, x.categoryId, x.merchant])).toEqual([
       [25000, 'gopay', 'food', 'Kopi Susu'],
       [5000, 'cash', 'transport', 'Parkir'],
@@ -36,7 +59,15 @@ describe('parseQuickAdd', () => {
 
   it('reads "mkn PH 100 bg 3" as a Rp100,000 Pizza Hut meal split three ways, flagged', () => {
     const [d] = parseQuickAdd('mkn PH 100 bg 3', ctx);
-    expect(d).toMatchObject({ type: 'EXPENSE', amount: 100000, needsConfirm: true, merchant: 'Pizza Hut', categoryId: 'food', split: 3, accountId: 'bca' });
+    expect(d).toMatchObject({
+      type: 'EXPENSE',
+      amount: 100000,
+      needsConfirm: true,
+      merchant: 'Pizza Hut',
+      categoryId: 'food',
+      split: 3,
+      accountId: 'bca',
+    });
   });
 
   it('uses the price range to pick a magnitude', () => {
@@ -51,34 +82,75 @@ describe('parseQuickAdd', () => {
   });
 
   it('learns from merchant history', () => {
-    const [d] = parseQuickAdd('ph 3', { ...ctx, merchantHistory: { 'pizza hut': { min: 150000, max: 300000, categoryId: 'food' } } });
+    const [d] = parseQuickAdd('ph 3', {
+      ...ctx,
+      merchantHistory: { 'pizza hut': { min: 150000, max: 300000, categoryId: 'food' } },
+    });
     expect(d.amount).toBeNull(); // 3,000 and 3,000,000 are both outside 50k..900k
-    const [e] = parseQuickAdd('ph 200', { ...ctx, merchantHistory: { 'pizza hut': { min: 150000, max: 300000, categoryId: 'food' } } });
+    const [e] = parseQuickAdd('ph 200', {
+      ...ctx,
+      merchantHistory: { 'pizza hut': { min: 150000, max: 300000, categoryId: 'food' } },
+    });
     expect(e.amount).toBe(200000);
   });
 
   it('reads Hokkien words', () => {
-    expect(parseQuickAdd('parkir goceng', ctx)[0]).toMatchObject({ amount: 5000, needsConfirm: false });
+    expect(parseQuickAdd('parkir goceng', ctx)[0]).toMatchObject({
+      amount: 5000,
+      needsConfirm: false,
+    });
     expect(parseQuickAdd('ojek ceban', ctx)[0].amount).toBe(10000);
     expect(parseQuickAdd('makan cepek ceng', ctx)[0].amount).toBe(100000);
-    expect(parseQuickAdd('makan cepek', ctx)[0]).toMatchObject({ amount: 100000, needsConfirm: true });
+    expect(parseQuickAdd('makan cepek', ctx)[0]).toMatchObject({
+      amount: 100000,
+      needsConfirm: true,
+    });
     expect(parseQuickAdd('jajan noceng', ctx)[0].amount).toBe(2000);
   });
 
   it('detects income and its category', () => {
-    expect(parseQuickAdd('gaji 9,5jt', ctx)[0]).toMatchObject({ type: 'INCOME', amount: 9500000, categoryId: 'salary' });
-    expect(parseQuickAdd('dapat angpao 200rb cash', ctx)[0]).toMatchObject({ type: 'INCOME', categoryId: 'angpao', accountId: 'cash' });
+    expect(parseQuickAdd('gaji 9,5jt', ctx)[0]).toMatchObject({
+      type: 'INCOME',
+      amount: 9500000,
+      categoryId: 'salary',
+    });
+    expect(parseQuickAdd('dapat angpao 200rb cash', ctx)[0]).toMatchObject({
+      type: 'INCOME',
+      categoryId: 'angpao',
+      accountId: 'cash',
+    });
   });
 
   it('reads transfers, top-ups and admin fees', () => {
-    expect(parseQuickAdd('transfer 500rb dari BCA ke GoPay', ctx)[0]).toMatchObject({ type: 'TRANSFER', amount: 500000, accountId: 'bca', toAccountId: 'gopay' });
-    expect(parseQuickAdd('top up gopay 100rb admin 1000', ctx)[0]).toMatchObject({ type: 'TRANSFER', amount: 100000, accountId: 'bca', toAccountId: 'gopay', fee: 1000 });
-    expect(parseQuickAdd('tarik tunai 500rb', ctx)[0]).toMatchObject({ type: 'TRANSFER', accountId: 'bca', toAccountId: 'cash' });
-    expect(parseQuickAdd('pinjemin ke friends 1jt', ctx)[0]).toMatchObject({ type: 'TRANSFER', toAccountId: 'friends' });
+    expect(parseQuickAdd('transfer 500rb dari BCA ke GoPay', ctx)[0]).toMatchObject({
+      type: 'TRANSFER',
+      amount: 500000,
+      accountId: 'bca',
+      toAccountId: 'gopay',
+    });
+    expect(parseQuickAdd('top up gopay 100rb admin 1000', ctx)[0]).toMatchObject({
+      type: 'TRANSFER',
+      amount: 100000,
+      accountId: 'bca',
+      toAccountId: 'gopay',
+      fee: 1000,
+    });
+    expect(parseQuickAdd('tarik tunai 500rb', ctx)[0]).toMatchObject({
+      type: 'TRANSFER',
+      accountId: 'bca',
+      toAccountId: 'cash',
+    });
+    expect(parseQuickAdd('pinjemin ke friends 1jt', ctx)[0]).toMatchObject({
+      type: 'TRANSFER',
+      toAccountId: 'friends',
+    });
   });
 
   it('does not treat "isi bensin" as a top-up', () =>
-    expect(parseQuickAdd('isi bensin 50rb', ctx)[0]).toMatchObject({ type: 'EXPENSE', categoryId: 'transport' }));
+    expect(parseQuickAdd('isi bensin 50rb', ctx)[0]).toMatchObject({
+      type: 'EXPENSE',
+      categoryId: 'transport',
+    }));
 
   it('uses the credit card only when asked', () => {
     expect(parseQuickAdd('netflix 186rb cc bca', ctx)[0].accountId).toBe('cc');
@@ -93,7 +165,10 @@ describe('parseQuickAdd', () => {
   });
 
   it('applies workspace aliases', () => {
-    const [d] = parseQuickAdd('warkop 15rb', { ...ctx, aliases: [{ alias: 'warkop', kind: 'MERCHANT', value: 'Warkop Bang Ali' }] });
+    const [d] = parseQuickAdd('warkop 15rb', {
+      ...ctx,
+      aliases: [{ alias: 'warkop', kind: 'MERCHANT', value: 'Warkop Bang Ali' }],
+    });
     expect(d).toMatchObject({ merchant: 'Warkop Bang Ali', rawMerchant: 'warkop' });
   });
 
@@ -105,17 +180,44 @@ describe('parseQuickAdd', () => {
 
   it('asks for the charged rupiah when a foreign price is paid from a rupiah account', () => {
     const [d] = parseQuickAdd('lunch 20 usd bca', ctx);
-    expect(d).toMatchObject({ amount: null, currency: 'IDR', originalAmount: 2000, originalCurrency: 'USD', needs: 'CHARGED_AMOUNT', accountId: 'bca' });
+    expect(d).toMatchObject({
+      amount: null,
+      currency: 'IDR',
+      originalAmount: 2000,
+      originalCurrency: 'USD',
+      needs: 'CHARGED_AMOUNT',
+      accountId: 'bca',
+    });
   });
 
   it('keeps a foreign amount as is when the account holds that currency', () => {
-    const usd = { ...ctx, accounts: [...ctx.accounts, { id: 'wise', name: 'Wise', kind: 'BANK', provider: null, currency_code: 'USD' }] };
-    expect(parseQuickAdd('lunch $20.5 wise', usd)[0]).toMatchObject({ amount: 2050, currency: 'USD', originalAmount: null, needs: null, accountId: 'wise' });
-    expect(parseQuickAdd('kopi 25rb', usd)[0]).toMatchObject({ amount: 25000, currency: 'IDR', needs: null });
+    const usd = {
+      ...ctx,
+      accounts: [
+        ...ctx.accounts,
+        { id: 'wise', name: 'Wise', kind: 'BANK', provider: null, currency_code: 'USD' },
+      ],
+    };
+    expect(parseQuickAdd('lunch $20.5 wise', usd)[0]).toMatchObject({
+      amount: 2050,
+      currency: 'USD',
+      originalAmount: null,
+      needs: null,
+      accountId: 'wise',
+    });
+    expect(parseQuickAdd('kopi 25rb', usd)[0]).toMatchObject({
+      amount: 25000,
+      currency: 'IDR',
+      needs: null,
+    });
   });
 
   it('never guesses M', () => {
     const [d] = parseQuickAdd('laptop 2m', ctx);
-    expect(d).toMatchObject({ amount: null, candidates: [2000000, 2000000000], needsConfirm: true });
+    expect(d).toMatchObject({
+      amount: null,
+      candidates: [2000000, 2000000000],
+      needsConfirm: true,
+    });
   });
 });

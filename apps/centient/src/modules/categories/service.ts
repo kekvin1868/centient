@@ -17,8 +17,10 @@ export function createCategoriesService({ ws, now, repos, catalog }: ServiceDeps
 
     async update(id: string, p: Patch) {
       const { archived, ...rest }: Record<string, unknown> = p;
-      if (archived !== undefined) rest.archived_at = archived ? new Date(now()).toISOString() : null;
-      if (!(await repos.categories.update(ws, id, rest))) throw new DomainError('NOT_FOUND', 'Not found');
+      if (archived !== undefined)
+        rest.archived_at = archived ? new Date(now()).toISOString() : null;
+      if (!(await repos.categories.update(ws, id, rest)))
+        throw new DomainError('NOT_FOUND', 'Not found');
       catalog.invalidate();
     },
 
@@ -27,8 +29,10 @@ export function createCategoriesService({ ws, now, repos, catalog }: ServiceDeps
       const c = await catalog.load();
       const cat = c.categories.find(x => x.id === id);
       if (!cat) throw new DomainError('NOT_FOUND', 'Category not found');
-      if (BUILT_IN_CATEGORIES.includes(cat.name)) throw new DomainError('BUILT_IN', `${cat.name} is used by the app and can't be deleted`);
-      if (moveTo === id) throw new DomainError('SAME_CATEGORY', 'Pick another category for its entries');
+      if (BUILT_IN_CATEGORIES.includes(cat.name))
+        throw new DomainError('BUILT_IN', `${cat.name} is used by the app and can't be deleted`);
+      if (moveTo === id)
+        throw new DomainError('SAME_CATEGORY', 'Pick another category for its entries');
       c.category(moveTo, cat.kind);
       await repos.categories.remove(ws, id, moveTo, new Date(now()).toISOString());
       catalog.invalidate();

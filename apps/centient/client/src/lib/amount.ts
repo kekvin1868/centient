@@ -5,19 +5,37 @@ import { DECIMALS } from '@centient/money';
 export const showAmount = (minor: number | null, cur: string) => {
   if (minor === null) return '';
   const d = DECIMALS[cur] ?? 0;
-  return (minor / 10 ** d).toLocaleString(cur === 'IDR' ? 'id-ID' : 'en-US', { maximumFractionDigits: d });
+  return (minor / 10 ** d).toLocaleString(cur === 'IDR' ? 'id-ID' : 'en-US', {
+    maximumFractionDigits: d,
+  });
 };
 
 /** Rupiah: every non-digit is grouping. Others: the last "." or "," is the decimal point. */
 function readAmount(raw: string, cur: string): number | null {
   const d = DECIMALS[cur] ?? 0;
-  if (cur === 'IDR') { const n = raw.replace(/\D/g, ''); return n ? Number(n) : null; }
+  if (cur === 'IDR') {
+    const n = raw.replace(/\D/g, '');
+    return n ? Number(n) : null;
+  }
   const m = raw.replace(/[^\d.,]/g, '').match(/^(.*?)(?:[.,](\d*))?$/);
   if (!m || (!m[1] && !m[2])) return null;
   return Math.round(Number(`${m[1].replace(/[.,]/g, '') || '0'}.${m[2] ?? '0'}`) * 10 ** d);
 }
 
-const OPS: Record<string, string> = { '+': '+', '-': '-', '−': '-', '*': '*', x: '*', X: '*', '×': '*', '/': '/', ':': '/', '÷': '/', '(': '(', ')': ')' };
+const OPS: Record<string, string> = {
+  '+': '+',
+  '-': '-',
+  '−': '-',
+  '*': '*',
+  x: '*',
+  X: '*',
+  '×': '*',
+  '/': '/',
+  ':': '/',
+  '÷': '/',
+  '(': '(',
+  ')': ')',
+};
 const isSum = (raw: string) => [...raw].some(c => c in OPS);
 
 /** A typed sum in minor units; null when it is empty, malformed, below zero or divides by zero. Numbers are read
@@ -30,21 +48,26 @@ export function evalAmount(raw: string, cur: string): number | null {
   const atom = (): number => {
     const t = tokens[i++];
     if (t === undefined) return NaN;
-    if (OPS[t] === '(') { const v = sum(); return OPS[tokens[i++]] === ')' ? v : NaN; }
+    if (OPS[t] === '(') {
+      const v = sum();
+      return OPS[tokens[i++]] === ')' ? v : NaN;
+    }
     const minor = /^[\d.,]+$/.test(t) ? readAmount(t, cur) : null;
     return minor === null ? NaN : minor / 10 ** d;
   };
   const product = (): number => {
     let v = atom();
     while (OPS[tokens[i]] === '*' || OPS[tokens[i]] === '/') {
-      const op = OPS[tokens[i++]], r = atom();
+      const op = OPS[tokens[i++]],
+        r = atom();
       v = op === '*' ? v * r : r === 0 ? NaN : v / r;
     }
     return v;
   };
   const sum = (): number => {
     let v = product();
-    while (OPS[tokens[i]] === '+' || OPS[tokens[i]] === '-') v = OPS[tokens[i++]] === '+' ? v + product() : v - product();
+    while (OPS[tokens[i]] === '+' || OPS[tokens[i]] === '-')
+      v = OPS[tokens[i++]] === '+' ? v + product() : v - product();
     return v;
   };
   if (!tokens.length) return null;
@@ -61,5 +84,10 @@ export const amountInput = (text: string, cur: string) => {
     return { minor, text, sum: true, invalid: minor === null && text.trim() !== '' };
   }
   const minor = readAmount(text, cur);
-  return { minor, text: cur === 'IDR' && minor !== null ? showAmount(minor, cur) : text, sum: false, invalid: false };
+  return {
+    minor,
+    text: cur === 'IDR' && minor !== null ? showAmount(minor, cur) : text,
+    sum: false,
+    invalid: false,
+  };
 };

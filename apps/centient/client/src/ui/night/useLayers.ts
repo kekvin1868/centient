@@ -21,4 +21,5 @@ export function useLayerKeys(onKey: (e: KeyboardEvent) => void, on = true) {
 }
 
 /** True when a key press should go to a text field instead of a shortcut. */
-export const typing = (e: KeyboardEvent) => e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+export const typing = (e: KeyboardEvent) =>
+  e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;

@@ -18,7 +18,11 @@ describe('geometry', () => {
     expect(zoomAt(c, 99, 0, 0).z).toBe(2);
   });
   it('fits everything, never past 100%', () => {
-    const c = fitCamera([box, { x: 0, y: 900, w: 100, h: 100 }], { w: 400, h: 600 }, { top: 0, bottom: 0, side: 0 })!;
+    const c = fitCamera(
+      [box, { x: 0, y: 900, w: 100, h: 100 }],
+      { w: 400, h: 600 },
+      { top: 0, bottom: 0, side: 0 },
+    )!;
     expect(c.z).toBeCloseTo(0.6);
     expect(fitCamera([box], { w: 4000, h: 4000 }, { top: 0, bottom: 0, side: 0 })!.z).toBe(1);
   });
@@ -26,7 +30,11 @@ describe('geometry', () => {
 
 describe('board state', () => {
   it('stacks new frames into the shorter column', () => {
-    const b = place(emptyBoard(), [{ key: 'a', pockets: 6 }, { key: 'b', pockets: 1 }, { key: 'c', pockets: 1 }]);
+    const b = place(emptyBoard(), [
+      { key: 'a', pockets: 6 },
+      { key: 'b', pockets: 1 },
+      { key: 'c', pockets: 1 },
+    ]);
     expect(b.pos.a.x).toBe(0);
     expect(b.pos.b.x).toBeGreaterThan(0);
     expect(b.pos.c).toEqual({ x: b.pos.b.x, y: expect.any(Number) }); // column two is still shorter

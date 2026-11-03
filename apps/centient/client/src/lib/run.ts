@@ -7,7 +7,9 @@ export async function attempt(fn: () => Promise<unknown>): Promise<boolean> {
     await fn();
     return true;
   } catch (e) {
-    showToast(e instanceof OfflineError ? 'No connection. Try again in a moment.' : (e as Error).message);
+    showToast(
+      e instanceof OfflineError ? 'No connection. Try again in a moment.' : (e as Error).message,
+    );
     return false;
   }
 }

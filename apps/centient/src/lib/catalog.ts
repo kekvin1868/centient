@@ -13,13 +13,17 @@ export function createCatalog(ws: string, repos: Repos) {
   let cached: Promise<Snapshot> | null = null;
   return {
     load: () => (cached ??= read(ws, repos)),
-    invalidate() { cached = null; },
+    invalidate() {
+      cached = null;
+    },
   };
 }
 
 async function read(ws: string, repos: Repos) {
   const [accounts, envelopes, categories] = await Promise.all([
-    repos.accounts.list(ws), repos.envelopes.list(ws), repos.categories.list(ws),
+    repos.accounts.list(ws),
+    repos.envelopes.list(ws),
+    repos.categories.list(ws),
   ]);
   const find = <T extends { id: string }>(rows: T[], id: string | undefined, what: string): T => {
     const row = rows.find(r => r.id === id);
@@ -27,18 +31,32 @@ async function read(ws: string, repos: Repos) {
     return row;
   };
   return {
-    accounts, envelopes, categories,
-    account: (id?: string): AccountRef & { row: Account } => { const a = find(accounts, id, 'Account'); return { id: a.id, currency: a.currency_code, row: a }; },
-    envelope: (id?: string): EnvelopeRef => { const e = find(envelopes, id, 'Pocket'); return { id: e.id, currency: e.currency_code, kind: e.kind, accountId: e.account_id }; },
+    accounts,
+    envelopes,
+    categories,
+    account: (id?: string): AccountRef & { row: Account } => {
+      const a = find(accounts, id, 'Account');
+      return { id: a.id, currency: a.currency_code, row: a };
+    },
+    envelope: (id?: string): EnvelopeRef => {
+      const e = find(envelopes, id, 'Pocket');
+      return { id: e.id, currency: e.currency_code, kind: e.kind, accountId: e.account_id };
+    },
     category: (id: string | undefined, kind: Category['kind']): Category => {
       const c = find(categories, id, 'Category');
-      if (c.kind !== kind) throw new DomainError('WRONG_CATEGORY_KIND', `${c.name} is an ${c.kind.toLowerCase()} category`);
+      if (c.kind !== kind)
+        throw new DomainError(
+          'WRONG_CATEGORY_KIND',
+          `${c.name} is an ${c.kind.toLowerCase()} category`,
+        );
       return c;
     },
     categoryByName: (name: string) => categories.find(c => c.name === name),
     /** The account's Main pocket (its default), else its first pocket. Every account is created with one. */
     defaultEnvelope(account: Account): EnvelopeRef {
-      const e = envelopes.find(x => x.id === account.default_envelope_id) ?? envelopes.find(x => x.account_id === account.id);
+      const e =
+        envelopes.find(x => x.id === account.default_envelope_id) ??
+        envelopes.find(x => x.account_id === account.id);
       if (!e) throw new DomainError('NO_ENVELOPE', `${account.name} has no pocket`);
       return { id: e.id, currency: e.currency_code, kind: e.kind, accountId: e.account_id };
     },

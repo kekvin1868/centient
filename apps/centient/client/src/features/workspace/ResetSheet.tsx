@@ -24,15 +24,19 @@ export function ResetSheet({ open, onClose }: { open: boolean; onClose: () => vo
   return (
     <Sheet open={open} onClose={onClose} title="Reset Centient">
       <p className="mx-4 my-4 text-muted">
-        This removes your accounts, entries, Pockets, categories and budgets from the app, and you start again from the first screen.
-        A copy stays on the server, marked as deleted.
+        This removes your accounts, entries, Pockets, categories and budgets from the app, and you
+        start again from the first screen. A copy stays on the server, marked as deleted.
       </p>
       <Group>
         <ToggleRow label="Download a backup first" checked={backup} onChange={setBackup} />
       </Group>
       <Block className="flex flex-col gap-2.5">
-        <Button large rounded className="k-color-brand-red" disabled={busy} onClick={run}>{busy ? 'Resetting…' : 'Reset Centient'}</Button>
-        <Button large rounded tonal onClick={onClose}>Cancel</Button>
+        <Button large rounded className="k-color-brand-red" disabled={busy} onClick={run}>
+          {busy ? 'Resetting…' : 'Reset Centient'}
+        </Button>
+        <Button large rounded tonal onClick={onClose}>
+          Cancel
+        </Button>
       </Block>
     </Sheet>
   );

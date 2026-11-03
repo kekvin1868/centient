@@ -2,12 +2,31 @@
 // Runs in the Worker today; the PWA can import it once it has a bundler.
 import { CURRENCY_WORDS, parseAmount, type Amount } from '@centient/money';
 import {
-  ABBREVIATIONS, CASH_WORDS, DAY_NAMES, DEFAULT_RANGE, FILLER, HOKKIEN_AMBIGUOUS, HOKKIEN_DIGITS,
-  HOKKIEN_EXACT, HOKKIEN_UNITS, INCOME_WORDS, KEYWORDS, MERCHANT_ALIASES, PROVIDER_ALIASES,
-  TRANSFER_WORDS, VERBS, type Hint,
+  ABBREVIATIONS,
+  CASH_WORDS,
+  DAY_NAMES,
+  DEFAULT_RANGE,
+  FILLER,
+  HOKKIEN_AMBIGUOUS,
+  HOKKIEN_DIGITS,
+  HOKKIEN_EXACT,
+  HOKKIEN_UNITS,
+  INCOME_WORDS,
+  KEYWORDS,
+  MERCHANT_ALIASES,
+  PROVIDER_ALIASES,
+  TRANSFER_WORDS,
+  VERBS,
+  type Hint,
 } from './dictionary';
 
-export type QAAccount = { id: string; name: string; kind: string; provider: string | null; currency_code?: string };
+export type QAAccount = {
+  id: string;
+  name: string;
+  kind: string;
+  provider: string | null;
+  currency_code?: string;
+};
 export type QACategory = { id: string; name: string; kind: 'EXPENSE' | 'INCOME' };
 export type QAAlias = { alias: string; kind: 'MERCHANT' | 'ACCOUNT' | 'CATEGORY'; value: string };
 export type QAContext = {
@@ -54,7 +73,10 @@ export function parseQuickAdd(input: string, ctx: QAContext): Draft[] {
     .replace(/\bkartu\s+kredit\b/gi, 'kartu-kredit')
     .replace(/\bkemarin\s+lusa\b/gi, 'kemarin-lusa')
     .replace(/\bcepek\s+ceng\b/gi, 'cepekceng');
-  const parts = text.split(/\s+(?:dan|and|&|\+)\s+|;|\n|,\s+/i).map(s => s.trim()).filter(Boolean);
+  const parts = text
+    .split(/\s+(?:dan|and|&|\+)\s+|;|\n|,\s+/i)
+    .map(s => s.trim())
+    .filter(Boolean);
   const drafts: Draft[] = [];
   for (const part of parts) {
     const { draft, hasAmount } = parsePart(part, ctx);
@@ -67,14 +89,20 @@ export function parseQuickAdd(input: string, ctx: QAContext): Draft[] {
 }
 
 function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boolean } {
-  const words = part.toLowerCase().split(/\s+/).map(w => ABBREVIATIONS[w] ?? w);
+  const words = part
+    .toLowerCase()
+    .split(/\s+/)
+    .map(w => ABBREVIATIONS[w] ?? w);
   let amount: Amount | null = null;
   let split: number | null = null;
   let fee: number | null = null;
   let date = ctx.today;
-  let income = false, transfer = false, topUp = false;
+  let income = false,
+    transfer = false,
+    topUp = false;
   let role: 'from' | 'to' | null = null;
-  let from: string | null = null, to: string | null = null;
+  let from: string | null = null,
+    to: string | null = null;
   const mentions: string[] = [];
   const hints: string[] = [];
   const merchantWords: string[] = [];
@@ -82,31 +110,71 @@ function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boo
   for (let i = 0; i < words.length; i++) {
     let w = words[i];
     const next = words[i + 1];
-    if (w in CURRENCY_WORDS && next && /^\d/.test(next)) { w = w + next; i++; }
+    if (w in CURRENCY_WORDS && next && /^\d/.test(next)) {
+      w = w + next;
+      i++;
+    }
 
-    if ((w === 'bagi' || w === 'split') && next && /^\d+$/.test(next)) { split = Number(next); i++; continue; }
-    if (w === 'tanggal' && next && /^\d{1,2}$/.test(next)) { date = dayOfMonth(ctx.today, Number(next)); i++; continue; }
-    if (w === 'kemarin') { date = addDays(ctx.today, -1); continue; }
-    if (w === 'kemarin-lusa') { date = addDays(ctx.today, -2); continue; }
-    if (w in DAY_NAMES) { date = lastWeekday(ctx.today, DAY_NAMES[w]); continue; }
+    if ((w === 'bagi' || w === 'split') && next && /^\d+$/.test(next)) {
+      split = Number(next);
+      i++;
+      continue;
+    }
+    if (w === 'tanggal' && next && /^\d{1,2}$/.test(next)) {
+      date = dayOfMonth(ctx.today, Number(next));
+      i++;
+      continue;
+    }
+    if (w === 'kemarin') {
+      date = addDays(ctx.today, -1);
+      continue;
+    }
+    if (w === 'kemarin-lusa') {
+      date = addDays(ctx.today, -2);
+      continue;
+    }
+    if (w in DAY_NAMES) {
+      date = lastWeekday(ctx.today, DAY_NAMES[w]);
+      continue;
+    }
     if (w === 'biaya' && next === 'admin') continue;
     if (w === 'admin') {
       const a = readAmount(words, i + 1);
-      if (a) { fee = a.amount.kind === 'exact' ? a.amount.value : (a.amount.kind === 'inferred' ? a.amount.candidates[1] : null); i += a.used; }
+      if (a) {
+        fee =
+          a.amount.kind === 'exact'
+            ? a.amount.value
+            : a.amount.kind === 'inferred'
+              ? a.amount.candidates[1]
+              : null;
+        i += a.used;
+      }
       continue;
     }
 
     if (!amount) {
       const a = readAmount(words, i);
-      if (a) { amount = a.amount; i += a.used - 1; continue; }
+      if (a) {
+        amount = a.amount;
+        i += a.used - 1;
+        continue;
+      }
     }
 
-    if (w === 'pakai' || w === 'via' || w === 'dari') { role = 'from'; continue; }
-    if (w === 'ke') { role = 'to'; continue; }
+    if (w === 'pakai' || w === 'via' || w === 'dari') {
+      role = 'from';
+      continue;
+    }
+    if (w === 'ke') {
+      role = 'to';
+      continue;
+    }
     if (w === 'isi' || w === 'top-up') {
       // "isi gopay" is a top-up; "isi bensin" is not.
-      if (w === 'top-up' || matchAccount(words, i + 1, ctx)) { transfer = true; topUp = true; }
-      else merchantWords.push(w);
+      if (w === 'top-up' || matchAccount(words, i + 1, ctx)) {
+        transfer = true;
+        topUp = true;
+      } else merchantWords.push(w);
       continue;
     }
 
@@ -121,10 +189,21 @@ function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boo
     }
     role = null;
 
-    if (INCOME_WORDS.has(w)) { income = true; hints.push(w); continue; }
+    if (INCOME_WORDS.has(w)) {
+      income = true;
+      hints.push(w);
+      continue;
+    }
     // "tarik tunai" moves money into the cash account, like a top-up.
-    if (TRANSFER_WORDS.has(w)) { transfer = true; if (w === 'tarik') topUp = true; continue; }
-    if (VERBS.has(w)) { hints.push(w); continue; }
+    if (TRANSFER_WORDS.has(w)) {
+      transfer = true;
+      if (w === 'tarik') topUp = true;
+      continue;
+    }
+    if (VERBS.has(w)) {
+      hints.push(w);
+      continue;
+    }
     if (FILLER.has(w)) continue;
     merchantWords.push(w);
   }
@@ -143,16 +222,23 @@ function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boo
   const { merchant, rawMerchant } = resolveMerchant(merchantWords, ctx);
   const history = ctx.merchantHistory?.[merchant.toLowerCase()];
   const hint = findHint([...hints, ...merchant.toLowerCase().split(/\s+/)], type);
-  const categoryId = type === 'TRANSFER' ? null
-    : history?.categoryId ?? categoryFromAlias(merchantWords, ctx) ?? categoryId_(hint?.category ?? (type === 'INCOME' ? 'Other income' : 'Other'), ctx);
-  const range: [number, number] = history ? [history.min / 3, history.max * 3] : hint?.range ?? DEFAULT_RANGE;
+  const categoryId =
+    type === 'TRANSFER'
+      ? null
+      : (history?.categoryId ??
+        categoryFromAlias(merchantWords, ctx) ??
+        categoryId_(hint?.category ?? (type === 'INCOME' ? 'Other income' : 'Other'), ctx));
+  const range: [number, number] = history
+    ? [history.min / 3, history.max * 3]
+    : (hint?.range ?? DEFAULT_RANGE);
 
   let value: number | null = null;
   let candidates: number[] = [];
   let needsConfirm = false;
   const accountCurrency = ctx.accounts.find(a => a.id === from)?.currency_code ?? 'IDR';
   const currency = accountCurrency;
-  let originalAmount: number | null = null, originalCurrency: string | null = null;
+  let originalAmount: number | null = null,
+    originalCurrency: string | null = null;
   let needs: Draft['needs'] = null;
   if (amount?.kind === 'exact' && amount.currency && amount.currency !== accountCurrency) {
     originalAmount = amount.value;
@@ -172,10 +258,24 @@ function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boo
   return {
     hasAmount: amount !== null,
     draft: {
-      text: part, type, amount: value, currency, originalAmount, originalCurrency, needs, candidates, needsConfirm,
-      accountId: from, toAccountId: type === 'TRANSFER' ? to : null, categoryId,
-      merchant, rawMerchant, date, split: type === 'EXPENSE' && split && split > 1 ? split : null,
-      fee, note: '',
+      text: part,
+      type,
+      amount: value,
+      currency,
+      originalAmount,
+      originalCurrency,
+      needs,
+      candidates,
+      needsConfirm,
+      accountId: from,
+      toAccountId: type === 'TRANSFER' ? to : null,
+      categoryId,
+      merchant,
+      rawMerchant,
+      date,
+      split: type === 'EXPENSE' && split && split > 1 ? split : null,
+      fee,
+      note: '',
     },
   };
 }
@@ -193,14 +293,23 @@ function readAmount(words: string[], i: number): { amount: Amount; used: number 
   if (a) return { amount: a, used: 1 };
   if (w === 'cepekceng') return { amount: { kind: 'exact', value: 100_000 }, used: 1 };
   if (w in HOKKIEN_EXACT) return { amount: { kind: 'exact', value: HOKKIEN_EXACT[w] }, used: 1 };
-  if (w in HOKKIEN_AMBIGUOUS) return { amount: { kind: 'inferred', candidates: HOKKIEN_AMBIGUOUS[w] }, used: 1 };
+  if (w in HOKKIEN_AMBIGUOUS)
+    return { amount: { kind: 'inferred', candidates: HOKKIEN_AMBIGUOUS[w] }, used: 1 };
   const m = w.match(/^(ce|se|it|no|ji|sa|si|go|lak|cit|pek|kau)(ceng|ban|tiao)$/);
-  if (m) return { amount: { kind: 'exact', value: HOKKIEN_DIGITS[m[1]] * HOKKIEN_UNITS[m[2]] }, used: 1 };
+  if (m)
+    return {
+      amount: { kind: 'exact', value: HOKKIEN_DIGITS[m[1]] * HOKKIEN_UNITS[m[2]] },
+      used: 1,
+    };
   return null;
 }
 
 /** Matches an account at words[i] by workspace alias, "kartu-kredit <provider>", name, provider word or cash word. */
-function matchAccount(words: string[], i: number, ctx: QAContext): { id: string; used: number } | null {
+function matchAccount(
+  words: string[],
+  i: number,
+  ctx: QAContext,
+): { id: string; used: number } | null {
   const active = ctx.accounts;
   for (const len of [3, 2, 1]) {
     if (i + len > words.length) continue;
@@ -213,7 +322,9 @@ function matchAccount(words: string[], i: number, ctx: QAContext): { id: string;
   const w = words[i];
   if (w === 'kartu-kredit') {
     const provider = PROVIDER_ALIASES[words[i + 1] ?? ''];
-    const card = active.find(a => a.kind === 'CREDIT_CARD' && (!provider || a.provider === provider));
+    const card = active.find(
+      a => a.kind === 'CREDIT_CARD' && (!provider || a.provider === provider),
+    );
     return card ? { id: card.id, used: provider ? 2 : 1 } : null;
   }
   const provider = PROVIDER_ALIASES[w];
@@ -230,12 +341,17 @@ function matchAccount(words: string[], i: number, ctx: QAContext): { id: string;
   return null;
 }
 
-function resolveMerchant(words: string[], ctx: QAContext): { merchant: string; rawMerchant: string } {
+function resolveMerchant(
+  words: string[],
+  ctx: QAContext,
+): { merchant: string; rawMerchant: string } {
   const rawMerchant = words.join(' ');
   const ws = (k: string) => ctx.aliases?.find(a => a.kind === 'MERCHANT' && a.alias === k)?.value;
   const whole = ws(rawMerchant);
   if (whole) return { merchant: whole, rawMerchant };
-  const merchant = words.map(w => ws(w) ?? MERCHANT_ALIASES[w] ?? w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const merchant = words
+    .map(w => ws(w) ?? MERCHANT_ALIASES[w] ?? w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
   return { merchant, rawMerchant };
 }
 
@@ -247,7 +363,12 @@ function categoryFromAlias(words: string[], ctx: QAContext): string | null {
   return null;
 }
 
-const INCOME_CATEGORIES = new Set(['Salary', 'Angpao & THR', 'Interest & cashback', 'Other income']);
+const INCOME_CATEGORIES = new Set([
+  'Salary',
+  'Angpao & THR',
+  'Interest & cashback',
+  'Other income',
+]);
 
 function findHint(words: string[], type: Draft['type']): Hint | null {
   for (const w of words) {
@@ -276,7 +397,13 @@ function lastWeekday(today: string, weekday: number): string {
 
 function dayOfMonth(today: string, day: number): string {
   let [y, m] = today.split('-').map(Number);
-  if (day > Number(today.slice(8, 10))) { m -= 1; if (m === 0) { m = 12; y -= 1; } }
+  if (day > Number(today.slice(8, 10))) {
+    m -= 1;
+    if (m === 0) {
+      m = 12;
+      y -= 1;
+    }
+  }
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return `${y}-${String(m).padStart(2, '0')}-${String(Math.min(day, last)).padStart(2, '0')}`;
 }

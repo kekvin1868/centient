@@ -11,8 +11,16 @@ export function ForecastStart() {
   const [day, setDay] = useState(loadStartDay);
   return (
     <Group foot="Early in the month, a few purchases can make the forecast jump. It stays hidden until this day, every month.">
-      <PickerRow label="Forecast starts on day" value={String(day)} options={DAYS}
-        onChange={v => { const n = Number(v ?? 3); saveStartDay(n); setDay(loadStartDay()); }} />
+      <PickerRow
+        label="Forecast starts on day"
+        value={String(day)}
+        options={DAYS}
+        onChange={v => {
+          const n = Number(v ?? 3);
+          saveStartDay(n);
+          setDay(loadStartDay());
+        }}
+      />
     </Group>
   );
 }

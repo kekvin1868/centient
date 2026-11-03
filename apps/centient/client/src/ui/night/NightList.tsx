@@ -19,11 +19,28 @@ export type NightRow = {
   bind?: Record<string, unknown>;
 };
 
-export function NightList({ label, rows, selected, onPick, className = '' }: { label: string; rows: NightRow[]; selected: number; onPick?: (i: number) => void; className?: string }) {
+export function NightList({
+  label,
+  rows,
+  selected,
+  onPick,
+  className = '',
+}: {
+  label: string;
+  rows: NightRow[];
+  selected: number;
+  onPick?: (i: number) => void;
+  className?: string;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [booting, setBooting] = useState(true); // only the first show is staggered
-  useEffect(() => { const t = setTimeout(() => setBooting(false), 700); return () => clearTimeout(t); }, []);
-  useEffect(() => { box.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }); }, [selected]);
+  useEffect(() => {
+    const t = setTimeout(() => setBooting(false), 700);
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    box.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [selected]);
   const shown = useExits(rows, r => r.key);
   let i = -1;
   return (
@@ -31,13 +48,32 @@ export function NightList({ label, rows, selected, onPick, className = '' }: { l
       {shown.map(({ item: r, key, gone }) => {
         const at = gone ? -1 : ++i;
         return (
-          <button key={gone ? `gone:${key}` : key} type="button" role="option" aria-selected={at === selected} className={`n-row ${r.mark ?? ''} ${gone ? 'gone' : ''}`}
-            tabIndex={gone ? -1 : undefined} aria-hidden={gone || undefined}
-            style={booting ? { animationDelay: `${at * 60}ms` } : undefined} {...(gone ? {} : r.bind ?? { onClick: () => onPick?.(at) })}>
+          <button
+            key={gone ? `gone:${key}` : key}
+            type="button"
+            role="option"
+            aria-selected={at === selected}
+            className={`n-row ${r.mark ?? ''} ${gone ? 'gone' : ''}`}
+            tabIndex={gone ? -1 : undefined}
+            aria-hidden={gone || undefined}
+            style={booting ? { animationDelay: `${at * 60}ms` } : undefined}
+            {...(gone ? {} : (r.bind ?? { onClick: () => onPick?.(at) }))}
+          >
             <span className="n-cur" />
             {r.mark === 'add' ? <span aria-hidden="true">+</span> : <span className="sq" />}
-            <span key={`n:${r.sig ?? ''}`} className={`nm ${r.sig !== undefined && !booting ? 'n-val' : ''}`}>{r.label}{r.note && <em>{r.note}</em>}</span>
-            <small key={`v:${r.sig ?? ''}`} className={r.sig !== undefined && !booting ? 'n-val' : ''}>{r.side}</small>
+            <span
+              key={`n:${r.sig ?? ''}`}
+              className={`nm ${r.sig !== undefined && !booting ? 'n-val' : ''}`}
+            >
+              {r.label}
+              {r.note && <em>{r.note}</em>}
+            </span>
+            <small
+              key={`v:${r.sig ?? ''}`}
+              className={r.sig !== undefined && !booting ? 'n-val' : ''}
+            >
+              {r.side}
+            </small>
           </button>
         );
       })}

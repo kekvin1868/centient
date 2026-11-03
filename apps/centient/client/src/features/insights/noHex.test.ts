@@ -18,6 +18,23 @@ import chartsGuide from './ChartsGuideSheet.tsx?raw';
 
 describe('Insights colours', () => {
   it('has no #rrggbb literals', () => {
-    for (const src of [bars, scale, sign, screen, chips, headline, period, chart, savings, list, biggest, exportRow, report, listsGuide, chartsGuide]) expect(src).not.toMatch(/#[0-9a-f]{3,8}\b/i);
+    for (const src of [
+      bars,
+      scale,
+      sign,
+      screen,
+      chips,
+      headline,
+      period,
+      chart,
+      savings,
+      list,
+      biggest,
+      exportRow,
+      report,
+      listsGuide,
+      chartsGuide,
+    ])
+      expect(src).not.toMatch(/#[0-9a-f]{3,8}\b/i);
   });
 });

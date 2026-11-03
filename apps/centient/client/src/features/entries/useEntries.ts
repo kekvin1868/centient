@@ -6,7 +6,11 @@ import { type Entry } from './EntryList';
 
 const recentCache = new Map<string, { items: Entry[]; cursor: string | null }>();
 
-export function useEntries(filter: { account?: string | null; type?: string; from?: string; to?: string }, limit: number, cacheKey?: string) {
+export function useEntries(
+  filter: { account?: string | null; type?: string; from?: string; to?: string },
+  limit: number,
+  cacheKey?: string,
+) {
   const cached = cacheKey ? recentCache.get(cacheKey) : undefined;
   const [items, setItems] = useState<Entry[]>(cached?.items ?? []);
   const [cursor, setCursor] = useState<string | null>(cached?.cursor ?? null);
@@ -14,8 +18,12 @@ export function useEntries(filter: { account?: string | null; type?: string; fro
   const load = async (more: boolean) => {
     type EntryType = 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'ALLOCATE';
     const query = {
-      limit: String(limit), account: filter.account || undefined, type: (filter.type || undefined) as EntryType | undefined,
-      from: filter.from || undefined, to: filter.to || undefined, cursor: more && cursor ? cursor : undefined,
+      limit: String(limit),
+      account: filter.account || undefined,
+      type: (filter.type || undefined) as EntryType | undefined,
+      from: filter.from || undefined,
+      to: filter.to || undefined,
+      cursor: more && cursor ? cursor : undefined,
     };
     await attempt(async () => {
       const page = await call(client.api.entries.$get({ query }));

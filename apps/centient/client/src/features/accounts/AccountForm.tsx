@@ -10,10 +10,24 @@ import { InputRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { CurrencyPicker } from '../../ui/CurrencyPicker';
 
-const KINDS = ['BANK', 'DEBIT_CARD', 'EWALLET', 'CASH', 'CREDIT_CARD', 'PAYLATER', 'EXCHANGE'] as const;
+const KINDS = [
+  'BANK',
+  'DEBIT_CARD',
+  'EWALLET',
+  'CASH',
+  'CREDIT_CARD',
+  'PAYLATER',
+  'EXCHANGE',
+] as const;
 type Kind = (typeof KINDS)[number];
 
-export function AccountForm({ onDone, submitLabel = 'Add account' }: { onDone: () => void; submitLabel?: string }) {
+export function AccountForm({
+  onDone,
+  submitLabel = 'Add account',
+}: {
+  onDone: () => void;
+  submitLabel?: string;
+}) {
   const [name, setName] = useState('');
   const [kind, setKind] = useState<Kind>('BANK');
   const [amount, setAmount] = useState<number | null>(null);
@@ -22,27 +36,53 @@ export function AccountForm({ onDone, submitLabel = 'Add account' }: { onDone: (
   const owes = kind === 'CREDIT_CARD' || kind === 'PAYLATER';
 
   const save = async () => {
-    const ok = await attempt(() => call(client.api.accounts.$post({
-      json: { name: name.trim(), kind, currency, openingBalance: amount ? (owes ? -amount : amount) : undefined },
-    })));
-    if (ok) { await refresh(); onDone(); }
+    const ok = await attempt(() =>
+      call(
+        client.api.accounts.$post({
+          json: {
+            name: name.trim(),
+            kind,
+            currency,
+            openingBalance: amount ? (owes ? -amount : amount) : undefined,
+          },
+        }),
+      ),
+    );
+    if (ok) {
+      await refresh();
+      onDone();
+    }
   };
 
   return (
     <>
       <Group>
         <InputRow label="Name" value={name} placeholder="e.g. BCA, GoPay" onInput={setName} />
-        <PickerRow label="Type" value={kind} options={KINDS.map(k => ({ value: k, label: ACCOUNT_KINDS[k] }))} onChange={v => v && setKind(v as Kind)} />
+        <PickerRow
+          label="Type"
+          value={kind}
+          options={KINDS.map(k => ({ value: k, label: ACCOUNT_KINDS[k] }))}
+          onChange={v => v && setKind(v as Kind)}
+        />
         {(otherCurrency || kind === 'EXCHANGE') && (
           <CurrencyPicker value={currency} onChange={setCurrency} />
         )}
-        <AmountField label={owes ? 'How much you owe now' : 'How much is in it now'} currency={currency} value={amount} onChange={setAmount} />
+        <AmountField
+          label={owes ? 'How much you owe now' : 'How much is in it now'}
+          currency={currency}
+          value={amount}
+          onChange={setAmount}
+        />
       </Group>
       <Block className="flex flex-col items-start gap-3 !mt-0">
         {!otherCurrency && kind !== 'EXCHANGE' && (
-          <Button clear inline onClick={() => setOtherCurrency(true)}>Different currency</Button>
+          <Button clear inline onClick={() => setOtherCurrency(true)}>
+            Different currency
+          </Button>
         )}
-        <Button large rounded disabled={!name.trim()} onClick={save}>{name.trim() ? submitLabel : 'Enter a name'}</Button>
+        <Button large rounded disabled={!name.trim()} onClick={save}>
+          {name.trim() ? submitLabel : 'Enter a name'}
+        </Button>
       </Block>
     </>
   );

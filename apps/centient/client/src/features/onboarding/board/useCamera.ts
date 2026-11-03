@@ -13,19 +13,34 @@ export function useCamera(view: RefObject<HTMLElement | null>) {
     timer.current = window.setTimeout(() => setGliding(false), 340);
   }, []);
   /** A client point relative to the board. */
-  const local = useCallback((cx: number, cy: number): [number, number] => {
-    const r = view.current!.getBoundingClientRect();
-    return [cx - r.left, cy - r.top];
-  }, [view]);
-  const toWorld = useCallback((cx: number, cy: number, c: Camera): [number, number] => {
-    const [x, y] = local(cx, cy);
-    return [(x - c.x) / c.z, (y - c.y) / c.z];
-  }, [local]);
-  const zoomBy = useCallback((f: number) => {
-    const el = view.current!;
-    glide();
-    setCam(c => zoomAt(c, c.z * f, el.clientWidth / 2, el.clientHeight / 2));
-  }, [view, glide]);
-  const panBy = useCallback((dx: number, dy: number) => { glide(); setCam(c => ({ ...c, x: c.x + dx, y: c.y + dy })); }, [glide]);
+  const local = useCallback(
+    (cx: number, cy: number): [number, number] => {
+      const r = view.current!.getBoundingClientRect();
+      return [cx - r.left, cy - r.top];
+    },
+    [view],
+  );
+  const toWorld = useCallback(
+    (cx: number, cy: number, c: Camera): [number, number] => {
+      const [x, y] = local(cx, cy);
+      return [(x - c.x) / c.z, (y - c.y) / c.z];
+    },
+    [local],
+  );
+  const zoomBy = useCallback(
+    (f: number) => {
+      const el = view.current!;
+      glide();
+      setCam(c => zoomAt(c, c.z * f, el.clientWidth / 2, el.clientHeight / 2));
+    },
+    [view, glide],
+  );
+  const panBy = useCallback(
+    (dx: number, dy: number) => {
+      glide();
+      setCam(c => ({ ...c, x: c.x + dx, y: c.y + dy }));
+    },
+    [glide],
+  );
   return { cam, setCam, gliding, glide, local, toWorld, zoomBy, panBy, clampZoom };
 }

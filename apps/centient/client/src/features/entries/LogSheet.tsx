@@ -5,7 +5,15 @@ import { Sheet } from '../../ui/Sheet';
 import { EntryForm } from './EntryForm';
 import { toCommand, type Form, type LogItem } from './form';
 
-export function LogSheet({ item, onClose, onSave }: { item: LogItem | null; onClose: () => void; onSave: (i: LogItem) => unknown }) {
+export function LogSheet({
+  item,
+  onClose,
+  onSave,
+}: {
+  item: LogItem | null;
+  onClose: () => void;
+  onSave: (i: LogItem) => unknown;
+}) {
   const [form, setForm] = useState<Form | null>(item?.form ?? null);
   if (!item || !form) return null;
   const r = toCommand(form);
@@ -13,7 +21,12 @@ export function LogSheet({ item, onClose, onSave }: { item: LogItem | null; onCl
     <Sheet open onClose={onClose} title={item.text ? 'Check entry' : 'New entry'}>
       <EntryForm form={form} onChange={setForm} />
       <Block>
-        <Button large rounded disabled={'error' in r} onClick={() => onSave({ ...item, askAmount: false, askCharged: false, form })}>
+        <Button
+          large
+          rounded
+          disabled={'error' in r}
+          onClick={() => onSave({ ...item, askAmount: false, askCharged: false, form })}
+        >
           {'error' in r ? r.error : 'Log it'}
         </Button>
       </Block>

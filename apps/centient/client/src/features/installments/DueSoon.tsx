@@ -15,13 +15,24 @@ export function DueSoon({ onGo }: { onGo: () => void }) {
         const acc = accounts.find(a => a.id === p.accountId);
         const overdue = p.next!.due < today;
         return (
-          <button key={p.id} type="button" onClick={onGo}
-            className={`panel flex items-center gap-3 rounded-2xl px-3.5 py-3 text-left active:opacity-80 ${overdue ? 'bg-pink text-white' : 'bg-white dark:bg-raised'}`}>
+          <button
+            key={p.id}
+            type="button"
+            onClick={onGo}
+            className={`panel flex items-center gap-3 rounded-2xl px-3.5 py-3 text-left active:opacity-80 ${overdue ? 'bg-pink text-white' : 'bg-white dark:bg-raised'}`}
+          >
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[15px] font-bold">{acc?.name} · {p.name}</span>
-              <span className={`block text-[13px] ${overdue ? '' : 'text-muted'}`}>{overdue ? 'Overdue since' : 'Due'} {dayLabel(p.next!.due, today)} · installment {p.next!.no} of {p.installments}</span>
+              <span className="block truncate text-[15px] font-bold">
+                {acc?.name} · {p.name}
+              </span>
+              <span className={`block text-[13px] ${overdue ? '' : 'text-muted'}`}>
+                {overdue ? 'Overdue since' : 'Due'} {dayLabel(p.next!.due, today)} · installment{' '}
+                {p.next!.no} of {p.installments}
+              </span>
             </span>
-            <span className="num shrink-0 text-[16px] font-extrabold">{formatMoney(p.next!.left, acc?.currency_code)}</span>
+            <span className="num shrink-0 text-[16px] font-extrabold">
+              {formatMoney(p.next!.left, acc?.currency_code)}
+            </span>
           </button>
         );
       })}

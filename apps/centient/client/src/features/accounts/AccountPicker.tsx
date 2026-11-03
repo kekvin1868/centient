@@ -22,8 +22,21 @@ export function AccountPicker({ open, onClose }: { open: boolean; onClose: () =>
   return (
     <Sheet open={open} onClose={onClose} title="Pick an account">
       <div className="pt-6 pb-2">
-        <AccountHand selected={selectedAccount.value} onPick={pick} label="Show account"
-          cards={[{ id: null, name: 'All accounts', kind: 'ALL' }, ...everyday().map(a => ({ id: a.id, name: a.name, kind: a.kind, balance: bal[a.id], currency: a.currency_code }))]} />
+        <AccountHand
+          selected={selectedAccount.value}
+          onPick={pick}
+          label="Show account"
+          cards={[
+            { id: null, name: 'All accounts', kind: 'ALL' },
+            ...everyday().map(a => ({
+              id: a.id,
+              name: a.name,
+              kind: a.kind,
+              balance: bal[a.id],
+              currency: a.currency_code,
+            })),
+          ]}
+        />
       </div>
     </Sheet>
   );

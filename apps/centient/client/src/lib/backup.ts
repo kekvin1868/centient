@@ -4,7 +4,9 @@ import { me } from './state';
 
 export async function downloadBackup(): Promise<void> {
   const data = await call(client.api.backup.$get());
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
+  );
   const a = document.createElement('a');
   a.href = url;
   a.download = `centient-backup-${me.value?.today ?? new Date().toISOString().slice(0, 10)}.json`;

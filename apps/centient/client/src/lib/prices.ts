@@ -11,7 +11,7 @@ export const prices = signal<Prices>(load('prices', {}));
 
 export async function loadPrices() {
   try {
-    prices.value = await call(client.api.prices.$get()) as Prices;
+    prices.value = (await call(client.api.prices.$get())) as Prices;
     save('prices', prices.value);
   } catch {
     // Offline or server error: keep the last known prices (already loaded from the device).
@@ -31,9 +31,15 @@ export function priceAge(currency: string, now = Date.now(), p: Prices = prices.
   const at = p[currency]?.fetchedAt;
   if (!at) return null;
   const d = new Date(at);
-  const sameDay = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }) === new Date(now).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  const sameDay =
+    d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }) ===
+    new Date(now).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
   const when = sameDay
-    ? d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })
+    ? d.toLocaleTimeString('en-GB', {
+        timeZone: 'Asia/Jakarta',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     : d.toLocaleDateString('en-GB', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'short' });
   return { label: `as of ${when}`, stale: now - d.getTime() > 10 * 60_000 };
 }

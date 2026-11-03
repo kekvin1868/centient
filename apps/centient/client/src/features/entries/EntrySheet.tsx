@@ -18,14 +18,16 @@ import { showToast } from '../../ui/Toast';
 export function deleteWithUndo(id: string) {
   const hide = (on: boolean) => {
     const next = new Set(hiddenEntries.value);
-    if (on) next.add(id); else next.delete(id);
+    if (on) next.add(id);
+    else next.delete(id);
     hiddenEntries.value = next;
   };
   hide(true);
   showToast('Deleted', {
     action: { label: 'Undo', run: () => hide(false) },
     onExpire: async () => {
-      if (await attempt(() => call(client.api.entries[':id'].$delete({ param: { id } })))) await refresh();
+      if (await attempt(() => call(client.api.entries[':id'].$delete({ param: { id } }))))
+        await refresh();
       hide(false);
     },
   });
@@ -40,8 +42,14 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
 
   const save = async () => {
     if (!result || 'error' in result) return;
-    const ok = await attempt(() => call(client.api.entries[':id'].$patch({ param: { id: entry.id }, json: result.command })));
-    if (ok) { onClose(); showToast('Saved'); await refresh(); }
+    const ok = await attempt(() =>
+      call(client.api.entries[':id'].$patch({ param: { id: entry.id }, json: result.command })),
+    );
+    if (ok) {
+      onClose();
+      showToast('Saved');
+      await refresh();
+    }
   };
 
   return (
@@ -57,7 +65,9 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
           </Block>
         </>
       ) : (
-        <Group foot={`${entry.kind === 'OPENING' ? 'To change it, use Update balance on the Money tab.' : 'Corrections come from Update balance on the Money tab.'} Swipe the row left to delete it.`}>
+        <Group
+          foot={`${entry.kind === 'OPENING' ? 'To change it, use Update balance on the Money tab.' : 'Corrections come from Update balance on the Money tab.'} Swipe the row left to delete it.`}
+        >
           <Row title={row.sub || row.title} trail={formatMoney(row.amount, row.currency)} />
         </Group>
       )}

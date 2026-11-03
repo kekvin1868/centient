@@ -18,16 +18,37 @@ test.afterAll(async () => page.close());
 
 const api = (path: string, init?: { method?: string; data?: unknown }) =>
   page.request.fetch(`/api${path}`, { method: init?.method ?? 'GET', data: init?.data });
-type Acc = { id: string; name: string; kind: string; default_envelope_id: string; currency_code: string };
+type Acc = {
+  id: string;
+  name: string;
+  kind: string;
+  default_envelope_id: string;
+  currency_code: string;
+};
 const accounts = async () => (await (await api('/catalog')).json()).accounts as Acc[];
 const accountId = async (name: string) => (await accounts()).find(a => a.name === name)!.id;
-const balances = async () => (await (await api('/balances')).json()) as { accounts: { name: string; balance: number }[]; envelopes: { id: string; name: string; account_id: string; balance: number; color: string | null }[] };
-const balance = async (name: string) => (await balances()).accounts.find(a => a.name === name)!.balance;
+const balances = async () =>
+  (await (await api('/balances')).json()) as {
+    accounts: { name: string; balance: number }[];
+    envelopes: {
+      id: string;
+      name: string;
+      account_id: string;
+      balance: number;
+      color: string | null;
+    }[];
+  };
+const balance = async (name: string) =>
+  (await balances()).accounts.find(a => a.name === name)!.balance;
 const tab = (name: string) => page.getByRole('button', { name, exact: true });
 const cards = () => page.getByRole('group', { name: 'Accounts' });
 
 test('first run: the night menu sets starting balances, then Home', async () => {
-  expect((await accounts()).map(a => [a.name, a.kind])).toEqual([['Dailies', 'EWALLET'], ['Main Account', 'BANK'], ['Miscs', 'DEBIT_CARD']]);
+  expect((await accounts()).map(a => [a.name, a.kind])).toEqual([
+    ['Dailies', 'EWALLET'],
+    ['Main Account', 'BANK'],
+    ['Miscs', 'DEBIT_CARD'],
+  ]);
   await page.getByRole('button', { name: 'CLICK TO START' }).tap();
   const menu = page.getByRole('listbox', { name: 'Accounts' });
   await expect(menu).toBeVisible({ timeout: 10_000 });
@@ -41,7 +62,10 @@ test('first run: the night menu sets starting balances, then Home', async () => 
   await menu.getByRole('option', { name: /Dailies/ }).tap();
   await setMain('300000');
   await page.getByRole('button', { name: 'CONFIRM ▸' }).tap();
-  await page.getByRole('dialog', { name: 'Confirm changes' }).getByRole('button', { name: 'CONFIRM ▸' }).tap();
+  await page
+    .getByRole('dialog', { name: 'Confirm changes' })
+    .getByRole('button', { name: 'CONFIRM ▸' })
+    .tap();
   await expect(page.getByRole('img', { name: 'Centient' })).toBeVisible();
   expect(await balance('Main Account')).toBe(5_000_000);
   // Nothing set aside yet: everything in the Main pockets is free to spend.
@@ -53,28 +77,71 @@ test('first run: the night menu sets starting balances, then Home', async () => 
 test('only the ten broad spending categories are offered', async () => {
   await page.getByRole('button', { name: 'Add without typing' }).tap();
   const sheet = page.getByRole('dialog', { name: 'New entry' });
-  const options = await sheet.getByRole('combobox', { name: 'Category' }).locator('option').allTextContents();
-  expect(options.slice(1)).toEqual(['Education', 'Family & Giving', 'Fees', 'Food & Drink', 'Fun', 'Health', 'Home & Bills', 'Other', 'Shopping', 'Transport']);
+  const options = await sheet
+    .getByRole('combobox', { name: 'Category' })
+    .locator('option')
+    .allTextContents();
+  expect(options.slice(1)).toEqual([
+    'Education',
+    'Family & Giving',
+    'Fees',
+    'Food & Drink',
+    'Fun',
+    'Health',
+    'Home & Bills',
+    'Other',
+    'Shopping',
+    'Transport',
+  ]);
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 });
 
 test('deleting a category moves its entries to another one', async () => {
-  const fun = ((await (await api('/catalog')).json()).categories as { id: string; name: string }[]).find(c => c.name === 'Fun')!.id;
-  expect((await api('/transactions', { method: 'POST', data: { type: 'EXPENSE', accountId: await accountId('Dailies'), categoryId: fun, amount: 50_000, date: '2026-10-20', merchant: 'Timezone' } })).ok()).toBe(true);
+  const fun = (
+    (await (await api('/catalog')).json()).categories as { id: string; name: string }[]
+  ).find(c => c.name === 'Fun')!.id;
+  expect(
+    (
+      await api('/transactions', {
+        method: 'POST',
+        data: {
+          type: 'EXPENSE',
+          accountId: await accountId('Dailies'),
+          categoryId: fun,
+          amount: 50_000,
+          date: '2026-10-20',
+          merchant: 'Timezone',
+        },
+      })
+    ).ok(),
+  ).toBe(true);
   await tab('Settings').tap();
   await page.getByRole('button', { name: /Fun/ }).first().tap();
-  await page.getByRole('dialog', { name: 'Fun' }).getByRole('button', { name: 'Delete category' }).tap();
+  await page
+    .getByRole('dialog', { name: 'Fun' })
+    .getByRole('button', { name: 'Delete category' })
+    .tap();
   const sheet = page.getByRole('dialog', { name: 'Delete Fun' });
   await expect(sheet.getByRole('combobox', { name: 'Move its entries to' })).toHaveValue(/.+/);
-  await sheet.getByRole('combobox', { name: 'Move its entries to' }).selectOption({ label: 'Other' });
+  await sheet
+    .getByRole('combobox', { name: 'Move its entries to' })
+    .selectOption({ label: 'Other' });
   await sheet.getByRole('button', { name: 'Delete category' }).tap();
   await expect(page.getByText('Deleted Fun')).toBeVisible();
-  const cats = ((await (await api('/catalog')).json()).categories as { name: string }[]).map(c => c.name);
+  const cats = ((await (await api('/catalog')).json()).categories as { name: string }[]).map(
+    c => c.name,
+  );
   expect(cats).not.toContain('Fun');
-  const entries = (await (await api('/entries?limit=10')).json()).items as { command: { merchant?: string; categoryId: string } }[];
-  const other = ((await (await api('/catalog')).json()).categories as { id: string; name: string }[]).find(c => c.name === 'Other')!.id;
-  expect(entries.find(e => e.command?.merchant?.toLowerCase() === 'timezone')!.command.categoryId).toBe(other);
+  const entries = (await (await api('/entries?limit=10')).json()).items as {
+    command: { merchant?: string; categoryId: string };
+  }[];
+  const other = (
+    (await (await api('/catalog')).json()).categories as { id: string; name: string }[]
+  ).find(c => c.name === 'Other')!.id;
+  expect(
+    entries.find(e => e.command?.merchant?.toLowerCase() === 'timezone')!.command.categoryId,
+  ).toBe(other);
 });
 
 test('lists have one even hairline on the rounded card', async () => {
@@ -86,14 +153,23 @@ test('lists have one even hairline on the rounded card', async () => {
 
 test('accounts are a hand you turn: drag sideways and it settles on (and picks) the next card', async () => {
   await tab('Money').tap();
-  for (const a of [{ name: 'Kredivo', kind: 'PAYLATER', openingBalance: -1_788_000 }, { name: 'Jago', kind: 'BANK' }, { name: 'Mandiri', kind: 'BANK' }]) {
+  for (const a of [
+    { name: 'Kredivo', kind: 'PAYLATER', openingBalance: -1_788_000 },
+    { name: 'Jago', kind: 'BANK' },
+    { name: 'Mandiri', kind: 'BANK' },
+  ]) {
     expect((await api('/accounts', { method: 'POST', data: a })).ok()).toBe(true);
   }
   await page.reload();
   await tab('Money').tap();
   // One fan for any count: six cards, the middle one highest, the outer ones lower and tilted.
   await expect(cards().locator('[data-slot]')).toHaveCount(6);
-  const mid = async (name: string) => { const b = (await cards().getByRole('button', { name: new RegExp(`^${name}`) }).boundingBox())!; return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+  const mid = async (name: string) => {
+    const b = (await cards()
+      .getByRole('button', { name: new RegExp(`^${name}`) })
+      .boundingBox())!;
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  };
   const box = (await cards().boundingBox())!;
   const centre = box.x + box.width / 2;
   // Money opens with one card picked already (Home's account, else the first).
@@ -119,7 +195,9 @@ async function showAll() {
   const chip = page.getByRole('button', { name: /^Showing .*\. Change account$/ });
   if ((await chip.getAttribute('aria-label'))!.startsWith('Showing all accounts')) return;
   await chip.tap();
-  const all = page.getByRole('dialog', { name: 'Pick an account' }).getByRole('button', { name: /^All accounts/ });
+  const all = page
+    .getByRole('dialog', { name: 'Pick an account' })
+    .getByRole('button', { name: /^All accounts/ });
   await all.focus();
   await all.press('Enter');
   await expect(page.getByRole('button', { name: /^Showing all accounts/ })).toBeVisible();
@@ -148,7 +226,10 @@ test('pockets live inside an account: add one, move money in, the account balanc
   // A card opens the pocket's actions (by keyboard here: the closing sheet hands focus back to the card).
   await pockets.getByRole('button', { name: /^Rent,/ }).focus();
   await page.keyboard.press('Enter');
-  await page.getByRole('dialog', { name: /^Rent/ }).getByRole('button', { name: 'Add money' }).focus();
+  await page
+    .getByRole('dialog', { name: /^Rent/ })
+    .getByRole('button', { name: 'Add money' })
+    .focus();
   await page.keyboard.press('Enter');
   const move = page.getByRole('dialog', { name: 'Add money to Rent' });
   // It opens once the actions sheet is gone, so the focus handed back doesn't land behind it.
@@ -163,26 +244,36 @@ test('pockets live inside an account: add one, move money in, the account balanc
   const b = await balances();
   const main = (await accounts()).find(a => a.name === 'Main Account')!;
   const inAccount = b.envelopes.filter(e => e.account_id === main.id);
-  expect(inAccount.find(e => e.name === 'Rent')).toMatchObject({ balance: 1_500_000, color: '#c3b1ff' });
+  expect(inAccount.find(e => e.name === 'Rent')).toMatchObject({
+    balance: 1_500_000,
+    color: '#c3b1ff',
+  });
   expect(inAccount.find(e => e.name === 'Main')!.balance).toBe(3_500_000);
   expect(await balance('Main Account')).toBe(5_000_000);
   // The hero is the free balance, the total sits under it.
   await expect(page.getByText('Rp5.000.000 in total')).toBeVisible();
   // Set aside means it's no longer free to spend. Picking on Money picked Main Account on Home too; show them all.
   await tab('Home').tap();
-  await expect(page.getByRole('button', { name: 'Showing Main Account. Change account' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Showing Main Account. Change account' }),
+  ).toBeVisible();
   await showAll();
   await expect(page.getByRole('region', { name: 'What you can spend' })).toContainText('3.750.000'); // Main 3.5jt + Dailies 300rb - the 50rb from the category test
 });
 
 test('a crypto account has no pockets yet and keeps its balance', async () => {
-  const r = await api('/accounts', { method: 'POST', data: { name: 'TokoCrypto', kind: 'EXCHANGE', currency: 'BTC', openingBalance: 250_000 } });
+  const r = await api('/accounts', {
+    method: 'POST',
+    data: { name: 'TokoCrypto', kind: 'EXCHANGE', currency: 'BTC', openingBalance: 250_000 },
+  });
   expect(r.ok()).toBe(true);
   expect(await balance('TokoCrypto')).toBe(250_000);
   await page.reload();
   await tab('Money').tap();
   await pick('TokoCrypto');
-  await expect(page.getByRole('region', { name: 'Pockets in TokoCrypto' })).toContainText('No pockets yet');
+  await expect(page.getByRole('region', { name: 'Pockets in TokoCrypto' })).toContainText(
+    'No pockets yet',
+  );
 });
 
 test('pay later: add a shared plan, pay each share, attach proof', async () => {
@@ -202,19 +293,27 @@ test('pay later: add a shared plan, pay each share, attach proof', async () => {
   expect(await balance('Brother')).toBe(894_000);
   await page.getByRole('button', { name: /iPhone, 1 of 3 paid/ }).tap();
   const plan = page.getByRole('dialog', { name: 'iPhone' });
-  await plan.getByRole('combobox', { name: 'You pay from' }).selectOption({ label: 'Main Account' });
+  await plan
+    .getByRole('combobox', { name: 'You pay from' })
+    .selectOption({ label: 'Main Account' });
   await plan.getByRole('button', { name: 'Mark your share of installment 2 paid' }).tap();
-  await expect(plan.getByRole('button', { name: 'Mark your share of installment 2 unpaid' })).toBeVisible();
+  await expect(
+    plan.getByRole('button', { name: 'Mark your share of installment 2 unpaid' }),
+  ).toBeVisible();
   expect(await balance('Main Account')).toBe(5_000_000 - 447_000);
   expect(await balance('Kredivo')).toBe(-1_788_000 + 447_000);
 
   await plan.getByRole('button', { name: "Mark Brother's share of installment 2 paid" }).tap();
-  await expect(plan.getByRole('button', { name: "Mark Brother's share of installment 2 unpaid" })).toBeVisible();
+  await expect(
+    plan.getByRole('button', { name: "Mark Brother's share of installment 2 unpaid" }),
+  ).toBeVisible();
   expect(await balance('Brother')).toBe(447_000);
   expect(await balance('Kredivo')).toBe(-894_000);
 
   const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex');
-  await plan.getByLabel('Attach proof for Brother, installment 2').setInputFiles({ name: 'proof.png', mimeType: 'image/png', buffer: png });
+  await plan
+    .getByLabel('Attach proof for Brother, installment 2')
+    .setInputFiles({ name: 'proof.png', mimeType: 'image/png', buffer: png });
   const link = plan.getByRole('link', { name: 'proof.png' });
   await expect(link).toBeVisible();
   const file = await api((await link.getAttribute('href'))!.replace('/api', ''));
@@ -225,10 +324,20 @@ test('pay later: add a shared plan, pay each share, attach proof', async () => {
 });
 
 test('a plan only you pay has no proof of payment', async () => {
-  const r = await api('/installments', { method: 'POST', data: {
-    accountId: await accountId('Kredivo'), name: 'Shoes', amountPerInstallment: 200_000, installments: 2, firstDue: '2026-12-01',
-    paidCount: 0, myShare: 200_000, others: [], alreadyInBalance: true,
-  } });
+  const r = await api('/installments', {
+    method: 'POST',
+    data: {
+      accountId: await accountId('Kredivo'),
+      name: 'Shoes',
+      amountPerInstallment: 200_000,
+      installments: 2,
+      firstDue: '2026-12-01',
+      paidCount: 0,
+      myShare: 200_000,
+      others: [],
+      alreadyInBalance: true,
+    },
+  });
   expect(r.status()).toBe(201);
   await page.reload();
   await tab('Money').tap();
@@ -236,14 +345,26 @@ test('a plan only you pay has no proof of payment', async () => {
   await page.getByRole('button', { name: /Shoes, 0 of 2 paid/ }).tap();
   const plan = page.getByRole('dialog', { name: 'Shoes' });
   await plan.getByRole('button', { name: 'Mark your share of installment 1 paid' }).tap();
-  await expect(plan.getByRole('button', { name: 'Mark your share of installment 1 unpaid' })).toBeVisible();
+  await expect(
+    plan.getByRole('button', { name: 'Mark your share of installment 1 unpaid' }),
+  ).toBeVisible();
   await expect(plan.getByText(/Attach proof/)).toHaveCount(0);
 });
 
 test('an entry gets its own emoji, remembered for its merchant', async () => {
   const cat = (await (await api('/catalog')).json()).categories as { id: string; name: string }[];
   const today = (await (await api('/me')).json()).today as string;
-  await api('/transactions', { method: 'POST', data: { type: 'EXPENSE', accountId: await accountId('Dailies'), categoryId: cat[0].id, amount: 20_000, date: today, merchant: 'Arcade' } });
+  await api('/transactions', {
+    method: 'POST',
+    data: {
+      type: 'EXPENSE',
+      accountId: await accountId('Dailies'),
+      categoryId: cat[0].id,
+      amount: 20_000,
+      date: today,
+      merchant: 'Arcade',
+    },
+  });
   await page.reload();
   await tab('Home').tap();
   await showAll();
@@ -254,7 +375,10 @@ test('an entry gets its own emoji, remembered for its merchant', async () => {
   await sheet.getByRole('button', { name: 'Save' }).tap();
   await expect(sheet).toBeHidden();
   await expect(row.getByRole('button', { name: /Change the icon/ })).toContainText('🎮');
-  const entries = (await (await api('/entries?limit=20')).json()).items as { icon: string | null; command: { merchant?: string } }[];
+  const entries = (await (await api('/entries?limit=20')).json()).items as {
+    icon: string | null;
+    command: { merchant?: string };
+  }[];
   expect(entries.find(e => e.command?.merchant?.toLowerCase() === 'arcade')!.icon).toBe('🎮');
 });
 
@@ -274,7 +398,10 @@ test('swiping a row left unlocks edit and delete; deleting can be undone, then g
   await page.getByRole('button', { name: 'Undo' }).click(); // changed my mind
   await expect(page.locator('.entry-row', { hasText: 'Arcade' })).toHaveCount(1);
   // The edit sheet only saves now.
-  await page.locator('.entry-row', { hasText: 'Arcade' }).getByRole('button', { name: /^Arcade/ }).click();
+  await page
+    .locator('.entry-row', { hasText: 'Arcade' })
+    .getByRole('button', { name: /^Arcade/ })
+    .click();
   const edit = page.getByRole('dialog', { name: 'Edit' });
   await expect(edit.getByRole('button', { name: 'Save' })).toBeVisible();
   await expect(edit.getByRole('button', { name: 'Delete' })).toHaveCount(0);
@@ -295,7 +422,11 @@ test('pockets are a list; Move money goes to another account too; patterns diffe
   await move.getByRole('button', { name: 'Move' }).tap();
   await expect(move).toBeHidden();
   expect(await balance('Jago')).toBe(before + 100_000);
-  const all = (await (await api('/catalog')).json()).envelopes as { account_id: string; pattern: number; archived_at: string | null }[];
+  const all = (await (await api('/catalog')).json()).envelopes as {
+    account_id: string;
+    pattern: number;
+    archived_at: string | null;
+  }[];
   const main = await accountId('Main Account');
   const mine = all.filter(e => e.account_id === main && !e.archived_at).map(e => e.pattern);
   expect(new Set(mine).size).toBe(mine.length);
@@ -305,21 +436,31 @@ test('a manual entry is a receipt: type the title, pick a pocket stamp, enter th
   await tab('Home').tap();
   await page.getByRole('button', { name: 'Add without typing' }).tap();
   const sheet = page.getByRole('dialog', { name: 'New entry' });
-  await sheet.getByRole('textbox', { name: 'What was it?' }).pressSequentially('Sewa', { delay: 20 });
+  await sheet
+    .getByRole('textbox', { name: 'What was it?' })
+    .pressSequentially('Sewa', { delay: 20 });
   await sheet.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Home & Bills' });
   await sheet.getByRole('combobox', { name: 'Paid with' }).selectOption({ label: 'Main Account' });
-  await sheet.getByRole('group', { name: 'From pocket' }).getByRole('button', { name: 'RENT' }).tap();
+  await sheet
+    .getByRole('group', { name: 'From pocket' })
+    .getByRole('button', { name: 'RENT' })
+    .tap();
   await sheet.getByRole('textbox', { name: 'Amount' }).fill('100000');
   await sheet.getByRole('button', { name: 'Log it' }).tap();
   await expect(sheet).toBeHidden();
   const rent = (await balances()).envelopes.find(e => e.name === 'Rent')!;
   expect(rent.balance).toBe(1_400_000); // 1.5jt set aside, 100rb spent from it
   // Editing shows the same receipt, stamped, with only Save.
-  await page.locator('.entry-row', { hasText: 'Sewa' }).getByRole('button', { name: /^Sewa/ }).click();
+  await page
+    .locator('.entry-row', { hasText: 'Sewa' })
+    .getByRole('button', { name: /^Sewa/ })
+    .click();
   const edit = page.getByRole('dialog', { name: 'Edit' });
   await expect(edit.getByText('EDITING')).toBeVisible();
   await expect(edit.getByRole('textbox', { name: 'What was it?' })).toHaveValue('Sewa');
-  await expect(edit.getByRole('group', { name: 'From pocket' }).getByRole('button', { name: 'RENT' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(
+    edit.getByRole('group', { name: 'From pocket' }).getByRole('button', { name: 'RENT' }),
+  ).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Escape');
 });
 
@@ -332,7 +473,9 @@ test('an account can be in any currency: search "yen", and its balance has no de
   await sheet.getByRole('button', { name: /^Currency/ }).tap();
   await sheet.getByRole('textbox', { name: 'Search' }).fill('yen');
   await sheet.getByRole('button', { name: 'JPY · Japanese Yen' }).tap();
-  await expect(sheet.getByRole('button', { name: /^Currency/ })).toContainText('JPY · Japanese Yen');
+  await expect(sheet.getByRole('button', { name: /^Currency/ })).toContainText(
+    'JPY · Japanese Yen',
+  );
   await sheet.getByRole('textbox', { name: /How much is in it now/ }).fill('1500');
   await sheet.getByRole('button', { name: 'Add account' }).tap();
   await expect(sheet).toBeHidden();
@@ -347,13 +490,24 @@ test('an account can be in any currency: search "yen", and its balance has no de
 });
 
 // The server's clock can't be faked from the browser, so "day 2 of the cycle" comes from starting the month yesterday.
-const jakartaDay = (offset = 0) => new Date(Date.now() + 7 * 3600e3 + offset * 864e5).toISOString().slice(0, 10);
-const categoryId = async (name: string) => ((await (await api('/catalog')).json()).categories as { id: string; name: string }[]).find(c => c.name === name)!.id;
-const settingsCombos = async () => page.getByRole('combobox').evaluateAll(els => els.map(e => e.getAttribute('aria-label')));
+const jakartaDay = (offset = 0) =>
+  new Date(Date.now() + 7 * 3600e3 + offset * 864e5).toISOString().slice(0, 10);
+const categoryId = async (name: string) =>
+  ((await (await api('/catalog')).json()).categories as { id: string; name: string }[]).find(
+    c => c.name === name,
+  )!.id;
+const settingsCombos = async () =>
+  page.getByRole('combobox').evaluateAll(els => els.map(e => e.getAttribute('aria-label')));
 
 test('the Budget forecast stays hidden until its start day, which is set on this device', async () => {
-  await api('/workspace', { method: 'PATCH', data: { cycle_start_day: Number(jakartaDay(-1).slice(8)) } });
-  await api('/budgets', { method: 'PUT', data: { categoryId: await categoryId('Food & Drink'), limit: 50_000_000 } });
+  await api('/workspace', {
+    method: 'PATCH',
+    data: { cycle_start_day: Number(jakartaDay(-1).slice(8)) },
+  });
+  await api('/budgets', {
+    method: 'PUT',
+    data: { categoryId: await categoryId('Food & Drink'), limit: 50_000_000 },
+  });
   await page.reload();
   await tab('Money').tap();
   await expect(page.getByText('Forecast starts on day 3 · 1 day to go')).toBeVisible();
@@ -362,7 +516,11 @@ test('the Budget forecast stays hidden until its start day, which is set on this
   await tab('Settings').tap();
   const names = await settingsCombos();
   expect(names[names.indexOf('Month starts on day') + 1]).toBe('Forecast starts on day');
-  await expect(page.getByText('Early in the month, a few purchases can make the forecast jump. It stays hidden until this day, every month.')).toBeVisible();
+  await expect(
+    page.getByText(
+      'Early in the month, a few purchases can make the forecast jump. It stays hidden until this day, every month.',
+    ),
+  ).toBeVisible();
   await page.getByRole('combobox', { name: 'Forecast starts on day' }).selectOption('5');
   await page.reload();
   await tab('Settings').tap();
@@ -372,7 +530,10 @@ test('the Budget forecast stays hidden until its start day, which is set on this
 });
 
 test('budgets are grouped per currency, and the ? beside the heading explains the words', async () => {
-  await api('/budgets', { method: 'PUT', data: { categoryId: await categoryId('Food & Drink'), currency: 'USD', limit: 5_000 } });
+  await api('/budgets', {
+    method: 'PUT',
+    data: { categoryId: await categoryId('Food & Drink'), currency: 'USD', limit: 5_000 },
+  });
   await page.reload();
   await tab('Money').tap();
   const idr = page.getByText(/^Budgets in IDR · \d+ days? left$/);
@@ -387,7 +548,8 @@ test('budgets are grouped per currency, and the ? beside the heading explains th
   expect(page.viewportSize()!.width - (button.x + button.width)).toBeLessThan(40); // at the far right
   await help.tap();
   const guide = page.getByRole('dialog', { name: 'Budget words' });
-  for (const word of ['On track', 'Likely over', 'Over']) await expect(guide.getByText(word, { exact: true })).toBeVisible();
+  for (const word of ['On track', 'Likely over', 'Over'])
+    await expect(guide.getByText(word, { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(guide).toBeHidden();
   await expect(help).toBeFocused();
@@ -396,11 +558,15 @@ test('budgets are grouped per currency, and the ? beside the heading explains th
 test('a pocket budget takes the pocket currency; a category budget picks one, rupiah first', async () => {
   await page.getByRole('button', { name: 'Set a budget' }).tap();
   const sheet = page.getByRole('dialog', { name: 'Set a budget' });
-  await sheet.getByRole('combobox', { name: 'Pocket' }).selectOption(`${await accountId('Yen')}:main`);
+  await sheet
+    .getByRole('combobox', { name: 'Pocket' })
+    .selectOption(`${await accountId('Yen')}:main`);
   await expect(sheet.getByText('Currency').locator('..').locator('..')).toContainText('JPY');
   await expect(sheet.getByRole('textbox', { name: 'Search' })).toHaveCount(0);
   await sheet.getByRole('combobox', { name: 'Pocket' }).selectOption('');
-  await expect(sheet.getByRole('button', { name: /^Currency/ })).toContainText('IDR · Indonesian Rupiah');
+  await expect(sheet.getByRole('button', { name: /^Currency/ })).toContainText(
+    'IDR · Indonesian Rupiah',
+  );
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
   // Leave the workspace on a 1st-of-the-month cycle and the default start day for later specs.
@@ -409,7 +575,12 @@ test('a pocket budget takes the pocket currency; a category budget picks one, ru
 });
 
 // "Nov 24", as temporary budgets write their dates.
-const monthDay = (day: string) => new Date(Date.parse(day)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+const monthDay = (day: string) =>
+  new Date(Date.parse(day)).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
 
 test('a temporary budget: the switch asks for a start and a length, and its row says when it ends', async () => {
   await page.reload();
@@ -417,14 +588,19 @@ test('a temporary budget: the switch asks for a start and a length, and its row 
   // Title left; History, then ?, on the right of the same row.
   const title = (await page.getByText(/^Budgets in IDR/).boundingBox())!;
   const history = page.getByRole('button', { name: 'Temporary budgets that ended' });
-  const [h, q] = [(await history.boundingBox())!, (await page.getByRole('button', { name: 'What the budget words mean' }).boundingBox())!];
+  const [h, q] = [
+    (await history.boundingBox())!,
+    (await page.getByRole('button', { name: 'What the budget words mean' }).boundingBox())!,
+  ];
   expect(Math.abs(h.y - q.y)).toBeLessThan(2);
   expect(h.x).toBeGreaterThan(title.x + title.width);
   expect(q.x).toBeGreaterThan(h.x + h.width);
   await expect(history).toHaveText('History');
   await history.tap();
   const sheet = page.getByRole('dialog', { name: 'Temporary budgets' });
-  await expect(sheet.getByText('Nothing here yet. Temporary budgets move here when they end.')).toBeVisible();
+  await expect(
+    sheet.getByText('Nothing here yet. Temporary budgets move here when they end.'),
+  ).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 
@@ -443,7 +619,15 @@ test('a temporary budget: the switch asks for a start and a length, and its row 
   await expect(form).toBeHidden();
 
   // Under the cycle budget, tagged; the cycle one has no tag. An upcoming one says when it starts.
-  await api('/budgets', { method: 'PUT', data: { categoryId: await categoryId('Food & Drink'), limit: 300_000, startsOn: jakartaDay(30), days: 3 } });
+  await api('/budgets', {
+    method: 'PUT',
+    data: {
+      categoryId: await categoryId('Food & Drink'),
+      limit: 300_000,
+      startsOn: jakartaDay(30),
+      days: 3,
+    },
+  });
   await page.reload();
   await tab('Money').tap();
   // Rupiah cycle, its temporary ones, then the dollar budget.
@@ -469,22 +653,61 @@ test('an overlapping temporary budget is refused in a warning popup; back to bac
   await popup.getByRole('button', { name: 'OK' }).tap();
   await expect(popup).toBeHidden();
   // The form is as it was.
-  await expect(form.getByRole('combobox', { name: 'Category' })).toHaveValue(await categoryId('Food & Drink'));
+  await expect(form.getByRole('combobox', { name: 'Category' })).toHaveValue(
+    await categoryId('Food & Drink'),
+  );
   await expect(form.getByRole('textbox', { name: 'Limit for these 14 days' })).toHaveValue(/400/);
   await form.getByLabel('Starts').fill(jakartaDay(7));
   await form.getByRole('button', { name: 'Save' }).tap();
   await expect(form).toBeHidden();
-  expect((await (await api('/budgets')).json()).budgets.filter((b: { startsOn: string | null }) => b.startsOn).length).toBe(3);
+  expect(
+    (await (await api('/budgets')).json()).budgets.filter(
+      (b: { startsOn: string | null }) => b.startsOn,
+    ).length,
+  ).toBe(3);
 });
 
 test('ended temporary budgets move to History with what was saved', async () => {
   const shopping = await categoryId('Shopping');
-  for (const days of [2, 3]) await api('/budgets', { method: 'PUT', data: { categoryId: shopping, limit: 100_000 * days, startsOn: jakartaDay(40 + days * 5), days } });
+  for (const days of [2, 3])
+    await api('/budgets', {
+      method: 'PUT',
+      data: {
+        categoryId: shopping,
+        limit: 100_000 * days,
+        startsOn: jakartaDay(40 + days * 5),
+        days,
+      },
+    });
   // The server's clock can't move, so their dates move back instead: two runs that ended 10 and 5 days ago.
   const state = resolve(import.meta.dirname, '..', '.e2e-state');
-  const shift = (from: number, to: number) => `UPDATE budgets SET starts_on = date(starts_on, '${to - from} days'), ends_on = date(ends_on, '${to - from} days') WHERE category_id = '${shopping}' AND starts_on = '${jakartaDay(from)}';`;
-  execFileSync('npx', ['wrangler', 'd1', 'execute', 'DB', '--local', '--persist-to', state, '--command', shift(50, -12) + shift(55, -8)], { cwd: resolve(import.meta.dirname, '..', 'apps/centient'), stdio: 'ignore' });
-  await api('/transactions', { method: 'POST', data: { type: 'EXPENSE', accountId: await accountId('Dailies'), categoryId: shopping, amount: 350_000, date: jakartaDay(-7) } });
+  const shift = (from: number, to: number) =>
+    `UPDATE budgets SET starts_on = date(starts_on, '${to - from} days'), ends_on = date(ends_on, '${to - from} days') WHERE category_id = '${shopping}' AND starts_on = '${jakartaDay(from)}';`;
+  execFileSync(
+    'npx',
+    [
+      'wrangler',
+      'd1',
+      'execute',
+      'DB',
+      '--local',
+      '--persist-to',
+      state,
+      '--command',
+      shift(50, -12) + shift(55, -8),
+    ],
+    { cwd: resolve(import.meta.dirname, '..', 'apps/centient'), stdio: 'ignore' },
+  );
+  await api('/transactions', {
+    method: 'POST',
+    data: {
+      type: 'EXPENSE',
+      accountId: await accountId('Dailies'),
+      categoryId: shopping,
+      amount: 350_000,
+      date: jakartaDay(-7),
+    },
+  });
 
   await page.getByRole('button', { name: 'Temporary budgets that ended' }).tap();
   const sheet = page.getByRole('dialog', { name: 'Temporary budgets' });

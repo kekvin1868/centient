@@ -21,7 +21,9 @@ export function App() {
   const prev = useRef<Screen>('home');
   const [fx, setFx] = useState<Fx | null>(null);
 
-  useEffect(() => { attempt(loadBasics).then(() => setReady(true)); }, []);
+  useEffect(() => {
+    attempt(loadBasics).then(() => setReady(true));
+  }, []);
   useEffect(() => {
     if (prev.current !== screen) {
       setFx(randomFx());
@@ -32,7 +34,11 @@ export function App() {
 
   return (
     <KonstaApp theme="ios" safeAreas>
-      {!ready || !me.value ? null : !me.value.workspace.onboarded_at ? <Suspense fallback={null}><FirstRun onDone={() => setScreen('home')} /></Suspense> : (
+      {!ready || !me.value ? null : !me.value.workspace.onboarded_at ? (
+        <Suspense fallback={null}>
+          <FirstRun onDone={() => setScreen('home')} />
+        </Suspense>
+      ) : (
         <>
           <div key={screen} className={fx ? `fx-in-${fx}` : ''}>
             {screen === 'home' && <Home onGoMoney={() => setScreen('money')} />}

@@ -26,12 +26,30 @@ type Props = {
 
 // Windows 98's close glyph, pixel for pixel.
 const X = ['##....##', '.##..##.', '..####..', '...##...', '..####..', '.##..##.', '##....##'];
-const X_PATH = X.flatMap((row, y) => [...row].map((c, x) => (c === '#' ? `M${x} ${y}h1v1h-1z` : ''))).join('');
-const CloseGlyph = () => <svg viewBox="0 0 8 7" width="8" height="7" shapeRendering="crispEdges" aria-hidden="true"><path d={X_PATH} fill="currentColor" /></svg>;
+const X_PATH = X.flatMap((row, y) =>
+  [...row].map((c, x) => (c === '#' ? `M${x} ${y}h1v1h-1z` : '')),
+).join('');
+const CloseGlyph = () => (
+  <svg viewBox="0 0 8 7" width="8" height="7" shapeRendering="crispEdges" aria-hidden="true">
+    <path d={X_PATH} fill="currentColor" />
+  </svg>
+);
 
 const FOCUSABLE = 'button:not(:disabled), input, [tabindex]:not([tabindex="-1"])';
 
-export function NightSheet({ label, title, meta, onClose, onKey, place = 'end', open = true, fixed = false, fx, className = '', children }: Props) {
+export function NightSheet({
+  label,
+  title,
+  meta,
+  onClose,
+  onKey,
+  place = 'end',
+  open = true,
+  fixed = false,
+  fx,
+  className = '',
+  children,
+}: Props) {
   const { leaving, leave, cls } = useFx(fx);
   const box = useRef<HTMLDivElement>(null);
   const closed = useRef(false);
@@ -44,7 +62,9 @@ export function NightSheet({ label, title, meta, onClose, onKey, place = 'end', 
     done.current();
   }, [leave]);
 
-  useEffect(() => { if (!open) close(); }, [open, close]);
+  useEffect(() => {
+    if (!open) close();
+  }, [open, close]);
 
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
@@ -55,7 +75,11 @@ export function NightSheet({ label, title, meta, onClose, onKey, place = 'end', 
 
   useLayerKeys(e => {
     if (closed.current) return;
-    if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+      return;
+    }
     if (e.key === 'Tab' && box.current) {
       const all = [...box.current.querySelectorAll<HTMLElement>(FOCUSABLE)];
       if (!all.length) return;
@@ -69,12 +93,29 @@ export function NightSheet({ label, title, meta, onClose, onKey, place = 'end', 
   });
 
   return (
-    <div className={`n-modal ${place} ${fixed ? 'fixed' : ''} ${leaving ? 'out' : ''}`} onClick={e => { if (e.target === e.currentTarget) close(); }}>
-      <div ref={box} tabIndex={-1} role="dialog" aria-modal="true" aria-label={label} className={`n-sheet ${cls} ${className}`}>
+    <div
+      className={`n-modal ${place} ${fixed ? 'fixed' : ''} ${leaving ? 'out' : ''}`}
+      onClick={e => {
+        if (e.target === e.currentTarget) close();
+      }}
+    >
+      <div
+        ref={box}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        className={`n-sheet ${cls} ${className}`}
+      >
         {title !== undefined && (
           <div className="n-ph">
             <span>{title}</span>
-            <span className="n-ph-end">{typeof meta === 'function' ? meta(close) : meta}<button type="button" className="n-x" aria-label="Close" onClick={close}><CloseGlyph /></button></span>
+            <span className="n-ph-end">
+              {typeof meta === 'function' ? meta(close) : meta}
+              <button type="button" className="n-x" aria-label="Close" onClick={close}>
+                <CloseGlyph />
+              </button>
+            </span>
           </div>
         )}
         {typeof children === 'function' ? children(close) : children}
