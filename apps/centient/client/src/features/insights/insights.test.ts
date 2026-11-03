@@ -48,7 +48,7 @@ describe('trend bars (T5.20)', () => {
   });
 });
 
-describe('Daily Wallet Spending readout (Q28)', () => {
+describe('Daily average spendings readout (Q28)', () => {
   it('reads the average with the count and the total', () => {
     const [, , , , , , sun] = weekdayBars(Array.from({ length: 7 }, () => ({ total: 800_000, occurrences: 2, average: 400_000 })), 'IDR');
     expect(weekdayReadout(sun, 'IDR')).toBe('Sundays · Rp400.000 on average (2 Sundays, Rp800.000 in total)');

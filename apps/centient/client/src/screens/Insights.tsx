@@ -1,16 +1,18 @@
 // Insights: the ledger read back for one period and one currency. Period bar, currency chips, the headline card
-// (spending, comparison, income, savings rate), where it went, the trend, Daily Wallet Spending, top merchants,
+// (spending, comparison, income, savings rate), where it went, the trend, Daily average spendings, top merchants,
 // biggest expenses, Budgets over time. A category or merchant row opens its entries; an entry opens the entry sheet.
 // The export row makes a report PDF of the sections marked `data-report`, or a CSV (step 7); the `?` by the title
 // explains the budget words.
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BudgetGuideSheet } from '../features/budgets/BudgetGuideSheet';
 import { EntrySheet } from '../features/entries/EntrySheet';
 import { BiggestExpenses } from '../features/insights/BiggestExpenses';
 import { CurrencyChips } from '../features/insights/CurrencyChips';
 import { EntriesSheet, type Pick } from '../features/insights/EntriesSheet';
 import { ExportRow } from '../features/insights/ExportRow';
+import { ChartsGuideSheet } from '../features/insights/ChartsGuideSheet';
 import { InsightsHeadline } from '../features/insights/InsightsHeadline';
+import { ListsGuideSheet } from '../features/insights/ListsGuideSheet';
 import { periodLabel, shareLabel, trendBars, weekdayBars, weekdayReadout } from '../features/insights/insights';
 import { SavingsBars } from '../features/insights/SavingsBars';
 import { PeriodBar, type Kind } from '../features/insights/PeriodBar';
@@ -30,8 +32,11 @@ type Data = Awaited<ReturnType<typeof load>>;
 type Savings = Awaited<ReturnType<typeof loadSavings>>;
 type Entry = Data['biggest'][number]['entry'];
 
-function Heading({ children }: { children: string }) {
-  return <h2 className="mx-4 mb-3 mt-7 text-[22px] font-extrabold leading-none tracking-[-0.03em]">{children}</h2>;
+/** A section title; `help` puts a `?` at its far right (the ◆ and rule stay on the row, the button is left out of the PDF). */
+function Heading({ children, help }: { children: string; help?: ReactNode }) {
+  const look = 'section-title mx-4 mb-3 mt-7 text-[22px] leading-none tracking-[-0.03em]';
+  if (!help) return <h2 className={look}>{children}</h2>;
+  return <div className={`${look} flex items-center gap-[.5em]`}><h2>{children}</h2><span className="ml-auto [text-shadow:none]" data-noprint>{help}</span></div>;
 }
 // The last answer for today's view, so coming back to Insights shows it at once while it refreshes.
 let cache: Data | null = null;
@@ -42,6 +47,8 @@ export function Insights() {
   const [currency, setCurrency] = useState<string | undefined>();
   const [data, setData] = useState<Data | null>(cache);
   const [guide, setGuide] = useState(false);
+  const [lists, setLists] = useState(false);
+  const [charts, setCharts] = useState(false);
   const [savings, setSavings] = useState<Savings>([]);
   const [pick, setPick] = useState<Pick | null>(null);
   const [entry, setEntry] = useState<Entry | null>(null);
@@ -61,6 +68,8 @@ export function Insights() {
   }, [kind, date, currency, version.value]);
 
   const help = <WinButton label="What the budget words mean" onClick={() => setGuide(true)}>?</WinButton>;
+  const chartsHelp = <WinButton label="How daily and daily average spendings differ" onClick={() => setCharts(true)}>?</WinButton>;
+  const listsHelp = <WinButton label="How top merchants and biggest expenses differ" onClick={() => setLists(true)}>?</WinButton>;
   if (!data) return <Page title="Insights" action={help}><BudgetGuideSheet open={guide} onClose={() => setGuide(false)} /></Page>;
   const cur = data.currency;
   const cats = catalog.value.categories;
@@ -88,17 +97,17 @@ export function Insights() {
         })} />
       </section>
       <section data-report>
-      <Heading>{kind === 'cycle' ? 'Spending each day' : 'Spending each month'}</Heading>
-      <BarChart key={`trend:${data.period.from}:${cur}`} title={kind === 'cycle' ? 'Spending each day' : 'Spending each month'}
+      <Heading help={chartsHelp}>{kind === 'cycle' ? 'Daily spendings' : 'Monthly spendings'}</Heading>
+      <BarChart key={`trend:${data.period.from}:${cur}`} title={kind === 'cycle' ? 'Daily spendings' : 'Monthly spendings'}
         empty="No spending in this period yet." bars={trendBars(data.trend, data.period.year, cur)} />
       </section>
       <section data-report>
-      <Heading>Daily Wallet Spending</Heading>
-      <BarChart key={`week:${data.period.from}:${cur}`} title="Daily Wallet Spending" empty="No spending in this period yet."
+      <Heading help={chartsHelp}>Daily average spendings</Heading>
+      <BarChart key={`week:${data.period.from}:${cur}`} title="Daily average spendings" empty="No spending in this period yet."
         bars={days} readout={b => weekdayReadout(days.find(d => d.key === b.key)!, cur)} />
       </section>
       <section data-report>
-      <Heading>Top merchants</Heading>
+      <Heading help={listsHelp}>Top merchants</Heading>
       <RankedBars title="Top merchants" empty="No merchants named in this period yet."
         onPick={key => { const m = data.merchants.find(x => x.key === key)!; setPick({ title: `${titleCase(m.name)} · ${span}`, merchant: m.key }); }}
         items={data.merchants.map(m => ({
@@ -107,7 +116,7 @@ export function Insights() {
         }))} />
       </section>
       <section data-report>
-      <Heading>Biggest expenses</Heading>
+      <Heading help={listsHelp}>Biggest expenses</Heading>
       <BiggestExpenses rows={data.biggest} currency={cur} onOpen={setEntry} />
       </section>
       {savings.length > 0 && (<section data-report>
@@ -120,6 +129,8 @@ export function Insights() {
       <ExportRow key={`export:${data.period.from}:${data.period.to}:${cur}`} period={data.period} currency={cur} report={() => screen.current}
         empty={data.spending === 0 && data.income === 0} />
       <BudgetGuideSheet open={guide} onClose={() => setGuide(false)} />
+      <ListsGuideSheet open={lists} onClose={() => setLists(false)} />
+      <ChartsGuideSheet open={charts} onClose={() => setCharts(false)} />
       <EntriesSheet pick={pick} from={data.period.from} last={data.period.last} currency={cur} onClose={() => setPick(null)}
         onOpen={setEntry} />
       <EntrySheet key={`entry:${entry?.id ?? 'none'}`} entry={entry} onClose={() => setEntry(null)} />

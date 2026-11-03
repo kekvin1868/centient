@@ -236,7 +236,7 @@ describe('insights currencies and empty data (R4.7, R4.8, R4.13)', () => {
   });
 });
 
-// ---- Step 5: trend, Daily Wallet Spending, top merchants, biggest expenses, savings history ----
+// ---- Step 5: trend, Daily average spendings, top merchants, biggest expenses, savings history ----
 
 const values = (trend: { amount: number | null }[]) => trend.map(t => t.amount);
 
@@ -275,7 +275,7 @@ describe('trend (R5.1, R5.2)', () => {
   });
 });
 
-describe('Daily Wallet Spending (R5.3)', () => {
+describe('Daily average spendings (R5.3)', () => {
   const show = (rows: { total: number; occurrences: number; average: number | null }[]) => rows.map(r => [r.total, r.occurrences, r.average]);
 
   it('T5.6 / T5.7 per weekday total, occurrences and average; the USD coffee is not in IDR', async () => {

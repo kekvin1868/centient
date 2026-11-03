@@ -1,5 +1,5 @@
 // Insights use cases: read the ledger back per period and currency (totals, savings rate, the comparison with the
-// previous period, spending by category, the trend, Daily Wallet Spending, top merchants, biggest expenses).
+// previous period, spending by category, the trend, Daily average spendings, top merchants, biggest expenses).
 // Period boundaries are worked out here, never on the phone.
 import type { ServiceDeps } from '../../context';
 import { addDays, cyclesIn, jakartaToday, periodOf, realDay, type PeriodKind } from '../../domain/cycle';
@@ -14,7 +14,7 @@ const ZERO = { spending: 0, income: 0 };
 const pick = (rows: CurrencyTotals[], currency: string) => rows.find(r => r.currency === currency) ?? ZERO;
 
 /**
- * Daily Wallet Spending: per weekday (Monday first) the spending total, how many of that weekday passed in
+ * Daily average spendings: per weekday (Monday first) the spending total, how many of that weekday passed in
  * [from, end), and the rounded average; a weekday that has not come round yet has no average (never 0 / 0).
  */
 export function weekdays(daily: { day: string; amount: number }[], from: string, end: string) {

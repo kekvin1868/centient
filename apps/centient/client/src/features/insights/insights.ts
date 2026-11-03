@@ -44,7 +44,7 @@ export function savingsView(rate: number | null): { kind: 'none' } | { kind: 'ok
   return rate < 0 ? { kind: 'negative', text: `−${pct}%` } : { kind: 'ok', text: `${pct}%` };
 }
 
-// ---- Step 5: the trend, Daily Wallet Spending, Budgets over time and the counted amounts in a list ----
+// ---- Step 5: the trend, Daily average spendings, Budgets over time and the counted amounts in a list ----
 
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const dayName = (day: string) => new Date(Date.parse(day)).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });

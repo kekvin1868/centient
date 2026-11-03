@@ -61,6 +61,7 @@ export async function makeReport(root: HTMLElement, o: { title: string; made: st
     for (const node of root.querySelectorAll<HTMLElement>('[data-report]')) {
       shots.push(await toCanvas(node, {
         pixelRatio: width / node.offsetWidth, backgroundColor: paper, fontEmbedCSS,
+        filter: n => !(n instanceof HTMLElement && n.dataset.noprint !== undefined), // the `?` buttons
       }));
     }
   } finally {

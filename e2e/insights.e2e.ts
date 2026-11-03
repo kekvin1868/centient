@@ -1,6 +1,6 @@
 // End to end: the Insights tab (steps 4, 5 and 7). Four tabs, the empty state, totals and the comparison line, category bars
 // with shares, the currency chips, previous / next / year, the savings rate's 404 and its nuclear alarm, and the `?`;
-// then step 5: the trend and its readout, Daily Wallet Spending, merchants, biggest expenses, the entries sheet with
+// then step 5: the trend and its readout, Daily average spendings, merchants, biggest expenses, the entries sheet with
 // counted amounts, and Budgets over time.
 // Runs first (alphabetical) on a fresh workspace, skips the first run through the API, and resets at the end so
 // onboarding.e2e.ts still starts from a fresh first run. The server's clock is real, so dates are relative to today.
@@ -142,7 +142,7 @@ test('T3.33 the ? on Insights opens the budget words; closing hands focus back',
 
 // ---- Step 5 ----
 
-test('T5.22 the trend, Daily Wallet Spending, merchants and biggest expenses', async () => {
+test('T5.22 the trend, Daily average spendings, merchants and biggest expenses', async () => {
   const cat = await (await api('/catalog')).json() as { accounts: { id: string; name: string }[]; categories: { id: string; name: string }[] };
   const main = cat.accounts.find(a => a.name === 'Main Account')!.id;
   const food = cat.categories.find(x => x.name === 'Food & Drink')!.id;
@@ -157,9 +157,9 @@ test('T5.22 the trend, Daily Wallet Spending, merchants and biggest expenses', a
   await page.reload();
   await tab('Insights').tap();
 
-  await expect(page.getByRole('heading', { name: 'Spending each day' })).toBeVisible();
-  await expect(page.getByRole('figure', { name: 'Spending each day' })).toBeVisible();
-  await expect(page.getByRole('figure', { name: 'Daily Wallet Spending' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Daily spendings' })).toBeVisible();
+  await expect(page.getByRole('figure', { name: 'Daily spendings' })).toBeVisible();
+  await expect(page.getByRole('figure', { name: 'Daily average spendings' })).toBeVisible();
   const merchants = page.getByRole('figure', { name: 'Top merchants' }).getByRole('listitem');
   await expect(merchants).toHaveCount(2);
   await expect(merchants.nth(0)).toContainText('Indomaret');
@@ -168,7 +168,7 @@ test('T5.22 the trend, Daily Wallet Spending, merchants and biggest expenses', a
 });
 
 test('T5.37 tapping a bar names it in the readout', async () => {
-  const trend = page.getByRole('figure', { name: 'Spending each day' });
+  const trend = page.getByRole('figure', { name: 'Daily spendings' });
   const todayBar = trend.getByRole('button').last();
   await todayBar.tap();
   await expect(todayBar).toHaveAttribute('aria-pressed', 'true');
@@ -211,6 +211,30 @@ test('T5.23 a biggest expense opens its entry', async () => {
   await expect(page.getByRole('dialog', { name: 'Edit' })).toBeHidden();
 });
 
+test('Q48 the ? on Top merchants and on Biggest expenses opens one guide with the example', async () => {
+  for (const title of ['Top merchants', 'Biggest expenses']) {
+    const row = page.getByRole('heading', { name: title, exact: true }).locator('..');
+    await row.getByRole('button', { name: 'How top merchants and biggest expenses differ' }).tap();
+    const guide = page.getByRole('dialog', { name: 'Merchants vs expenses' });
+    await expect(guide.getByTestId('lists-guide-table')).toContainText('Indomaret · Rp250.000 · 2 visits');
+    await expect(guide.getByTestId('lists-guide-table')).toContainText('Shopping · Rp800.000');
+    await page.keyboard.press('Escape');
+    await expect(guide).toBeHidden();
+  }
+});
+
+test('Q49 the ? on Daily spendings and on Daily average spendings opens one guide', async () => {
+  for (const title of ['Daily spendings', 'Daily average spendings']) {
+    const row = page.getByRole('heading', { name: title, exact: true }).locator('..');
+    await row.getByRole('button', { name: 'How daily and daily average spendings differ' }).tap();
+    const guide = page.getByRole('dialog', { name: 'Daily vs daily average' });
+    await expect(guide).toContainText('which day of the week costs me most?');
+    await expect(guide.getByTestId('charts-guide-summary')).toContainText('Saturday Rp250.000');
+    await page.keyboard.press('Escape');
+    await expect(guide).toBeHidden();
+  }
+});
+
 // T5.24 (bars from seeded history) needs limits dated in past cycles, which the API cannot set; the service tests
 // (T5.14 - T5.18) and the unit test (T5.34) cover it. Here: a new budget shows the section with its waiting note.
 test('T5.25 Budgets over time shows for rupiah and hides for a currency with no budgets', async () => {
@@ -224,8 +248,8 @@ test('T5.25 Budgets over time shows for rupiah and hides for a currency with no 
 
 test('T5.26 the year view: 12 month slots', async () => {
   await page.getByRole('radio', { name: 'Year' }).tap();
-  await expect(page.getByRole('heading', { name: 'Spending each month' })).toBeVisible();
-  const months = page.getByRole('figure', { name: 'Spending each month' });
+  await expect(page.getByRole('heading', { name: 'Monthly spendings' })).toBeVisible();
+  const months = page.getByRole('figure', { name: 'Monthly spendings' });
   await expect(months.getByRole('button')).toHaveCount(m); // Jan to this month have a value; the rest are empty slots
   await page.getByRole('radio', { name: 'Cycle' }).tap();
   expect(errors).toEqual([]);

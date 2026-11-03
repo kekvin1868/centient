@@ -60,9 +60,9 @@ _Avoid_: Pace, projection
 Income minus spending, as a share of income, for one currency and one period.
 _Avoid_: Saved percentage
 
-**Daily Wallet Spending**:
+**Daily average spendings**:
 What you spend on a typical Monday, Tuesday and so on: each weekday's spending divided by how many of that weekday have passed in the period, so a weekday that came round twice does not look bigger.
-_Avoid_: Weekday total, average day of the week
+_Avoid_: Weekday total, average day of the week, Daily wallet spending (the old title)
 
 **Counted amount**:
 The part of an entry that counts as spending: your share of a split bill, or only the fee of a transfer. Lists opened from Insights show it, with the whole entry explained underneath, so they add up to the number you tapped.
