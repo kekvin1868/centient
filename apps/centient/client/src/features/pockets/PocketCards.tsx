@@ -46,7 +46,7 @@ export function PocketCards({ pockets, colorIndex, onOpen }: { pockets: Pocket[]
                   {goal !== null && (
                     <span className="mb-2 flex items-center gap-2 text-[12px] font-bold">
                       <GoalBar share={goal} />
-                      {Math.round(goal * 100)}% of {formatMoney(p.target_amount!, p.currency_code)}
+                      {Math.floor(goal * 100)}% of {formatMoney(p.target_amount!, p.currency_code)}
                     </span>
                   )}
                   <span className="num block text-[32px] font-extrabold leading-none tracking-[-0.04em]">{formatMoney(p.balance, p.currency_code)}</span>

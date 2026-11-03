@@ -152,11 +152,13 @@ export function entriesRepo(db: D1Database) {
     /**
      * One pocket's entries, newest first, each with its net amount in the pocket and the pocket's balance after it.
      * The running sum is taken over the pocket's whole history, so a later page continues where the last one stopped.
-     * Entries that net to zero in the pocket are left out. Cursor `occurred_at|entryId`, as the entry list.
+     * Entries that net to zero in the pocket are left out. Cursor `occurred_at|entryId`, as the entry list. `balance` is the
+     * pocket's balance now.
+     * ponytail: the running sum scans the pocket's whole history per page; fine for one person's goal, cache it if a log grows huge.
      */
     async pocketLog(ws: string, envelopeId: string, cursor: string | undefined, limit: number) {
       const [at, id] = cursor ? cursor.split('|') : [null, null];
-      const rows = (await db.prepare(`WITH lines AS (
+      const [log, total] = await db.batch<GroupRow & { at: string; amount: number; balance_after: number }>([db.prepare(`WITH lines AS (
           SELECT g.id, MIN(t.occurred_at) AS at, SUM(a.amount) AS amount
           FROM entry_groups g JOIN transactions t ON t.group_id = g.id AND t.deleted_at IS NULL
           JOIN allocations a ON a.transaction_id = t.id AND a.envelope_id = ?
@@ -168,8 +170,11 @@ export function entriesRepo(db: D1Database) {
         SELECT r.id, r.at, r.amount, r.balance_after, g.kind, g.command, g.icon
         FROM running r JOIN entry_groups g ON g.id = r.id
         WHERE ? IS NULL OR (r.at, r.id) < (?, ?)
-        ORDER BY r.at DESC, r.id DESC LIMIT ?`).bind(envelopeId, ws, at, at, id, limit + 1)
-        .all<GroupRow & { at: string; amount: number; balance_after: number }>()).results;
+        ORDER BY r.at DESC, r.id DESC LIMIT ?`).bind(envelopeId, ws, at, at, id, limit + 1),
+        db.prepare(`SELECT COALESCE(SUM(a.amount), 0) AS amount FROM allocations a JOIN transactions t ON t.id = a.transaction_id
+          WHERE a.envelope_id = ? AND t.workspace_id = ? AND t.deleted_at IS NULL`).bind(envelopeId, ws),
+      ]);
+      const rows = log.results;
       const page = rows.slice(0, limit);
       const views = await withTransactions(ws, page);
       const items = views.map(v => {
@@ -177,7 +182,7 @@ export function entriesRepo(db: D1Database) {
         return { ...v, pocket: { amount: r.amount, balanceAfter: r.balance_after } };
       });
       const last = page.at(-1);
-      return { items, nextCursor: rows.length > limit && last ? `${last.at}|${last.id}` : null };
+      return { balance: total.results[0]?.amount ?? 0, items, nextCursor: rows.length > limit && last ? `${last.at}|${last.id}` : null };
     },
 
     async hasTransactions(ws: string, accountId: string) {

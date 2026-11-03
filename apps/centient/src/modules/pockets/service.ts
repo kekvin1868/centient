@@ -46,8 +46,8 @@ export function createPocketsService({ ws, now, repos, catalog }: ServiceDeps) {
       const p = c.envelopes.find(e => e.id === id);
       if (!p) throw new DomainError('NOT_FOUND', 'Pocket not found');
       if (p.kind !== 'GOAL' || !p.target_amount) throw new DomainError('NOT_A_GOAL', 'Only a goal has an activity log');
-      const [w, b, log] = await Promise.all([repos.workspaces.get(ws), repos.entries.balances(ws), repos.entries.pocketLog(ws, id, cursor, 50)]);
-      const balance = b.envelopes[id] ?? 0;
+      const [w, log] = await Promise.all([repos.workspaces.get(ws), repos.entries.pocketLog(ws, id, cursor, 50)]);
+      const { balance } = log;
       const goal = {
         currency: p.currency_code, balance, target: p.target_amount, targetDate: p.target_date,
         ...goalOutlook({ balance, target: p.target_amount, targetDate: p.target_date, today: jakartaToday(now()), startDay: w.cycle_start_day }),
