@@ -7,8 +7,10 @@ import type { EntryView } from '../../../../src/repos/entries';
 import type { Command } from '../../../../src/lib/schemas';
 import { formatMoney } from '../../lib/format';
 import { entryRow } from '../../lib/labels';
+import { stickersOf } from '../../lib/nameSticker';
 import { catalog } from '../../lib/state';
 import { entryQueries } from '../../models/entry';
+import { NameSticker } from '../../ui/NameSticker';
 import { Sheet } from '../../ui/Sheet';
 import { counted, merchantKey } from './insights';
 
@@ -55,7 +57,10 @@ export function EntriesSheet({
   const rows = (items ?? []).map(e => ({
     e,
     r: entryRow(e, cat),
-    c: counted(e, match, inCurrency),
+    c: counted(e, match, inCurrency, id => {
+      const a = cat.accounts.find(x => x.id === id);
+      return a && { name: a.name, stickers: stickersOf(a) };
+    }),
   }));
   const total = rows.reduce((s, x) => s + x.c.amount, 0);
 
@@ -96,14 +101,20 @@ export function EntriesSheet({
                   {e.occurred_at.slice(0, 10)}
                   {r.sub ? ` · ${r.sub}` : ''}
                 </span>
-                {c.lines.map(l => (
+                {c.lines.map((l, n) => (
                   <span
-                    key={l.label}
+                    key={n}
                     className={`num flex justify-between pl-8 text-[13px] ${l.counted ? '' : 'text-muted'}`}
                   >
                     <span>
                       {l.label}
                       {l.counted ? ' · counted' : ''}
+                      {l.stickers?.length ? (
+                        <>
+                          {' '}
+                          <NameSticker stickers={l.stickers} />
+                        </>
+                      ) : null}
                     </span>
                     <span>{formatMoney(l.amount, currency)}</span>
                   </span>

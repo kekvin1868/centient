@@ -1,6 +1,6 @@
 // Accounts: where money is held (bank, e-wallet, card, IOU, ...). Each has a Main pocket.
 import { currencyRow } from './currencies';
-import { all, uid, updateColumns } from './sql';
+import { all, uid, updateStatement } from './sql';
 
 export type Account = {
   id: string;
@@ -86,11 +86,48 @@ export function accountsRepo(db: D1Database) {
       };
     },
 
-    /** Patches whitelisted columns; false when the account is not in this workspace. */
-    async update(ws: string, id: string, patch: Record<string, unknown>) {
+    /**
+     * Patches whitelisted columns; false when the account is not in this workspace. A changed `name` also
+     * saves the old one (with `at`) in account_name_history, in the same batch, so both land or neither.
+     */
+    async update(ws: string, id: string, patch: Record<string, unknown>, at?: string) {
       if (typeof patch.kind === 'string') patch = { ...patch, ...storedKind(patch.kind) };
       if (typeof patch.currency_code === 'string') await currencyRow(db, patch.currency_code).run();
-      return updateColumns(db, 'accounts', PATCHABLE, ws, id, patch, ' AND deleted_at IS NULL');
+      const stmt = updateStatement(
+        db,
+        'accounts',
+        PATCHABLE,
+        ws,
+        id,
+        patch,
+        ' AND deleted_at IS NULL',
+      );
+      if (!stmt) return true;
+      if (typeof patch.name !== 'string' || !at) return (await stmt.run()).meta.changes > 0;
+      // The history row reads the name before the UPDATE in the batch changes it.
+      const [, r] = await db.batch([
+        db
+          .prepare(
+            `INSERT INTO account_name_history (id, workspace_id, account_id, old_name, changed_at)
+            SELECT ?, workspace_id, id, name, ? FROM accounts
+            WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL AND name != ?`,
+          )
+          .bind(uid(), at, id, ws, patch.name),
+        stmt,
+      ]);
+      return r.meta.changes > 0;
+    },
+
+    /** Old names per account, newest first: `{ [accountId]: [{ name, at }] }`. */
+    async formerNames(ws: string) {
+      const out: Record<string, { name: string; at: string }[]> = {};
+      for (const r of await all<{ account_id: string; old_name: string; changed_at: string }>(
+        db,
+        'SELECT account_id, old_name, changed_at FROM account_name_history WHERE workspace_id = ? ORDER BY changed_at DESC, rowid DESC',
+        ws,
+      ))
+        (out[r.account_id] ??= []).push({ name: r.old_name, at: r.changed_at });
+      return out;
     },
 
     /** Soft-deletes the account and every entry that touches it; false when it is not in this workspace. */

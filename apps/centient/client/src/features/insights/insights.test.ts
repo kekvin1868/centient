@@ -208,3 +208,92 @@ describe('paginate (Q43)', () => {
     expect(paginate([1500], 1000, 1200, 20)).toEqual([{ page: 0, y: 0, h: 1000 }]);
   });
 });
+
+describe('counted amounts with named people (T14, T16)', () => {
+  const idr = () => true;
+  const food = (t: { category_id: string | null }) => t.category_id === 'food';
+  const bill = (command: Parameters<typeof counted>[0]['command'], mine: number) => ({
+    command,
+    transactions: [
+      {
+        type: 'EXPENSE',
+        category_id: 'food',
+        merchant: 'Kado',
+        allocations: [{ envelope_id: 'm', amount: -mine }],
+      },
+    ],
+  });
+
+  it('lists each person by their current name, with the stickers of a renamed one', () => {
+    const e = bill(
+      {
+        type: 'EXPENSE',
+        amount: 100_000,
+        split: {
+          people: 3,
+          parties: [{ iouAccountId: 'a', share: 10_000 }, { share: 50_000 }],
+        },
+      },
+      40_000,
+    );
+    const tab = (id: string) =>
+      id === 'a' ? { name: 'Obang', stickers: ['was Abang'] } : undefined;
+    expect(counted(e, food, idr, tab)).toEqual({
+      amount: 40_000,
+      lines: [
+        { label: 'bill, split with 3', amount: 100_000 },
+        { label: 'You', amount: 40_000, counted: true },
+        { label: 'Obang', amount: 10_000, stickers: ['was Abang'] },
+        { label: 'Person 3', amount: 50_000 },
+      ],
+    });
+  });
+
+  it('a pot someone else runs shows the pot and my share', () => {
+    const e = bill(
+      { type: 'EXPENSE', amount: 25_000, pot: { total: 100_000, people: 4, manager: 'Andi' } },
+      25_000,
+    );
+    expect(counted(e, food, idr).lines).toEqual([
+      { label: 'pot, 4 people, run by Andi', amount: 100_000 },
+      { label: 'You', amount: 25_000, counted: true },
+    ]);
+  });
+});
+
+describe('a share I covered from another account', () => {
+  it('shows the whole bill and the cover, but counts only my share here', () => {
+    const e = {
+      transactions: [],
+      command: {
+        type: 'EXPENSE',
+        amount: 260_000,
+        split: {
+          people: 3,
+          parties: [
+            {
+              iouAccountId: 'andi',
+              share: 60_000,
+              covered: { amount: 40_000, accountId: 'gopay' },
+            },
+            { iouAccountId: 'budi', share: 100_000 },
+          ],
+        },
+      },
+    };
+    const names: Record<string, string> = { andi: 'Andi', budi: 'Budi', gopay: 'GoPay' };
+    const { lines } = counted(
+      e,
+      () => true,
+      () => true,
+      id => ({ name: names[id], stickers: [] }),
+    );
+    expect(lines.map(l => [l.label, l.amount, l.counted ?? false])).toEqual([
+      ['bill, split with 3', 300_000, false],
+      ['You', 100_000, true],
+      ['You cover Andi (GoPay)', 40_000, false],
+      ['Andi', 60_000, false],
+      ['Budi', 100_000, false],
+    ]);
+  });
+});

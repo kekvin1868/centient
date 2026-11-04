@@ -14,7 +14,8 @@ import { Page } from '../layouts/Page';
 import { formatMoney } from '../lib/format';
 import { idrValue } from '../lib/prices';
 import { usePrices } from '../models/price';
-import { selectedAccount } from '../lib/state';
+import { stickersOf } from '../lib/nameSticker';
+import { catalog, selectedAccount } from '../lib/state';
 import { accountQueries } from '../models/account';
 
 export function Money({ onShowAccount }: { onShowAccount: () => void }) {
@@ -57,6 +58,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
             balance: x.balance,
             currency: x.currency_code,
             note: v !== null ? `≈ ${formatMoney(v)}` : undefined,
+            stickers: stickersOf(catalog.value.accounts.find(c => c.id === x.id)),
           };
         })}
       />

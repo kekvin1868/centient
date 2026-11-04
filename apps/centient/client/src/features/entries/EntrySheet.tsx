@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { fromCommand, toCommand, type Form } from './form';
 import { formatMoney } from '../../lib/format';
 import { entryRow } from '../../lib/labels';
-import { catalog, hiddenEntries } from '../../lib/state';
+import { catalog, hiddenEntries, nameOf } from '../../lib/state';
 import type { Entry } from './EntryList';
 import { EntryForm } from './EntryForm';
 import { Group, Row } from '../../ui/List';
@@ -34,7 +34,9 @@ export function deleteWithUndo(id: string) {
 
 /** Render with key={entry id}: the form is set up once per opened entry. */
 export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: () => void }) {
-  const [form, setForm] = useState<Form | null>(entry?.command ? fromCommand(entry.command) : null);
+  const [form, setForm] = useState<Form | null>(
+    entry?.command ? fromCommand(entry.command, id => nameOf(catalog.value.accounts, id)) : null,
+  );
   if (!entry) return null;
   const row = entryRow(entry, catalog.value);
   const result = form ? toCommand(form) : null;

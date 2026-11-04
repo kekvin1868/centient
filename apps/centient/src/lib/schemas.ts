@@ -35,7 +35,34 @@ export const command = z.discriminatedUnion('type', [
     merchant: text(120).optional(),
     note: text(500).optional(),
     split: z
-      .object({ people: z.number().int().min(2).max(50), iouAccountId: id.optional() })
+      .object({
+        people: z.number().int().min(2).max(50),
+        /** Where the unnamed people's shares go ("Friends" when left out). */
+        iouAccountId: id.optional(),
+        /** The others (not you), with their own amounts; `people - 1` long. A name makes or finds that person's tab. */
+        parties: z
+          .array(
+            z.object({
+              name: text(60).min(1).optional(),
+              iouAccountId: id.optional(),
+              share: z.number().int().min(0),
+              /** Handed over now: moves `amount` from this person's tab into `accountId` (a named person only). */
+              paid: z.object({ amount: money, accountId: id }).optional(),
+              /** What I covered of their share from another account (its own entry); kept here so Insights shows the whole bill. */
+              covered: z.object({ amount: money, accountId: id }).optional(),
+            }),
+          )
+          .max(49)
+          .optional(),
+      })
+      .optional(),
+    /** Joining a pot someone else runs: `amount` is my share of `total`. No ledger effect beyond the expense. */
+    pot: z
+      .object({
+        total: money,
+        people: z.number().int().min(2).max(50),
+        manager: text(60).optional(),
+      })
       .optional(),
     originalAmount: money.optional(),
     originalCurrency: currency.optional(),

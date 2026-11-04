@@ -1,8 +1,8 @@
 // The full entry form, as a receipt: Spent / Received / Moved, used by chips, Edit, and "+ Add manually".
 // The title (where / from whom) is typed like a typewriter; every other detail is a receipt line you tap to
 // change; the pocket is picked up front as stamps (Main pressed by default); the amount is the TOTAL.
-import { Minus, Plus } from '@phosphor-icons/react';
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { Minus, Plus, X } from '@phosphor-icons/react';
+import { Fragment, useState, type CSSProperties, type ReactNode } from 'react';
 import { amountInput, showAmount } from '../../lib/amount';
 import { formatMoney } from '../../lib/format';
 import { pocketColor } from '../../lib/pocketColors';
@@ -12,6 +12,8 @@ import { useSumInput } from '../../ui/useSumInput';
 import { Segmented } from '../../ui/Segmented';
 import { Typewriter } from '../../ui/Typewriter';
 import type { EntryType, Form } from './form';
+import { splitView, withPeople, type Mode } from './shares';
+import { withMyPotShare, withPot } from './form';
 
 const TYPES: { value: EntryType; label: string }[] = [
   { value: 'EXPENSE', label: 'Spent' },
@@ -24,6 +26,11 @@ const HEAD: Record<EntryType, string> = {
   TRANSFER: 'MOVED',
   ALLOCATE: 'MOVED',
 };
+const MODES: { value: Mode; label: string }[] = [
+  { value: 'SPLIT', label: 'Others pay the rest' },
+  { value: 'COVER', label: 'I cover the rest' },
+  { value: 'LATER', label: 'Pays the rest later' },
+];
 const dateLabel = (d: string) =>
   d
     ? new Date(`${d}T00:00:00Z`)
@@ -47,7 +54,9 @@ export function EntryForm({
   lockType?: boolean;
 }) {
   const set = (patch: Partial<Form>) => onChange({ ...form, ...patch });
-  const [more, setMore] = useState(Boolean(form.note || (form.split && form.split > 1)));
+  const [more, setMore] = useState(
+    Boolean(form.note || form.pot || (form.split && form.split > 1)),
+  );
   const cat = catalog.value;
   const name = (rows: { id: string; name: string }[], id: string | null) =>
     rows.find(r => r.id === id)?.name;
@@ -55,6 +64,13 @@ export function EntryForm({
   const allAccounts = active(cat.accounts).map(a => ({ value: a.id, label: a.name }));
   const account = cat.accounts.find(a => a.id === form.accountId);
   const currency = account?.currency_code ?? 'IDR';
+  // Covering a gap or taking money back only moves the bill's own currency.
+  const sameCurrency = everyday()
+    .filter(a => a.currency_code === currency)
+    .map(a => ({ value: a.id, label: a.name }));
+  // A new bill account drops the people's picked accounts: they may be in the old currency.
+  const setAccount = (patch: Partial<Form>) =>
+    set({ ...patch, parties: form.parties.map(p => ({ ...p, accountId: null })) });
   const categories = active(cat.categories)
     .filter(
       c => c.kind === form.type && c.name !== 'Balance adjustment' && c.name !== 'Opening balance',
@@ -63,9 +79,17 @@ export function EntryForm({
   // Pockets of the chosen account only (a pocket belongs to one account); none picked = where its new money goes.
   const pockets = active(cat.envelopes).filter(e => e.account_id === form.accountId);
   const pocket = form.envelopeId ?? account?.default_envelope_id ?? null;
-  const ious = active(cat.accounts)
-    .filter(a => a.kind === 'IOU')
-    .map(a => ({ value: a.id, label: a.name }));
+  // Names to suggest for a split: the people tabs, without the "Friends" lump or a currency suffix ("Andi (USD)").
+  const tabNames = [
+    ...new Set(
+      active(cat.accounts)
+        .filter(a => a.kind === 'IOU' && a.name.toLowerCase() !== 'friends')
+        .map(a => a.name.replace(/ \([A-Z]{3,}\)$/, '')),
+    ),
+  ];
+  const shares = splitView(form.amount, form.parties, form.myShare);
+  const equalShare = form.amount && form.split ? Math.floor(form.amount / form.split) : 0;
+  const anyFixed = form.myShare !== null || form.parties.some(p => p.share !== null);
   const money = form.type === 'EXPENSE' || form.type === 'INCOME';
 
   return (
@@ -75,7 +99,16 @@ export function EntryForm({
           label="Type"
           value={form.type}
           options={TYPES}
-          onChange={t => set({ type: t, categoryId: null, toAccountId: null, split: null })}
+          onChange={t =>
+            set({
+              type: t,
+              categoryId: null,
+              toAccountId: null,
+              split: null,
+              parties: [],
+              myShare: null,
+            })
+          }
         />
       )}
       <Receipt stamp={lockType ? 'EDITING' : undefined}>
@@ -105,7 +138,7 @@ export function EntryForm({
                   label="From"
                   value={form.accountId}
                   options={allAccounts}
-                  onChange={accountId => set({ accountId })}
+                  onChange={accountId => setAccount({ accountId })}
                 />
               }
             />
@@ -149,7 +182,7 @@ export function EntryForm({
                   label={form.type === 'EXPENSE' ? 'Paid with' : 'Into'}
                   value={form.accountId}
                   options={accounts}
-                  onChange={accountId => set({ accountId, envelopeId: null })}
+                  onChange={accountId => setAccount({ accountId, envelopeId: null })}
                 />
               }
             />
@@ -231,52 +264,279 @@ export function EntryForm({
             )}
             {more && form.type === 'EXPENSE' && (
               <>
-                <div className="flex items-center gap-1.5 py-[7px]">
-                  <span className="shrink-0 text-[12px] uppercase tracking-[0.1em] text-[var(--paper-faint)]">
-                    Split with
-                  </span>
-                  <span
-                    className="min-w-4 flex-1 -translate-y-1 border-b-2 border-dotted border-[color-mix(in_oklab,var(--paper-ink)_25%,transparent)]"
-                    aria-hidden="true"
-                  />
-                  <Step
-                    label="One person fewer"
-                    onClick={() => {
-                      const n = Math.max(1, (form.split ?? 1) - 1);
-                      set({
-                        split: n > 1 ? n : null,
-                        iouAccountId: n > 1 ? form.iouAccountId : null,
-                      });
-                    }}
-                  >
-                    <Minus size={12} weight="bold" />
-                  </Step>
-                  <span className="min-w-[4.5ch] text-center font-bold" aria-live="polite">
-                    {form.split ?? 1} {(form.split ?? 1) === 1 ? 'just you' : 'people'}
-                  </span>
-                  <Step
-                    label="One person more"
-                    onClick={() => {
-                      const n = Math.min(50, (form.split ?? 1) + 1);
-                      set({ split: n, iouAccountId: form.iouAccountId ?? ious[0]?.value ?? null });
-                    }}
-                  >
-                    <Plus size={12} weight="bold" />
-                  </Step>
+                <div className="flex gap-2 py-1" role="group" aria-label="Kind of split">
+                  {(
+                    [
+                      [false, 'I paid, others owe me'],
+                      [true, "I'm joining a pot"],
+                    ] as const
+                  ).map(([pot, label]) => (
+                    <button
+                      key={label}
+                      type="button"
+                      aria-pressed={Boolean(form.pot) === pot}
+                      onClick={() =>
+                        Boolean(form.pot) === pot
+                          ? undefined
+                          : pot
+                            ? onChange(withPot({ ...form, amount: null }, {}))
+                            : set({ pot: null, amount: null })
+                      }
+                      className="receipt-stamp-btn active:opacity-70"
+                    >
+                      {label.toUpperCase()}
+                    </button>
+                  ))}
                 </div>
-                {form.split && form.split > 1 && ious.length > 1 && (
-                  <ReceiptLine
-                    label="Who owes you"
-                    value={name(cat.accounts, form.iouAccountId) ?? 'Pick one'}
-                    control={
-                      <LineSelect
-                        label="Who owes you"
-                        value={form.iouAccountId}
-                        options={ious}
-                        onChange={iouAccountId => set({ iouAccountId })}
+                {form.pot && (
+                  <div className="pb-1" role="group" aria-label="The pot">
+                    <label className="flex items-baseline gap-1.5 py-[5px]">
+                      <span className="shrink-0 text-[12px] uppercase tracking-[0.1em] text-[var(--paper-faint)]">
+                        Pot total
+                      </span>
+                      <input
+                        aria-label="Pot total"
+                        inputMode="decimal"
+                        placeholder="0"
+                        value={showAmount(form.pot.total, currency)}
+                        onChange={e =>
+                          onChange(
+                            withPot(form, { total: amountInput(e.target.value, currency).minor }),
+                          )
+                        }
+                        className="num min-w-0 flex-1 bg-transparent text-right font-bold outline-none placeholder:font-normal placeholder:text-[var(--paper-faint)] [font-size:16px]"
                       />
-                    }
-                  />
+                    </label>
+                    <div className="flex items-center gap-1.5 py-[5px]">
+                      <span className="shrink-0 text-[12px] uppercase tracking-[0.1em] text-[var(--paper-faint)]">
+                        Paying in
+                      </span>
+                      <span className="min-w-4 flex-1" aria-hidden="true" />
+                      <Step
+                        label="One person fewer in the pot"
+                        onClick={() => onChange(withPot(form, { people: form.pot!.people - 1 }))}
+                      >
+                        <Minus size={12} weight="bold" />
+                      </Step>
+                      <span className="min-w-[4.5ch] text-center font-bold" aria-live="polite">
+                        {form.pot.people} people
+                      </span>
+                      <Step
+                        label="One person more in the pot"
+                        onClick={() => onChange(withPot(form, { people: form.pot!.people + 1 }))}
+                      >
+                        <Plus size={12} weight="bold" />
+                      </Step>
+                    </div>
+                    <label className="flex items-baseline gap-1.5 py-[5px]">
+                      <span className="shrink-0 text-[12px] uppercase tracking-[0.1em] text-[var(--paper-faint)]">
+                        Run by
+                      </span>
+                      <input
+                        aria-label="Run by"
+                        list="split-people"
+                        value={form.pot.manager}
+                        placeholder="optional"
+                        onChange={e => onChange(withPot(form, { manager: e.target.value }))}
+                        className="min-w-0 flex-1 border-b-2 border-dotted border-[color-mix(in_oklab,var(--paper-ink)_25%,transparent)] bg-transparent text-right font-bold outline-none placeholder:font-normal placeholder:text-[var(--paper-faint)] [font-size:16px]"
+                      />
+                      <datalist id="split-people">
+                        {tabNames.map(n => (
+                          <option key={n} value={n} />
+                        ))}
+                      </datalist>
+                    </label>
+                    {form.pot.typed && (
+                      <button
+                        type="button"
+                        onClick={() => onChange(withMyPotShare(form, null))}
+                        className="text-[12px] font-bold uppercase tracking-[0.1em] underline decoration-dotted underline-offset-4 active:opacity-70"
+                      >
+                        Equal share
+                      </button>
+                    )}
+                  </div>
+                )}
+                {!form.pot && (
+                  <>
+                    <div className="flex items-center gap-1.5 py-[7px]">
+                      <span className="shrink-0 text-[12px] uppercase tracking-[0.1em] text-[var(--paper-faint)]">
+                        Split with
+                      </span>
+                      <span
+                        className="min-w-4 flex-1 -translate-y-1 border-b-2 border-dotted border-[color-mix(in_oklab,var(--paper-ink)_25%,transparent)]"
+                        aria-hidden="true"
+                      />
+                      <Step
+                        label="One person fewer"
+                        onClick={() => set(withPeople(form, (form.split ?? 1) - 1))}
+                      >
+                        <Minus size={12} weight="bold" />
+                      </Step>
+                      <span className="min-w-[4.5ch] text-center font-bold" aria-live="polite">
+                        {form.split ?? 1} {(form.split ?? 1) === 1 ? 'just you' : 'people'}
+                      </span>
+                      <Step
+                        label="One person more"
+                        onClick={() => set(withPeople(form, (form.split ?? 1) + 1))}
+                      >
+                        <Plus size={12} weight="bold" />
+                      </Step>
+                    </div>
+                    {form.split && form.split > 1 && (
+                      <div className="pb-1" role="group" aria-label="Who pays what">
+                        <datalist id="split-people">
+                          {tabNames.map(n => (
+                            <option key={n} value={n} />
+                          ))}
+                        </datalist>
+                        <ShareRow
+                          who={<span className="font-bold">You</span>}
+                          value={shares.mine}
+                          fixed={form.myShare !== null}
+                          currency={currency}
+                          label="Your share"
+                          onChange={myShare => set({ myShare })}
+                        />
+                        {form.parties.map((p, i) => (
+                          <Fragment key={i}>
+                            <ShareRow
+                              who={
+                                <input
+                                  aria-label={`Person ${i + 2} name`}
+                                  list="split-people"
+                                  value={p.name}
+                                  placeholder={`Person ${i + 2}`}
+                                  onChange={e =>
+                                    set({
+                                      parties: form.parties.map((x, j) =>
+                                        j === i ? { ...x, name: e.target.value } : x,
+                                      ),
+                                    })
+                                  }
+                                  className="min-w-0 flex-1 border-b-2 border-dotted border-[color-mix(in_oklab,var(--paper-ink)_25%,transparent)] bg-transparent font-bold outline-none placeholder:font-normal placeholder:text-[var(--paper-faint)] [font-size:16px]"
+                                />
+                              }
+                              value={p.share ?? shares.owes[i]}
+                              fixed={p.share !== null}
+                              currency={currency}
+                              label={`${p.name || `Person ${i + 2}`}'s share`}
+                              onChange={share =>
+                                set({
+                                  parties: form.parties.map((x, j) =>
+                                    j === i ? { ...x, share } : x,
+                                  ),
+                                })
+                              }
+                              onRemove={() => {
+                                const left = form.parties.filter((_, j) => j !== i);
+                                set({ split: left.length ? left.length + 1 : null, parties: left });
+                              }}
+                            />
+                            {p.share !== null && (p.mode !== 'SPLIT' || p.share < equalShare) && (
+                              <>
+                                <ReceiptLine
+                                  label={`${p.name || `Person ${i + 2}`} is short`}
+                                  value={MODES.find(m => m.value === p.mode)!.label}
+                                  control={
+                                    <LineSelect
+                                      label={`${p.name || `Person ${i + 2}`} is short`}
+                                      value={p.mode}
+                                      options={MODES}
+                                      onChange={mode =>
+                                        set({
+                                          parties: form.parties.map((x, j) =>
+                                            // The account belongs to the old mode; editing hides the cover picker, so a stale one would
+                                            // cut the bill with no cover entry saved.
+                                            j === i
+                                              ? { ...x, mode: mode as Mode, accountId: null }
+                                              : x,
+                                          ),
+                                        })
+                                      }
+                                    />
+                                  }
+                                />
+                                {p.mode !== 'SPLIT' && !(lockType && p.mode === 'COVER') && (
+                                  <ReceiptLine
+                                    label={
+                                      p.mode === 'COVER' ? 'I cover it with' : 'They paid into'
+                                    }
+                                    value={
+                                      name(cat.accounts, p.accountId ?? form.accountId) ??
+                                      'Pick one'
+                                    }
+                                    control={
+                                      <LineSelect
+                                        label={
+                                          p.mode === 'COVER' ? 'I cover it with' : 'They paid into'
+                                        }
+                                        value={p.accountId ?? form.accountId}
+                                        options={sameCurrency}
+                                        onChange={accountId =>
+                                          set({
+                                            parties: form.parties.map((x, j) =>
+                                              j === i ? { ...x, accountId } : x,
+                                            ),
+                                          })
+                                        }
+                                      />
+                                    }
+                                  />
+                                )}
+                                {shares.covered[i] > 0 && (
+                                  <p className="py-0.5 text-right text-[12px] text-[var(--paper-faint)]">
+                                    You cover {formatMoney(shares.covered[i], currency)}
+                                  </p>
+                                )}
+                                {shares.paidNow[i] > 0 && (
+                                  <p className="py-0.5 text-right text-[12px] text-[var(--paper-faint)]">
+                                    {formatMoney(shares.owes[i] - shares.paidNow[i], currency)}{' '}
+                                    stays on {p.name || 'their'} tab
+                                  </p>
+                                )}
+                              </>
+                            )}
+                          </Fragment>
+                        ))}
+                        {shares.problem && (
+                          <p
+                            role="alert"
+                            className="py-1 text-right text-[12px] font-bold text-[#b3261e]"
+                          >
+                            {shares.problem === 'gap'
+                              ? `${formatMoney(Math.abs(shares.gap), currency)} ${shares.gap > 0 ? 'not covered' : 'too much'}`
+                              : shares.problem === 'over'
+                                ? 'The amounts add up to more than the total'
+                                : shares.problem === 'nothing'
+                                  ? `${form.parties[shares.badIndex]?.name || `Person ${shares.badIndex + 2}`} pays their full share, nothing to cover`
+                                  : shares.problem === 'name'
+                                    ? 'Name the person who pays later'
+                                    : 'Your share must be more than zero'}
+                          </p>
+                        )}
+                        {anyFixed && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              set({
+                                myShare: null,
+                                parties: form.parties.map(p => ({
+                                  ...p,
+                                  share: null,
+                                  mode: 'SPLIT' as const,
+                                  accountId: null,
+                                })),
+                              })
+                            }
+                            className="text-[12px] font-bold uppercase tracking-[0.1em] underline decoration-dotted underline-offset-4 active:opacity-70"
+                          >
+                            Equal
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}
@@ -301,12 +561,61 @@ export function EntryForm({
             PRICE WAS {formatMoney(form.originalAmount, form.originalCurrency)}
           </div>
         )}
-        <Total value={form.amount} currency={currency} onChange={amount => set({ amount })} />
+        <Total
+          label={form.pot ? 'YOUR SHARE' : 'TOTAL'}
+          value={form.amount}
+          currency={currency}
+          onChange={amount => onChange(withMyPotShare(form, amount))}
+        />
         <div className="mt-3 text-center text-[11px] tracking-[0.1em] text-[var(--paper-faint)]">
           THANK YOU
         </div>
       </Receipt>
     </>
+  );
+}
+
+/** One person's line in a split: who, and their amount. Typing over the amount fixes it (bold); empty = equal again. */
+function ShareRow({
+  who,
+  value,
+  fixed,
+  currency,
+  label,
+  onChange,
+  onRemove,
+}: {
+  who: ReactNode;
+  value: number;
+  fixed: boolean;
+  currency: string;
+  label: string;
+  onChange: (share: number | null) => void;
+  onRemove?: () => void;
+}) {
+  return (
+    <div className="flex items-baseline gap-1.5 py-[5px]">
+      {who}
+      <input
+        aria-label={label}
+        inputMode="decimal"
+        value={showAmount(value, currency)}
+        onChange={e => onChange(amountInput(e.target.value, currency).minor)}
+        className={`num w-[11ch] bg-transparent text-right outline-none [font-size:16px] ${fixed ? 'font-extrabold underline decoration-dotted' : 'font-normal text-[var(--paper-faint)]'}`}
+      />
+      {onRemove ? (
+        <button
+          type="button"
+          aria-label={`Remove ${label.replace(/'s share$/, '')}`}
+          onClick={onRemove}
+          className="grid size-5 shrink-0 place-items-center active:opacity-60"
+        >
+          <X size={12} weight="bold" />
+        </button>
+      ) : (
+        <span className="size-5 shrink-0" aria-hidden="true" />
+      )}
+    </div>
   );
 }
 
@@ -333,10 +642,12 @@ function Step({
 
 /** The TOTAL line: the amount, typed in place (sums too). */
 function Total({
+  label,
   value,
   currency,
   onChange,
 }: {
+  label: string;
   value: number | null;
   currency: string;
   onChange: (minor: number | null) => void;
@@ -345,7 +656,7 @@ function Total({
   return (
     <div>
       <label className="flex items-baseline justify-between gap-3">
-        <span className="text-[13px] font-extrabold tracking-[0.2em]">TOTAL</span>
+        <span className="text-[13px] font-extrabold tracking-[0.2em]">{label}</span>
         <span className="flex min-w-0 items-baseline justify-end gap-1.5 text-[30px] font-extrabold tracking-[-0.02em]">
           <span className="text-[0.6em]">{currency === 'IDR' ? 'Rp' : currency}</span>
           <input

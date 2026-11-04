@@ -34,6 +34,7 @@ import {
 } from 'react';
 import { formatMoney, shortMoney } from '../../lib/format';
 import { buzz, reducedMotion } from '../../lib/motion';
+import { NameSticker } from '../../ui/NameSticker';
 
 type HandCard = {
   id: string | null;
@@ -42,6 +43,8 @@ type HandCard = {
   balance?: number;
   currency?: string;
   note?: ReactNode;
+  /** "was Abang" / "archived" for a person's tab, for 2 days (lib/nameSticker). */
+  stickers?: string[];
 };
 
 const ICON: Record<string, Icon> = {
@@ -273,6 +276,11 @@ function Card({
           <span className="line-clamp-2 break-words px-2.5 pt-2 text-[17px] font-extrabold leading-[1.1] tracking-[-0.02em]">
             {c.name}
           </span>
+          {c.stickers?.length ? (
+            <span className="px-2.5 pt-1">
+              <NameSticker stickers={c.stickers} />
+            </span>
+          ) : null}
           {money && (
             <span
               className={`num truncate px-2.5 pt-1 text-[13px] font-bold ${c.balance! < 0 ? 'text-negative' : 'text-muted'}`}

@@ -81,7 +81,12 @@ function baseRow(e: EntryView & { command: Command | null }, cat: Catalog): Entr
     case 'EXPENSE':
     case 'INCOME': {
       const category = name(cat.categories, c.categoryId);
-      const split = c.type === 'EXPENSE' && c.split ? `split with ${c.split.people}` : '';
+      const split =
+        c.type === 'EXPENSE' && c.split
+          ? `split with ${c.split.people}`
+          : c.type === 'EXPENSE' && c.pot
+            ? `pot of ${c.pot.people}`
+            : '';
       return {
         emoji: categoryEmoji(category, c.type),
         title: c.merchant

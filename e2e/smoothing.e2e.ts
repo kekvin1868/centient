@@ -464,6 +464,131 @@ test('a manual entry is a receipt: type the title, pick a pocket stamp, enter th
   await page.keyboard.press('Escape');
 });
 
+test('a split bill names people, re-divides live, and Equal resets it (Phase 1b)', async () => {
+  await tab('Home').tap();
+  await page.getByRole('button', { name: 'Add without typing' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'New entry' });
+  await sheet
+    .getByRole('textbox', { name: 'What was it?' })
+    .pressSequentially('Kado', { delay: 20 });
+  await sheet.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Home & Bills' });
+  await sheet.getByRole('combobox', { name: 'Paid with' }).selectOption({ label: 'Main Account' });
+  await sheet.getByRole('textbox', { name: 'Amount' }).fill('100000');
+  await sheet.getByRole('button', { name: '+ Split or note' }).tap();
+  for (let n = 0; n < 3; n++) await sheet.getByRole('button', { name: 'One person more' }).tap();
+  const who = sheet.getByRole('group', { name: 'Who pays what' });
+  await expect(who.getByRole('textbox', { name: 'Your share' })).toHaveValue('25.000');
+  // Person 2 is Andi and pays only 10.000: the others (me, Person 3, Person 4) share the other 90.000.
+  await who.getByRole('combobox', { name: 'Person 2 name' }).fill('Andi');
+  await who.getByRole('textbox', { name: "Andi's share" }).fill('10000');
+  await expect(who.getByRole('textbox', { name: 'Your share' })).toHaveValue('30.000');
+  await who.getByRole('button', { name: 'Equal' }).tap();
+  await expect(who.getByRole('textbox', { name: 'Your share' })).toHaveValue('25.000');
+  // One person leaves: 3 people, 33.334 for me.
+  await who.getByRole('button', { name: 'Remove Person 4' }).tap();
+  await expect(who.getByRole('textbox', { name: 'Your share' })).toHaveValue('33.334');
+  await who.getByRole('textbox', { name: "Andi's share" }).fill('50000');
+  await who.getByRole('textbox', { name: "Person 3's share" }).fill('50000');
+  await expect(who.getByRole('alert')).toContainText('Your share must be more than zero');
+  await who.getByRole('textbox', { name: "Person 3's share" }).fill('20000');
+  await sheet.getByRole('button', { name: 'Log it' }).tap();
+  await expect(sheet).toBeHidden();
+  // Andi has his own tab with 50.000; deleting it removes the split again, so later tests are unaffected.
+  expect(await balance('Andi')).toBe(50_000);
+  await api(`/accounts/${await accountId('Andi')}`, { method: 'DELETE' });
+});
+
+test('joining a pot someone else runs saves just my share (Phase 1b)', async () => {
+  await tab('Home').tap();
+  await page.getByRole('button', { name: 'Add without typing' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'New entry' });
+  await sheet
+    .getByRole('textbox', { name: 'What was it?' })
+    .pressSequentially('Pot kado', { delay: 20 });
+  await sheet.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Home & Bills' });
+  await sheet.getByRole('combobox', { name: 'Paid with' }).selectOption({ label: 'Main Account' });
+  await sheet.getByRole('button', { name: '+ Split or note' }).tap();
+  await sheet.getByRole('button', { name: /joining a pot/i }).tap();
+  const pot = sheet.getByRole('group', { name: 'The pot' });
+  await pot.getByRole('textbox', { name: 'Pot total' }).fill('100000');
+  for (let n = 0; n < 2; n++)
+    await pot.getByRole('button', { name: 'One person more in the pot' }).tap();
+  await pot.getByRole('combobox', { name: 'Run by' }).fill('Andi');
+  await expect(sheet.getByRole('textbox', { name: 'Amount' })).toHaveValue('25.000');
+  const before = await balance('Main Account');
+  await sheet.getByRole('button', { name: 'Log it' }).tap();
+  await expect(sheet).toBeHidden();
+  expect(await balance('Main Account')).toBe(before - 25_000);
+  const entry = (
+    (await (await api('/entries?limit=5')).json()).items as {
+      id: string;
+      command: { pot?: { total: number; people: number; manager: string } };
+    }[]
+  ).find(e => e.command?.pot)!;
+  expect(entry.command.pot).toEqual({ total: 100_000, people: 4, manager: 'Andi' });
+  await api(`/entries/${entry.id}`, { method: 'DELETE' });
+});
+
+test('a short person: I cover the rest from another account, or they pay the rest later (Phase 1b)', async () => {
+  const fill = async (title: string) => {
+    await tab('Home').tap();
+    await page.getByRole('button', { name: 'Add without typing' }).tap();
+    const sheet = page.getByRole('dialog', { name: 'New entry' });
+    await sheet
+      .getByRole('textbox', { name: 'What was it?' })
+      .pressSequentially(title, { delay: 20 });
+    await sheet.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Home & Bills' });
+    await sheet
+      .getByRole('combobox', { name: 'Paid with' })
+      .selectOption({ label: 'Main Account' });
+    await sheet.getByRole('textbox', { name: 'Amount' }).fill('100000');
+    await sheet.getByRole('button', { name: '+ Split or note' }).tap();
+    for (let n = 0; n < 3; n++) await sheet.getByRole('button', { name: 'One person more' }).tap();
+    const who = sheet.getByRole('group', { name: 'Who pays what' });
+    await who.getByRole('combobox', { name: 'Person 2 name' }).fill('Andi');
+    await who.getByRole('textbox', { name: "Andi's share" }).fill('10000');
+    return { sheet, who };
+  };
+  const main0 = await balance('Main Account');
+  const daily0 = await balance('Dailies');
+
+  // Cover the rest from Dailies: the bill on Main Account is 85.000, Dailies pays 15.000, Andi's tab holds 10.000.
+  let { sheet, who } = await fill('Kado');
+  await who
+    .getByRole('combobox', { name: 'Andi is short' })
+    .selectOption({ label: 'I cover the rest' });
+  await who.getByRole('combobox', { name: 'I cover it with' }).selectOption({ label: 'Dailies' });
+  await expect(who.getByText('You cover Rp15.000')).toBeVisible();
+  await sheet.getByRole('button', { name: 'Log it' }).tap();
+  await expect(sheet).toBeHidden();
+  expect(await balance('Main Account')).toBe(main0 - 85_000);
+  expect(await balance('Dailies')).toBe(daily0 - 15_000);
+  expect(await balance('Andi')).toBe(10_000);
+  const covering = (
+    (await (await api('/entries?limit=10')).json()).items as {
+      id: string;
+      transactions: { note: string | null }[];
+    }[]
+  ).find(e => e.transactions.some(t => t.note?.startsWith("Covering Andi's part")))!;
+  await api(`/entries/${covering.id}`, { method: 'DELETE' });
+  await api(`/accounts/${await accountId('Andi')}`, { method: 'DELETE' });
+  expect(await balance('Main Account')).toBe(main0);
+
+  // Pays the rest later: Main Account pays all 100.000, Andi is put down for 25.000 and gave 10.000 into Dailies.
+  ({ sheet, who } = await fill('Kado 2'));
+  await who
+    .getByRole('combobox', { name: 'Andi is short' })
+    .selectOption({ label: 'Pays the rest later' });
+  await who.getByRole('combobox', { name: 'They paid into' }).selectOption({ label: 'Dailies' });
+  await sheet.getByRole('button', { name: 'Log it' }).tap();
+  await expect(sheet).toBeHidden();
+  expect(await balance('Main Account')).toBe(main0 - 100_000);
+  expect(await balance('Dailies')).toBe(daily0 + 10_000);
+  expect(await balance('Andi')).toBe(15_000);
+  await api(`/accounts/${await accountId('Andi')}`, { method: 'DELETE' });
+  expect(await balance('Dailies')).toBe(daily0); // the entry went with the tab, and its payment with it
+});
+
 test('an account can be in any currency: search "yen", and its balance has no decimals', async () => {
   await tab('Settings').tap();
   await page.getByRole('button', { name: 'Add account' }).tap();

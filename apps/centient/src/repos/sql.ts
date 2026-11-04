@@ -12,8 +12,8 @@ export async function all<T>(db: D1Database, sql: string, ...args: unknown[]): P
   ).results;
 }
 
-/** Patches only the `allowed` columns of one row in this workspace; false when no row matched. */
-export async function updateColumns(
+/** The UPDATE that patches only the `allowed` columns of one row in this workspace; null when nothing to patch. */
+export function updateStatement(
   db: D1Database,
   table: string,
   allowed: string[],
@@ -21,14 +21,18 @@ export async function updateColumns(
   id: string,
   patch: Record<string, unknown>,
   extraWhere = '',
-): Promise<boolean> {
+): D1PreparedStatement | null {
   const cols = Object.keys(patch).filter(k => allowed.includes(k));
-  if (!cols.length) return true;
-  const r = await db
+  if (!cols.length) return null;
+  return db
     .prepare(
       `UPDATE ${table} SET ${cols.map(c => `${c} = ?`).join(', ')} WHERE id = ? AND workspace_id = ?${extraWhere}`,
     )
-    .bind(...cols.map(c => patch[c] ?? null), id, ws)
-    .run();
-  return r.meta.changes > 0;
+    .bind(...cols.map(c => patch[c] ?? null), id, ws);
+}
+
+/** Patches only the `allowed` columns of one row in this workspace; false when no row matched. */
+export async function updateColumns(...args: Parameters<typeof updateStatement>): Promise<boolean> {
+  const stmt = updateStatement(...args);
+  return stmt ? (await stmt.run()).meta.changes > 0 : true;
 }
