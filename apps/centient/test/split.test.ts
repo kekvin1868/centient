@@ -124,6 +124,30 @@ describe('split bill with named people', () => {
     expect(tabs).toEqual([]);
   });
 
+  it('keeps a cover from another account on the bill, with no money moved by it', async () => {
+    const t = await setup('cover@test');
+    const gopay = (
+      await svc(t.ws).accounts.create({ name: 'GoPay', kind: 'EWALLET', openingBalance: 0 })
+    ).id;
+    const covered = { amount: 40_000, accountId: gopay };
+    const [id] = await svc(t.ws).ledger.record([
+      t.bill({ people: 2, parties: [{ name: 'Andi', share: 60_000, covered }] }, 260_000),
+    ]);
+    const e = (await svc(t.ws).ledger.listEntries({ limit: 5 })).items.find(x => x.id === id)!;
+    expect(e.command).toMatchObject({ split: { parties: [{ share: 60_000, covered }] } });
+    expect(await t.balance('GoPay')).toBe(0);
+    await expect(
+      svc(t.ws).ledger.record([
+        t.bill({
+          people: 2,
+          parties: [
+            { name: 'Budi', share: 60_000, covered, paid: { amount: 1, accountId: t.bca } },
+          ],
+        }),
+      ]),
+    ).rejects.toMatchObject({ code: 'INVALID_SPLIT' });
+  });
+
   it('will not use a hidden tab without asking', async () => {
     const t = await setup('s5@test');
     await svc(t.ws).ledger.record([

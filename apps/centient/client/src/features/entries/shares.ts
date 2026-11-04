@@ -14,6 +14,8 @@ export type Party = {
   /** The tab this person was loaded from (editing), and the name it had then. */
   tab: string | null;
   tabName: string;
+  /** A cover from another account, as saved (editing): passed back unchanged, its own entry is not edited here. */
+  cover: { amount: number; accountId: string } | null;
 };
 
 export const blankParty = (): Party => ({
@@ -23,6 +25,7 @@ export const blankParty = (): Party => ({
   accountId: null,
   tab: null,
   tabName: '',
+  cover: null,
 });
 
 export type Shares = {

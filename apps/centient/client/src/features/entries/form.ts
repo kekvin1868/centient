@@ -121,6 +121,7 @@ function splitOf(c: Extract<Command, { type: 'EXPENSE' }>, tabName: (id: string)
       accountId: p.paid?.accountId ?? null,
       tab: p.iouAccountId ?? null,
       tabName: p.iouAccountId ? tabName(p.iouAccountId) : '',
+      cover: p.covered ?? null,
     })),
   };
 }
@@ -190,14 +191,22 @@ function splitCommand(
   const parties = f.parties.map((p, i) => {
     const name = p.name.trim();
     const who = p.tab && name === p.tabName ? { iouAccountId: p.tab } : name ? { name } : {};
-    if (v.covered[i] && p.accountId && p.accountId !== f.accountId) {
-      cut += v.covered[i];
-      covers.set(p.accountId, [...(covers.get(p.accountId) ?? []), name || `Person ${i + 2}`]);
+    const fresh =
+      v.covered[i] && p.accountId && p.accountId !== f.accountId
+        ? { amount: v.covered[i], accountId: p.accountId }
+        : null;
+    if (fresh) {
+      cut += fresh.amount;
+      covers.set(fresh.accountId, [
+        ...(covers.get(fresh.accountId) ?? []),
+        name || `Person ${i + 2}`,
+      ]);
     }
+    const covered = fresh ?? (p.mode === 'SPLIT' ? p.cover : null);
     const paid = v.paidNow[i]
       ? { paid: { amount: v.paidNow[i], accountId: p.accountId ?? f.accountId! } }
       : {};
-    return { ...who, share: v.owes[i], ...paid };
+    return { ...who, share: v.owes[i], ...paid, ...(covered ? { covered } : {}) };
   });
   return { split: { people: f.split, iouAccountId: lump, parties }, cut, covers };
 }

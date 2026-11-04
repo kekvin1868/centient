@@ -136,7 +136,14 @@ type Tx = {
 type Cmd = {
   type: string;
   amount: number;
-  split?: { people: number; parties?: { iouAccountId?: string; share: number }[] };
+  split?: {
+    people: number;
+    parties?: {
+      iouAccountId?: string;
+      share: number;
+      covered?: { amount: number; accountId: string };
+    }[];
+  };
   pot?: { total: number; people: number; manager?: string };
   fee?: number;
 } | null;
@@ -178,20 +185,35 @@ export function counted(
   if (c?.type === 'EXPENSE' && c.split) {
     const { people, parties } = c.split;
     const each = Math.floor(c.amount / people);
+    const who = (p: { iouAccountId?: string }) =>
+      p.iouAccountId ? tab(p.iouAccountId) : undefined;
     const others: Line[] = parties
       ? parties.map((p, n) => {
-          const t = p.iouAccountId ? tab(p.iouAccountId) : undefined;
+          const t = who(p);
           return { label: t?.name ?? `Person ${n + 2}`, amount: p.share, stickers: t?.stickers };
         })
       : Array.from({ length: people - 1 }, (_, n) => ({ label: `Person ${n + 2}`, amount: each }));
+    // A gap I covered from another account is that account's own entry: shown here, counted there.
+    const covers: Line[] = (parties ?? []).flatMap((p, n) =>
+      p.covered
+        ? [
+            {
+              label: `You cover ${who(p)?.name ?? `Person ${n + 2}`} (${tab(p.covered.accountId)?.name ?? 'other account'})`,
+              amount: p.covered.amount,
+            },
+          ]
+        : [],
+    );
+    const bill = c.amount + covers.reduce((sum, l) => sum + l.amount, 0);
     const mine = parties
       ? c.amount - parties.reduce((sum, p) => sum + p.share, 0)
       : c.amount - each * (people - 1);
     return {
       amount,
       lines: [
-        { label: `bill, split with ${people}`, amount: c.amount },
+        { label: `bill, split with ${people}`, amount: bill },
         { label: 'You', amount: mine, counted: true },
+        ...covers,
         ...others,
       ],
     };

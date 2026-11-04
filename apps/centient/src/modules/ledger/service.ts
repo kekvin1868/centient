@@ -52,7 +52,7 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
         const resolved: NonNullable<typeof split.parties> = [];
         for (const p of split.parties) {
           const iouAccountId = p.iouAccountId ?? (p.name ? await tab(p.name, currency) : undefined);
-          resolved.push({ iouAccountId, share: p.share, paid: p.paid });
+          resolved.push({ iouAccountId, share: p.share, paid: p.paid, covered: p.covered });
         }
         // A typed name can still land on a tab given by id elsewhere on the bill.
         const ids = resolved.flatMap(p => (p.iouAccountId ? [p.iouAccountId] : []));
@@ -170,6 +170,8 @@ function checkParties(
   for (const p of ps) {
     if (p.paid && p.paid.amount > p.share)
       throw new DomainError('INVALID_PAYMENT', 'Nobody can hand over more than their share');
+    if (p.paid && p.covered)
+      throw new DomainError('INVALID_SPLIT', 'A person is covered or pays later, not both');
     if (p.paid && !p.iouAccountId && !p.name)
       throw new DomainError('PAID_NEEDS_NAME', 'Name the person who paid');
   }

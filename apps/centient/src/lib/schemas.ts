@@ -48,6 +48,8 @@ export const command = z.discriminatedUnion('type', [
               share: z.number().int().min(0),
               /** Handed over now: moves `amount` from this person's tab into `accountId` (a named person only). */
               paid: z.object({ amount: money, accountId: id }).optional(),
+              /** What I covered of their share from another account (its own entry); kept here so Insights shows the whole bill. */
+              covered: z.object({ amount: money, accountId: id }).optional(),
             }),
           )
           .max(49)

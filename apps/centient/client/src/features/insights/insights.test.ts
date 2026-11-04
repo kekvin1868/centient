@@ -260,3 +260,40 @@ describe('counted amounts with named people (T14, T16)', () => {
     ]);
   });
 });
+
+describe('a share I covered from another account', () => {
+  it('shows the whole bill and the cover, but counts only my share here', () => {
+    const e = {
+      transactions: [],
+      command: {
+        type: 'EXPENSE',
+        amount: 260_000,
+        split: {
+          people: 3,
+          parties: [
+            {
+              iouAccountId: 'andi',
+              share: 60_000,
+              covered: { amount: 40_000, accountId: 'gopay' },
+            },
+            { iouAccountId: 'budi', share: 100_000 },
+          ],
+        },
+      },
+    };
+    const names: Record<string, string> = { andi: 'Andi', budi: 'Budi', gopay: 'GoPay' };
+    const { lines } = counted(
+      e,
+      () => true,
+      () => true,
+      id => ({ name: names[id], stickers: [] }),
+    );
+    expect(lines.map(l => [l.label, l.amount, l.counted ?? false])).toEqual([
+      ['bill, split with 3', 300_000, false],
+      ['You', 100_000, true],
+      ['You cover Andi (GoPay)', 40_000, false],
+      ['Andi', 60_000, false],
+      ['Budi', 100_000, false],
+    ]);
+  });
+});

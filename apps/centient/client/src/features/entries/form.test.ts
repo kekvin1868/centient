@@ -242,6 +242,18 @@ describe('cover the rest / pays later (T6-T8)', () => {
         }),
       ],
     });
+    // The bill remembers the cover, and an edit saves it back without cutting the bill again.
+    type Expense = Extract<Parameters<typeof fromCommand>[0], { type: 'EXPENSE' }>;
+    const cover = (c: unknown) => (c as Expense).split?.parties?.[0].covered;
+    const cmd = (r as { command: Expense }).command;
+    expect(cover(cmd)).toEqual({ amount: 15_000, accountId: 'cash' });
+    const again = toCommand(fromCommand(cmd, () => 'Andi')) as {
+      command: Expense;
+      extra?: unknown;
+    };
+    expect(again.command.amount).toBe(85_000);
+    expect(again.extra).toBeUndefined();
+    expect(cover(again.command)).toEqual({ amount: 15_000, accountId: 'cash' });
   });
 
   it('T8: pays the rest later keeps 25.000 on the tab and sends what was handed over', () => {
