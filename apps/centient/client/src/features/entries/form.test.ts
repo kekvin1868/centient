@@ -264,7 +264,9 @@ describe('cover the rest / pays later (T6-T8)', () => {
       () => 'Andi',
     );
     expect(back.parties[0]).toMatchObject({ mode: 'LATER', share: 10_000, accountId: 'cash' });
-    expect(back.parties[1].share).toBeNull();
+    // Everyone else, me included, reloads at the saved amount, so nothing re-rounds on save.
+    expect(back.parties[1].share).toBe(25_000);
+    expect(back.myShare).toBe(25_000);
   });
 
   it('refuses to cover someone who pays their full share, or a nameless payer-later', () => {
@@ -324,5 +326,28 @@ describe('joining a pot (T9)', () => {
       manager: 'Andi',
       typed: false,
     });
+  });
+});
+
+describe('editing a split where someone pays later', () => {
+  it('saves the same shares back unchanged', () => {
+    const saved = {
+      type: 'EXPENSE' as const,
+      accountId: 'bca',
+      categoryId: 'food',
+      amount: 100,
+      date: '2026-10-20',
+      split: {
+        people: 4,
+        parties: [
+          { iouAccountId: 'a', share: 50 },
+          { iouAccountId: 'b', share: 16, paid: { amount: 5, accountId: 'bca' } },
+          { iouAccountId: 'c', share: 16 },
+        ],
+      },
+    };
+    const names: Record<string, string> = { a: 'A', b: 'B', c: 'C' };
+    const r = toCommand(fromCommand(saved, id => names[id]));
+    expect(r).toMatchObject({ command: { amount: 100, split: { parties: saved.split.parties } } });
   });
 });

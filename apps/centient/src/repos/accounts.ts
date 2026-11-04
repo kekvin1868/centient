@@ -1,6 +1,6 @@
 // Accounts: where money is held (bank, e-wallet, card, IOU, ...). Each has a Main pocket.
 import { currencyRow } from './currencies';
-import { all, uid, updateColumns } from './sql';
+import { all, uid, updateStatement } from './sql';
 
 export type Account = {
   id: string;
@@ -88,23 +88,12 @@ export function accountsRepo(db: D1Database) {
 
     /**
      * Patches whitelisted columns; false when the account is not in this workspace. A changed `name` also
-     * saves the old one (with `at`) in account_name_history.
-     * ponytail: the history row is a second write after the update, not one batch; a crash between them
-     * loses one old name. Fold both into `db.batch` if that ever matters.
+     * saves the old one (with `at`) in account_name_history, in the same batch, so both land or neither.
      */
     async update(ws: string, id: string, patch: Record<string, unknown>, at?: string) {
       if (typeof patch.kind === 'string') patch = { ...patch, ...storedKind(patch.kind) };
       if (typeof patch.currency_code === 'string') await currencyRow(db, patch.currency_code).run();
-      const before =
-        typeof patch.name === 'string'
-          ? await db
-              .prepare(
-                'SELECT name FROM accounts WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL',
-              )
-              .bind(id, ws)
-              .first<{ name: string }>()
-          : null;
-      const ok = await updateColumns(
+      const stmt = updateStatement(
         db,
         'accounts',
         PATCHABLE,
@@ -113,14 +102,20 @@ export function accountsRepo(db: D1Database) {
         patch,
         ' AND deleted_at IS NULL',
       );
-      if (ok && before && at && before.name !== patch.name)
-        await db
+      if (!stmt) return true;
+      if (typeof patch.name !== 'string' || !at) return (await stmt.run()).meta.changes > 0;
+      // The history row reads the name before the UPDATE in the batch changes it.
+      const [, r] = await db.batch([
+        db
           .prepare(
-            'INSERT INTO account_name_history (id, workspace_id, account_id, old_name, changed_at) VALUES (?, ?, ?, ?, ?)',
+            `INSERT INTO account_name_history (id, workspace_id, account_id, old_name, changed_at)
+            SELECT ?, workspace_id, id, name, ? FROM accounts
+            WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL AND name != ?`,
           )
-          .bind(uid(), ws, id, before.name, at)
-          .run();
-      return ok;
+          .bind(uid(), at, id, ws, patch.name),
+        stmt,
+      ]);
+      return r.meta.changes > 0;
     },
 
     /** Old names per account, newest first: `{ [accountId]: [{ name, at }] }`. */

@@ -24,9 +24,22 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
   /**
    * Gets a split bill's IOU accounts ready. Named people get their own tab (found by name in the bill's currency,
    * or made); a split with unnamed people, or an old one without `parties`, goes to a lump account: the one given,
-   * else the IOU account named "Friends" (made if missing; never a person's tab). The saved command keeps ids only, so a rename follows.
+   * else the "Friends" tab in the bill's currency (made if missing, refused while hidden; never a person's tab).
+   * The saved command keeps ids only, so a rename follows.
+   * ponytail: a "Friends" the owner renamed is not found; a new one is made. Look up name history if that bites.
    */
   async function withIou(c: Snapshot, cmds: Command[]): Promise<{ c: Snapshot; cmds: Command[] }> {
+    // Every bill is checked before any tab is made, so a refused save leaves no new tabs behind.
+    for (const x of cmds)
+      if (x.type === 'EXPENSE' && x.split?.parties) checkParties(x.amount, x.split);
+    const tab = async (name: string, currency: string) => {
+      const id = await findOrCreateTab(repos, ws, c.accounts, name, currency);
+      if (!c.accounts.some(a => a.id === id)) {
+        catalog.invalidate();
+        c = await catalog.load();
+      }
+      return id;
+    };
     const out: Command[] = [];
     for (const x of cmds) {
       if (x.type !== 'EXPENSE' || !x.split) {
@@ -34,46 +47,21 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
         continue;
       }
       const split = { ...x.split };
-      const parties = split.parties;
-      if (parties) {
-        if (parties.length + 1 !== split.people)
-          throw new DomainError('INVALID_SPLIT', 'Split people and shares do not match');
-        const currency = c.account(x.accountId).row.currency_code;
-        const resolved: NonNullable<typeof parties> = [];
-        for (const p of parties) {
-          let iouAccountId = p.iouAccountId;
-          if (!iouAccountId && p.name) {
-            iouAccountId = await findOrCreateTab(repos, ws, c.accounts, p.name, currency);
-            catalog.invalidate();
-            c = await catalog.load();
-          }
-          if (p.paid && !iouAccountId)
-            throw new DomainError('PAID_NEEDS_NAME', 'Name the person who paid');
+      const currency = c.account(x.accountId).row.currency_code;
+      if (split.parties) {
+        const resolved: NonNullable<typeof split.parties> = [];
+        for (const p of split.parties) {
+          const iouAccountId = p.iouAccountId ?? (p.name ? await tab(p.name, currency) : undefined);
           resolved.push({ iouAccountId, share: p.share, paid: p.paid });
         }
+        // A typed name can still land on a tab given by id elsewhere on the bill.
         const ids = resolved.flatMap(p => (p.iouAccountId ? [p.iouAccountId] : []));
         if (new Set(ids).size !== ids.length)
           throw new DomainError('DUPLICATE_PARTY', 'Each person once');
         split.parties = resolved;
       }
-      if (!split.iouAccountId && (!split.parties || split.parties.some(p => !p.iouAccountId))) {
-        let iou = c.accounts.find(
-          a => a.kind === 'IOU' && !a.archived_at && a.name.toLowerCase() === 'friends',
-        );
-        if (!iou) {
-          await repos.accounts.create(ws, {
-            name: 'Friends',
-            kind: 'IOU',
-            provider: null,
-            currency_code: 'IDR',
-            due_day: null,
-          });
-          catalog.invalidate();
-          c = await catalog.load();
-          iou = c.accounts.find(a => a.kind === 'IOU' && a.name.toLowerCase() === 'friends')!;
-        }
-        split.iouAccountId = iou.id;
-      }
+      if (!split.iouAccountId && (!split.parties || split.parties.some(p => !p.iouAccountId)))
+        split.iouAccountId = await tab('Friends', currency);
       out.push({ ...x, split });
     }
     return { c, cmds: out };
@@ -169,6 +157,29 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
   };
 }
 
+/** The rules of a named split that need no tabs, checked before withIou makes any. */
+function checkParties(
+  amount: number,
+  split: NonNullable<Extract<Command, { type: 'EXPENSE' }>['split']>,
+) {
+  const ps = split.parties ?? [];
+  if (ps.length + 1 !== split.people)
+    throw new DomainError('INVALID_SPLIT', 'Split people and shares do not match');
+  if (amount - ps.reduce((s, p) => s + p.share, 0) <= 0)
+    throw new DomainError('INVALID_SHARE', 'Your share must be more than zero');
+  for (const p of ps) {
+    if (p.paid && p.paid.amount > p.share)
+      throw new DomainError('INVALID_PAYMENT', 'Nobody can hand over more than their share');
+    if (p.paid && !p.iouAccountId && !p.name)
+      throw new DomainError('PAID_NEEDS_NAME', 'Name the person who paid');
+  }
+  const keys = ps.flatMap(p =>
+    p.iouAccountId ? [p.iouAccountId] : p.name ? [`name:${p.name.trim().toLowerCase()}`] : [],
+  );
+  if (new Set(keys).size !== keys.length)
+    throw new DomainError('DUPLICATE_PARTY', 'Each person once');
+}
+
 function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] {
   const occurredAt = toOccurredAt(cmd.date, now);
   switch (cmd.type) {
@@ -241,11 +252,7 @@ function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] {
           owed(cmd.split.iouAccountId!, others, note),
         ];
       }
-      for (const p of ps)
-        if (p.paid && p.paid.amount > p.share)
-          throw new DomainError('INVALID_PAYMENT', 'Nobody can hand over more than their share');
       const mine = cmd.amount - ps.reduce((s, p) => s + p.share, 0);
-      if (mine <= 0) throw new DomainError('INVALID_SHARE', 'Your share must be more than zero');
       const named = ps.filter(p => p.iouAccountId);
       const lump = ps.filter(p => !p.iouAccountId).reduce((s, p) => s + p.share, 0);
       const names = named.map(p => c.account(p.iouAccountId!).row.name);

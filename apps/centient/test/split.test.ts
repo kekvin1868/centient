@@ -119,6 +119,9 @@ describe('split bill with named people', () => {
         ],
       }),
     ).rejects.toMatchObject({ code: 'DUPLICATE_PARTY' });
+    // None of the refused bills left a tab behind.
+    const tabs = (await w.repos.accounts.list(t.ws)).filter(a => ['A', 'B', 'a'].includes(a.name));
+    expect(tabs).toEqual([]);
   });
 
   it('will not use a hidden tab without asking', async () => {

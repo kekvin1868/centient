@@ -105,10 +105,13 @@ function splitOf(c: Extract<Command, { type: 'EXPENSE' }>, tabName: (id: string)
     split.parties.map(() => null),
     null,
   ).others;
-  const same = split.parties.every((p, i) => p.paid || p.share === auto[i]);
+  // Someone paid now: their owed share is not loaded (their typed amount is what they handed over), so my share
+  // is fixed to what was saved and they get back exactly the rest; leaving me free would re-round it.
+  const paid = split.parties.some(p => p.paid);
+  const same = !paid && split.parties.every((p, i) => p.share === auto[i]);
   return {
     split: split.people,
-    myShare: null,
+    myShare: paid ? c.amount - split.parties.reduce((s, p) => s + p.share, 0) : null,
     parties: split.parties.map((p, i) => ({
       ...blankParty(),
       name: p.iouAccountId ? tabName(p.iouAccountId) : '',

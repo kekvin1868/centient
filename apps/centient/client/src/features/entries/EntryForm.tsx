@@ -64,6 +64,13 @@ export function EntryForm({
   const allAccounts = active(cat.accounts).map(a => ({ value: a.id, label: a.name }));
   const account = cat.accounts.find(a => a.id === form.accountId);
   const currency = account?.currency_code ?? 'IDR';
+  // Covering a gap or taking money back only moves the bill's own currency.
+  const sameCurrency = everyday()
+    .filter(a => a.currency_code === currency)
+    .map(a => ({ value: a.id, label: a.name }));
+  // A new bill account drops the people's picked accounts: they may be in the old currency.
+  const setAccount = (patch: Partial<Form>) =>
+    set({ ...patch, parties: form.parties.map(p => ({ ...p, accountId: null })) });
   const categories = active(cat.categories)
     .filter(
       c => c.kind === form.type && c.name !== 'Balance adjustment' && c.name !== 'Opening balance',
@@ -131,7 +138,7 @@ export function EntryForm({
                   label="From"
                   value={form.accountId}
                   options={allAccounts}
-                  onChange={accountId => set({ accountId })}
+                  onChange={accountId => setAccount({ accountId })}
                 />
               }
             />
@@ -175,7 +182,7 @@ export function EntryForm({
                   label={form.type === 'EXPENSE' ? 'Paid with' : 'Into'}
                   value={form.accountId}
                   options={accounts}
-                  onChange={accountId => set({ accountId, envelopeId: null })}
+                  onChange={accountId => setAccount({ accountId, envelopeId: null })}
                 />
               }
             />
@@ -439,7 +446,11 @@ export function EntryForm({
                                       onChange={mode =>
                                         set({
                                           parties: form.parties.map((x, j) =>
-                                            j === i ? { ...x, mode: mode as Mode } : x,
+                                            // The account belongs to the old mode; editing hides the cover picker, so a stale one would
+                                            // cut the bill with no cover entry saved.
+                                            j === i
+                                              ? { ...x, mode: mode as Mode, accountId: null }
+                                              : x,
                                           ),
                                         })
                                       }
@@ -461,7 +472,7 @@ export function EntryForm({
                                           p.mode === 'COVER' ? 'I cover it with' : 'They paid into'
                                         }
                                         value={p.accountId ?? form.accountId}
-                                        options={accounts}
+                                        options={sameCurrency}
                                         onChange={accountId =>
                                           set({
                                             parties: form.parties.map((x, j) =>
