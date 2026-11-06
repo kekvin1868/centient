@@ -11,6 +11,7 @@ import { Banner } from '../../ui/Banner';
 import { showToast } from '../../ui/Toast';
 import { blankForm, chipView, fromDraft, toCommand, type LogItem } from './form';
 import { LogChip } from './LogChip';
+import { LogGuideSheet } from './LogGuideSheet';
 import { LogSheet } from './LogSheet';
 import { entryApi } from '../../models/entry';
 import { persist } from '../../models/query';
@@ -21,6 +22,7 @@ export function LogBox() {
   const [pending, setPending] = useState<LogItem[]>([]);
   const [sheet, setSheet] = useState<LogItem | null>(null);
   const [saving, setSaving] = useState(false);
+  const [guide, setGuide] = useState(false);
   const today = me.value?.today ?? '';
 
   const live = useMemo(() => {
@@ -144,8 +146,8 @@ export function LogBox() {
       suggestedMerchant: '',
     });
 
-  // The key on the right says what Enter will do: log (cyan, with a count), answer a card first (?), or,
-  // with nothing typed, open the full form.
+  // The key on the right says what Enter will do: log (cyan, with a count), or, with nothing typed, open the full
+  // form. While a card still asks something it is `?`: the logging guide (Enter still says to answer the card).
   const key = ready.length ? (
     <button
       type="submit"
@@ -159,7 +161,12 @@ export function LogBox() {
       </span>
     </button>
   ) : items.length ? (
-    <button type="submit" className="keycap keycap-quiet" aria-label="Answer the card first">
+    <button
+      type="button"
+      className="keycap keycap-quiet"
+      onClick={() => setGuide(true)}
+      aria-label="How to log"
+    >
       <Question size={18} weight="bold" aria-hidden="true" />
     </button>
   ) : (
@@ -221,6 +228,7 @@ export function LogBox() {
           />
         ))}
       </div>
+      <LogGuideSheet open={guide} onClose={() => setGuide(false)} />
       <LogSheet
         key={sheet?.key ?? 'none'}
         item={sheet}

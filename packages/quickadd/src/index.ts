@@ -19,6 +19,17 @@ import {
   VERBS,
   type Hint,
 } from './dictionary';
+// The word lists the client's logging guide (LogGuideSheet) shows, so it says what the parser really reads.
+export {
+  CASH_WORDS,
+  DAY_NAMES,
+  HOKKIEN_AMBIGUOUS,
+  HOKKIEN_EXACT,
+  HOKKIEN_UNITS,
+  INCOME_WORDS,
+  PROVIDER_ALIASES,
+  TRANSFER_WORDS,
+} from './dictionary';
 
 export type QAAccount = {
   id: string;
@@ -65,7 +76,7 @@ export type Draft = {
   note: string;
 };
 
-const SUFFIXES = new Set(['rb', 'ribu', 'k', 'jt', 'juta', 'm', 'usd', 'usdt', 'btc']);
+export const SUFFIXES = new Set(['rb', 'ribu', 'k', 'jt', 'juta', 'm', 'usd', 'usdt', 'btc']);
 
 export function parseQuickAdd(input: string, ctx: QAContext): Draft[] {
   const text = input

@@ -2,11 +2,12 @@
 // The title (where / from whom) is typed like a typewriter; every other detail is a receipt line you tap to
 // change; the pocket is picked up front as stamps (Main pressed by default); the amount is the TOTAL.
 import { Minus, Plus, X } from '@phosphor-icons/react';
-import { Fragment, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { amountInput, showAmount } from '../../lib/amount';
 import { formatMoney } from '../../lib/format';
 import { pocketColor } from '../../lib/pocketColors';
 import { active, catalog, everyday } from '../../lib/state';
+import { DatePicker } from '../../ui/DatePicker';
 import { LineSelect, Receipt, ReceiptLine, Rule } from '../../ui/Receipt';
 import { useSumInput } from '../../ui/useSumInput';
 import { Segmented } from '../../ui/Segmented';
@@ -54,6 +55,12 @@ export function EntryForm({
   lockType?: boolean;
 }) {
   const set = (patch: Partial<Form>) => onChange({ ...form, ...patch });
+  const [dateOpen, setDateOpen] = useState(false);
+  const dateLine = useRef<HTMLButtonElement>(null);
+  const closeDate = () => {
+    setDateOpen(false);
+    dateLine.current?.focus();
+  };
   const [more, setMore] = useState(
     Boolean(form.note || form.pot || (form.split && form.split > 1)),
   );
@@ -210,15 +217,28 @@ export function EntryForm({
           label="Date"
           value={dateLabel(form.date)}
           control={
-            <input
-              type="date"
-              aria-label="Date"
-              value={form.date}
-              onChange={e => set({ date: e.target.value })}
-              className="absolute inset-0 w-full cursor-pointer opacity-0 [font-size:16px]"
+            <button
+              ref={dateLine}
+              type="button"
+              aria-label={`Date, ${dateLabel(form.date)}`}
+              aria-expanded={dateOpen}
+              data-value={form.date}
+              onClick={() => setDateOpen(o => !o)}
+              className="absolute inset-0 w-full cursor-pointer"
             />
           }
         />
+        {dateOpen && (
+          <DatePicker
+            label="Date"
+            value={form.date}
+            onPick={d => {
+              set({ date: d });
+              closeDate();
+            }}
+            onClose={closeDate}
+          />
+        )}
         {money && pockets.length > 0 && (
           <div
             className="pt-1.5"
@@ -267,8 +287,8 @@ export function EntryForm({
                 <div className="flex gap-2 py-1" role="group" aria-label="Kind of split">
                   {(
                     [
-                      [false, 'I paid, others owe me'],
-                      [true, "I'm joining a pot"],
+                      [false, 'My Pot'],
+                      [true, 'Joining a Pot'],
                     ] as const
                   ).map(([pot, label]) => (
                     <button
@@ -374,7 +394,7 @@ export function EntryForm({
                         <Minus size={12} weight="bold" />
                       </Step>
                       <span className="min-w-[4.5ch] text-center font-bold" aria-live="polite">
-                        {form.split ?? 1} {(form.split ?? 1) === 1 ? 'just you' : 'people'}
+                        {(form.split ?? 1) === 1 ? 'Just me' : `${form.split} people`}
                       </span>
                       <Step
                         label="One person more"

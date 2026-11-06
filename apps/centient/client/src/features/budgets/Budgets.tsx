@@ -15,14 +15,9 @@ import {
   type Budget,
   type BudgetCycle,
 } from '../../models/budget';
-import {
-  forecastView,
-  loadStartDay,
-  monthDay,
-  startDayFor,
-  STATUS_LABEL,
-} from '../../models/forecast';
+import { forecastView, loadStartDay, monthDay, startDayFor } from '../../models/forecast';
 import { Group, Row } from '../../ui/List';
+import { StatusTag } from './StatusTag';
 import { WinButton } from '../../ui/WinButton';
 import { BudgetGuideSheet } from './BudgetGuideSheet';
 import { BudgetHistorySheet } from './BudgetHistorySheet';
@@ -147,13 +142,7 @@ function BudgetRow({
           {perDay}
           {(f.status || f.hint) && (
             <span className="mt-1 block">
-              {f.status && (
-                <span
-                  className={`font-semibold ${f.status === 'ON_TRACK' ? 'text-primary' : 'text-negative'}`}
-                >
-                  {STATUS_LABEL[f.status]}
-                </span>
-              )}
+              {f.status && <StatusTag status={f.status} />}
               {f.line && ` · ${f.line}`}
               {f.hint}
             </span>

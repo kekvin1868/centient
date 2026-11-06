@@ -212,6 +212,23 @@ async function pick(name: string) {
   await expect(card).toHaveAttribute('aria-pressed', 'true');
 }
 
+test('tapping the account Home already shows keeps it (v2 #8)', async () => {
+  await tab('Home').tap();
+  const chip = page.getByRole('button', { name: /^Showing .*\. Change account$/ });
+  for (let n = 0; n < 2; n++) {
+    await chip.tap();
+    const dailies = page
+      .getByRole('dialog', { name: 'Pick an account' })
+      .getByRole('button', { name: /^Dailies/ });
+    await dailies.focus();
+    await dailies.press('Enter');
+    await expect(page.getByRole('dialog', { name: 'Pick an account' })).toBeHidden();
+    await expect(page.getByRole('button', { name: /^Showing Dailies/ })).toBeVisible();
+  }
+  await showAll();
+  await tab('Money').tap(); // where the next test starts
+});
+
 test('pockets live inside an account: add one, move money in, the account balance stays', async () => {
   await pick('Main Account');
   const pockets = page.getByRole('region', { name: 'Pockets in Main Account' });
@@ -446,6 +463,21 @@ test('a manual entry is a receipt: type the title, pick a pocket stamp, enter th
     .getByRole('button', { name: 'RENT' })
     .tap();
   await sheet.getByRole('textbox', { name: 'Amount' }).fill('100000');
+  // The date line opens our calendar, not the browser's (v2 #3): today outlined, arrows move, Escape closes
+  // only the calendar, Enter picks.
+  const date = sheet.getByRole('button', { name: /^Date,/ });
+  await date.tap();
+  const cal = sheet.getByRole('group', { name: 'Date calendar' });
+  await expect(cal.locator('[aria-current="date"]')).toHaveAttribute('data-date', jakartaDay());
+  await page.keyboard.press('Escape');
+  await expect(cal).toBeHidden();
+  await expect(sheet).toBeVisible();
+  await date.tap();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowLeft');
+  await page.keyboard.press('Enter');
+  await expect(cal).toBeHidden();
+  await expect(date).toHaveAttribute('data-value', jakartaDay());
   await sheet.getByRole('button', { name: 'Log it' }).tap();
   await expect(sheet).toBeHidden();
   const rent = (await balances()).envelopes.find(e => e.name === 'Rent')!;
@@ -475,7 +507,9 @@ test('a split bill names people, re-divides live, and Equal resets it (Phase 1b)
   await sheet.getByRole('combobox', { name: 'Paid with' }).selectOption({ label: 'Main Account' });
   await sheet.getByRole('textbox', { name: 'Amount' }).fill('100000');
   await sheet.getByRole('button', { name: '+ Split or note' }).tap();
+  await expect(sheet.getByText('Just me', { exact: true })).toBeVisible(); // v2 #4: no "1 just you"
   for (let n = 0; n < 3; n++) await sheet.getByRole('button', { name: 'One person more' }).tap();
+  await expect(sheet.getByText('4 people', { exact: true })).toBeVisible();
   const who = sheet.getByRole('group', { name: 'Who pays what' });
   await expect(who.getByRole('textbox', { name: 'Your share' })).toHaveValue('25.000');
   // Person 2 is Andi and pays only 10.000: the others (me, Person 3, Person 4) share the other 90.000.
@@ -673,7 +707,7 @@ test('budgets are grouped per currency, and the ? beside the heading explains th
   expect(button.x).toBeGreaterThan(title.x + title.width); // title left, button right
   expect(page.viewportSize()!.width - (button.x + button.width)).toBeLessThan(40); // at the far right
   await help.tap();
-  const guide = page.getByRole('dialog', { name: 'Budget words' });
+  const guide = page.getByRole('dialog', { name: 'Insights Glossary' });
   for (const word of ['On track', 'Likely over', 'Over'])
     await expect(guide.getByText(word, { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
@@ -734,7 +768,10 @@ test('a temporary budget: the switch asks for a start and a length, and its row 
   const form = page.getByRole('dialog', { name: 'Set a budget' });
   await form.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Food & Drink' });
   await form.getByText('Temporary', { exact: true }).tap();
-  await expect(form.getByLabel('Starts')).toHaveValue(jakartaDay());
+  await expect(form.getByRole('button', { name: /^Starts,/ })).toHaveAttribute(
+    'data-value',
+    jakartaDay(),
+  );
   await expect(form.getByRole('combobox', { name: 'Lasts' })).toHaveValue('14');
   await expect(form.getByText(`Ends ${monthDay(jakartaDay(14))} at 00:00`)).toBeVisible();
   await expect(form.getByRole('textbox', { name: 'Limit for these 14 days' })).toBeVisible();
@@ -783,7 +820,14 @@ test('an overlapping temporary budget is refused in a warning popup; back to bac
     await categoryId('Food & Drink'),
   );
   await expect(form.getByRole('textbox', { name: 'Limit for these 14 days' })).toHaveValue(/400/);
-  await form.getByLabel('Starts').fill(jakartaDay(7));
+  // Our calendar (v2 #3): it opens on the picked day; a week down, Enter picks it.
+  await form.getByRole('button', { name: /^Starts,/ }).tap();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(form.getByRole('button', { name: /^Starts,/ })).toHaveAttribute(
+    'data-value',
+    jakartaDay(7),
+  );
   await form.getByRole('button', { name: 'Save' }).tap();
   await expect(form).toBeHidden();
   expect(
@@ -846,4 +890,20 @@ test('ended temporary budgets move to History with what was saved', async () => 
   await expect(rows.nth(1)).toContainText('Rp0 of Rp200.000');
   await expect(rows.nth(1)).toContainText('Rp200.000 saved');
   await page.keyboard.press('Escape');
+});
+
+test('the ? keycap opens the logging guide; Enter still asks to answer the card (v2 #10)', async () => {
+  await tab('Home').tap();
+  const box = page.getByRole('textbox', { name: 'What did you spend or receive?' });
+  await box.fill('perpuluhan 50'); // several sizes fit, so the card asks
+  await page.getByRole('button', { name: 'How to log' }).tap();
+  const guide = page.getByRole('dialog', { name: 'How to log' });
+  for (const rule of ['Amounts', 'Money in', 'Hokkien'])
+    await expect(guide.getByText(rule, { exact: true })).toBeVisible();
+  await expect(guide.getByText(/cenggo = Rp1\.500/)).toBeVisible(); // from the quickadd dictionary
+  await page.keyboard.press('Escape');
+  await expect(guide).toBeHidden();
+  await box.press('Enter');
+  await expect(page.getByText('Answer the question on the card first')).toBeVisible();
+  await box.fill('');
 });

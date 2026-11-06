@@ -9,7 +9,7 @@ import { nextPocketColor } from '../../lib/pocketColors';
 import { catalog, everyday } from '../../lib/state';
 import { AmountField } from '../../ui/AmountField';
 import { ColorPicker } from '../../ui/ColorPicker';
-import { InputRow, PickerRow } from '../../ui/Fields';
+import { DateRow, InputRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
@@ -93,7 +93,7 @@ export function AddPocketSheet({
               currency={inside?.currency_code ?? 'IDR'}
               onChange={setTarget}
             />
-            <InputRow label="By" type="date" value={date} onInput={setDate} />
+            <DateRow label="By" value={date} onChange={setDate} optional />
           </>
         )}
       </Group>

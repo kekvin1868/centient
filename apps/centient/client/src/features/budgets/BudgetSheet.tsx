@@ -23,7 +23,7 @@ import { monthDay } from '../../models/forecast';
 import { AmountField } from '../../ui/AmountField';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { CurrencyPicker } from '../../ui/CurrencyPicker';
-import { InputRow, PickerRow, ToggleRow } from '../../ui/Fields';
+import { DateRow, PickerRow, ToggleRow } from '../../ui/Fields';
 import { Group, Row } from '../../ui/List';
 import { NoticeSheet } from '../../ui/NoticeSheet';
 import { Sheet } from '../../ui/Sheet';
@@ -138,11 +138,10 @@ export function BudgetSheet({
               </>
             ) : (
               <>
-                <InputRow
+                <DateRow
                   label="Starts"
-                  type="date"
                   value={form.startsOn}
-                  onInput={v => set({ startsOn: v })}
+                  onChange={v => set({ startsOn: v })}
                 />
                 <PickerRow
                   label="Lasts"

@@ -7,7 +7,7 @@ import { pocketColor, POCKET_COLORS } from '../../lib/pocketColors';
 import { catalog } from '../../lib/state';
 import { AmountField } from '../../ui/AmountField';
 import { ColorPicker } from '../../ui/ColorPicker';
-import { InputRow } from '../../ui/Fields';
+import { DateRow, InputRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
@@ -68,7 +68,7 @@ export function EditPocketSheet({
               currency={p.currency_code}
               onChange={setTarget}
             />
-            <InputRow label="By" type="date" value={date} onInput={setDate} />
+            <DateRow label="By" value={date} onChange={setDate} optional />
           </>
         )}
       </Group>

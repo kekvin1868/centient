@@ -40,6 +40,10 @@
   --color-muted: var(--muted);
   --color-ink: var(--ink);
   --color-edge: var(--edge);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-on-tone: var(--on-tone);
 }
 
 /* Miku palette: teal #39c5bb (hair), aqua #86cecb, deep teal #137a7f, pink #e12885 (ties), silver #bec8d1, charcoal #373b3e. */
@@ -56,6 +60,12 @@
   --edge: rgb(78 75 66 / 0.32); /* hairline outlines, NieR's brown-gray ink at low strength */
   --lip: rgb(78 75 66 / 0.2); /* the short shadow under raised pieces */
   --logo-edge: #4e4b42; /* outline that keeps the light coin visible on paper */
+  /* Budget status tags (ui/StatusTag), filled with dark ink on top in both themes: the one place with green,
+     yellow and red, so a status reads at a glance. --on-tone is 7:1 or better on each. */
+  --ok: #4fd67a;
+  --warn: #f4c43a;
+  --bad: #ff6b6b;
+  --on-tone: #1a1712;
 }
 @supports (color: color(display-p3 0 0 0)) {
   :root {

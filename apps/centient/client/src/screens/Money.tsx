@@ -29,7 +29,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
     bal.accounts[0] ??
     null;
   const pockets = a ? bal.envelopes.filter(e => e.account_id === a.id && !e.archived_at) : [];
-  // Tapping the picked card again asks to drop it (null); Money always keeps one. Home has no IOU accounts.
+  // Home has no IOU accounts, so an IOU pick stays on Money.
   const pick = (id: string | null) => {
     if (!id) return;
     setPicked(id);

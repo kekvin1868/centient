@@ -1,8 +1,8 @@
 // Accounts as playing cards held in a hand, like Balatro: an arched fan you turn with a finger or the mouse
 // (drag sideways; it settles on the nearest card) or the arrow keys. The card in the middle sits at the top of
 // the arc and its neighbours move out of its way, so a lifted card never hides the others. Any number of
-// accounts uses the same fan; cards far from the middle fade. Tap a card to turn to it and pick it (tap the
-// picked one again to drop it). With `pickOnSettle` (Money), turning also picks the card it settles on.
+// accounts uses the same fan; cards far from the middle fade. Tap a card to turn to it and pick it (tapping the
+// picked one again keeps it). With `pickOnSettle` (Money), turning also picks the card it settles on.
 // The "All" card (id null) is the joker. Cards are dealt in and float; on a pointer device one tilts toward it.
 import {
   Bank,
@@ -173,7 +173,7 @@ export function AccountHand({
               if (dragged.current) return;
               buzz();
               turn(i, false);
-              onPick(c.id === selected && c.id !== null ? null : c.id);
+              onPick(c.id); // tapping the picked card again keeps it
             }}
           />
         </Slot>

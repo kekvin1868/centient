@@ -7,7 +7,7 @@ import type { Account } from '../../../../src/repos/accounts';
 import { formatMoney } from '../../lib/format';
 import { active, catalog, me } from '../../lib/state';
 import { AmountField } from '../../ui/AmountField';
-import { InputRow, PickerRow, StepperRow, ToggleRow } from '../../ui/Fields';
+import { DateRow, InputRow, PickerRow, StepperRow, ToggleRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
@@ -106,7 +106,7 @@ export function NewPlanSheet({
             if (paidCount >= v) setPaidCount(v - 1);
           }}
         />
-        <InputRow label="First due" type="date" value={firstDue} onInput={setFirstDue} />
+        <DateRow label="First due" value={firstDue} onChange={setFirstDue} />
         <StepperRow
           label="Already paid"
           value={paidCount}
