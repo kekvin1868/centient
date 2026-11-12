@@ -133,7 +133,7 @@ export function addPocket(d: Draft, k: string): { draft: Draft; key: string } {
     key: key('p'),
     id: null,
     name: '',
-    kind: 'SAVINGS',
+    kind: 'SPENDING', // owner 2026-11-12: new pockets are for spending (and can take a budget)
     balance: null,
     main: false,
   };
@@ -166,36 +166,96 @@ export const editPocket = (
 export const removePocket = (d: Draft, k: string, pk: string) =>
   map(d, k, a => ({ ...a, pockets: a.pockets.filter(p => p.main || p.key !== pk) }));
 
-/** Moves `amount` out of an account's Main balance into another account's pocket (its Main or a named one). Opening
- * balances only: nothing is logged as a transfer. Unchanged when the amount is more than the Main balance holds. */
-export function moveBalance(
+/** Where a pocket's (or a BALANCE's) extra money comes from when it is raised. */
+export type Source =
+  { kind: 'BALANCE' } | { kind: 'BUDGET' } | { kind: 'ACCOUNT'; account: string; pocket: string };
+
+/** A row another account can give from: its BALANCE (Main) or one of its pockets. */
+export type SourceRow = {
+  account: string;
+  pocket: string;
+  name: string;
+  main: boolean;
+  balance: number | null;
+};
+
+/** Other kept accounts that hold money (not cards / pay later), each BALANCE first with its pockets under it. */
+export const sources = (d: Draft, k: string): SourceRow[] =>
+  d
+    .filter(a => a.kept && a.key !== k && !owes(a.kind))
+    .flatMap(a =>
+      [...a.pockets]
+        .sort((x, y) => Number(y.main) - Number(x.main))
+        .map(p => ({
+          account: a.key,
+          pocket: p.key,
+          name: p.main ? a.name : p.name,
+          main: p.main,
+          balance: p.balance,
+        })),
+    );
+
+/** The mode a raise starts in: From Balance, unless this account's BALANCE holds nothing (then new money). */
+export function defaultSource(a: AccountDraft, main: boolean): Source {
+  const have = a.pockets.find(p => p.main)?.balance ?? 0;
+  return !main && have > 0 ? { kind: 'BALANCE' } : { kind: 'BUDGET' };
+}
+
+/** What a source row holds now (null when it is gone). */
+export function sourceHas(d: Draft, k: string, s: Source): { name: string; have: number } | null {
+  if (s.kind === 'BUDGET') return null;
+  const a = d.find(x => x.key === (s.kind === 'ACCOUNT' ? s.account : k));
+  const p =
+    s.kind === 'ACCOUNT' ? a?.pockets.find(x => x.key === s.pocket) : a?.pockets.find(x => x.main);
+  if (!a || !p) return null;
+  const owner = a.name.endsWith('s') ? `${a.name}'` : `${a.name}'s`;
+  return { name: p.main ? `${owner} balance` : `${a.name} · ${p.name}`, have: p.balance ?? 0 };
+}
+
+/**
+ * Sets a pocket (or the BALANCE) to `amount`. Raising takes the extra from `source`: this BALANCE, another account's
+ * row, or nowhere (Additional Budget); `short` when the source has less. Lowering a pocket gives the difference back
+ * to this BALANCE; the BALANCE itself just takes the number. Null = back to ??? (a pocket's money goes back first).
+ */
+export function setAmount(
   d: Draft,
-  from: string,
-  to: string,
-  toPocket: string,
-  amount: number,
-): Draft {
-  const src = d.find(a => a.key === from)?.pockets.find(p => p.main);
-  if (
-    from === to ||
-    !src ||
-    amount <= 0 ||
-    (src.balance ?? 0) < amount ||
-    !d.find(a => a.key === to)?.pockets.some(p => p.key === toPocket)
-  )
-    return d;
-  return d.map(a =>
-    a.key !== from && a.key !== to
-      ? a
-      : {
-          ...a,
-          pockets: a.pockets.map(p =>
-            a.key === from && p.main
-              ? { ...p, balance: p.balance! - amount }
-              : a.key === to && p.key === toPocket
-                ? { ...p, balance: (p.balance ?? 0) + amount }
-                : p,
-          ),
-        },
-  );
+  k: string,
+  pk: string,
+  amount: number | null,
+  source: Source,
+): { draft: Draft } | { short: { name: string; have: number } } {
+  const a = d.find(x => x.key === k);
+  const p = a?.pockets.find(x => x.key === pk);
+  if (!a || !p) return { draft: d };
+  const delta = (amount ?? 0) - (p.balance ?? 0);
+  const set = (x: Draft, ak: string, pkk: string, f: (b: number | null) => number | null) =>
+    x.map(acc =>
+      acc.key !== ak
+        ? acc
+        : {
+            ...acc,
+            pockets: acc.pockets.map(q => (q.key === pkk ? { ...q, balance: f(q.balance) } : q)),
+          },
+    );
+  let next = set(d, k, pk, () => amount);
+  const main = a.pockets.find(x => x.main)!;
+  if (delta < 0 && !p.main) next = set(next, k, main.key, b => (b ?? 0) - delta);
+  if (delta > 0 && source.kind !== 'BUDGET' && !(p.main && source.kind === 'BALANCE')) {
+    const from = sourceHas(d, k, source);
+    if (!from || from.have < delta) return { short: from ?? { name: 'That', have: 0 } };
+    const [ak, pkk] = source.kind === 'ACCOUNT' ? [source.account, source.pocket] : [k, main.key];
+    next = set(next, ak, pkk, b => (b ?? 0) - delta);
+  }
+  return { draft: next };
+}
+
+/** Deletes a pocket; `back` returns its money to the account's BALANCE, else the account total drops by it. */
+export function deletePocket(d: Draft, k: string, pk: string, back: boolean): Draft {
+  const p = d.find(a => a.key === k)?.pockets.find(x => x.key === pk);
+  const next = removePocket(d, k, pk);
+  if (!back || !p?.balance) return next;
+  return map(next, k, a => ({
+    ...a,
+    pockets: a.pockets.map(x => (x.main ? { ...x, balance: (x.balance ?? 0) + p.balance! } : x)),
+  }));
 }
