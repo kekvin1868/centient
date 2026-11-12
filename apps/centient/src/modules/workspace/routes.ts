@@ -25,6 +25,11 @@ export const workspaceRoutes = new Hono<AppEnv>()
     },
   )
 
+  .post('/workspace/purge', json(z.object({ confirm: z.string().max(20) })), async c => {
+    await c.var.services.workspace.purge(c.req.valid('json').confirm);
+    return c.json({ ok: true });
+  })
+
   .post('/workspace/reset', async c => {
     await c.var.services.workspace.reset();
     return c.json({ ok: true });

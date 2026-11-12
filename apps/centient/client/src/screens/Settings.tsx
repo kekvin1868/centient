@@ -1,4 +1,5 @@
-// Settings: accounts, pockets, categories, hidden items, when the month starts, import, the Inbox, backup and reset. "Hide"
+// Settings: accounts, pockets, categories, hidden items, when the month starts, the app lock, import, the Inbox,
+// backup, reset and delete everything. "Hide"
 // keeps history; deleting an account or resetting flags data as deleted rather than erasing it.
 import { useState } from 'react';
 import type { Account } from '../../../src/repos/accounts';
@@ -10,7 +11,9 @@ import { EditAccountSheet } from '../features/accounts/EditAccountSheet';
 import { AddCategorySheet } from '../features/categories/AddCategorySheet';
 import { EditCategorySheet } from '../features/categories/EditCategorySheet';
 import { ImportSheet } from '../features/inbox/ImportSheet';
+import { LockSettings } from '../features/lock/LockSettings';
 import { AddPocketSheet } from '../features/pockets/AddPocketSheet';
+import { DeleteAccountSheet } from '../features/workspace/DeleteAccountSheet';
 import { EditPocketSheet } from '../features/pockets/EditPocketSheet';
 import { HiddenItems } from '../features/workspace/HiddenItems';
 import { MonthStart } from '../features/workspace/MonthStart';
@@ -31,6 +34,7 @@ export function Settings() {
   const [category, setCategory] = useState<Category | null>(null);
   const [add, setAdd] = useState<'account' | 'pocket' | 'category' | null>(null);
   const [reset, setReset] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [importing, setImporting] = useState(false);
   const [inbox, setInbox] = useState(false);
   const cat = catalog.value;
@@ -96,6 +100,7 @@ export function Settings() {
       <HiddenItems />
       <MonthStart />
       <ForecastStart />
+      <LockSettings />
 
       <Group label="Your data">
         <Row
@@ -130,10 +135,22 @@ export function Settings() {
           }
           onClick={() => setReset(true)}
         />
+        <Row
+          title={
+            <span className="k-color-brand-red font-semibold text-primary">Delete everything</span>
+          }
+          sub="For good, from the server too"
+          onClick={() => setDeleting(true)}
+        />
       </Group>
 
       {/* Sheets are keyed by what they show, so each opening starts from fresh state set at mount. */}
       <ResetSheet open={reset} onClose={() => setReset(false)} />
+      <DeleteAccountSheet
+        key={`delete:${deleting}`}
+        open={deleting}
+        onClose={() => setDeleting(false)}
+      />
       <ImportSheet
         key={`import:${importing}`}
         open={importing}

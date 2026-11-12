@@ -15,6 +15,9 @@ function world() {
     async get(k) {
       return files.get(k) ?? null;
     },
+    async delete(keys) {
+      for (const k of keys) files.delete(k);
+    },
   };
   return { w: base({ now: () => NOW, store }), files };
 }

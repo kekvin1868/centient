@@ -1,7 +1,8 @@
-// Workspace use cases: who am I, settings, the catalog, crypto prices, backup / CSV export, reset.
+// Workspace use cases: who am I, settings, the catalog, crypto prices, backup / CSV export, reset, delete account.
 import { DECIMALS } from '@centient/money';
 import type { ServiceDeps } from '../../context';
 import { addDays, cycleStart, jakartaToday, nextCycleStart } from '../../domain/cycle';
+import { DomainError } from '../../domain/ledger';
 import type { Price } from '../../repos/prices';
 import type { LedgerService } from '../ledger/service';
 
@@ -16,7 +17,8 @@ export function createWorkspaceService({
   catalog,
   ledger,
   fetch,
-}: ServiceDeps & { ledger: LedgerService; fetch: typeof globalThis.fetch }) {
+  userId,
+}: ServiceDeps & { ledger: LedgerService; fetch: typeof globalThis.fetch; userId: string }) {
   const stamp = () => new Date(now()).toISOString();
 
   return {
@@ -185,6 +187,20 @@ export function createWorkspaceService({
     },
 
     /** Soft-deletes the workspace; the next request creates a fresh, seeded one. */
+    /**
+     * Delete account: erases the person and everything in every workspace they have had, rows and files, for
+     * good (reset only flags a workspace). `confirm` must be the word DELETE, typed by the owner. The next
+     * sign-in starts from nothing.
+     */
+    async purge(confirm: string) {
+      if (confirm !== 'DELETE')
+        throw new DomainError('CONFIRM_DELETE', 'Type DELETE to delete everything');
+      const files = await repos.purge.fileKeys(userId);
+      await repos.purge.user(userId);
+      // The rows are gone in one write; a file that fails to delete after it is only an orphan in the bucket.
+      await repos.files.erase(files);
+    },
+
     async reset() {
       await repos.workspaces.reset(ws, stamp());
     },
