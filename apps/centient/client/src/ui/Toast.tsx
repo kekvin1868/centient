@@ -29,6 +29,19 @@ export function showToast(
   };
 }
 
+/** Ends a toast that has work waiting (a pending delete) now: the Undo window is over. */
+export function endToast() {
+  const t = toast.value;
+  if (!t?.onExpire) return;
+  toast.value = null;
+  t.onExpire();
+}
+
+// Leaving the app (switching away, closing the PWA) ends the toast now, so a pending delete is sent before the page
+// dies. Switching tabs does too (App), so the next screen's balances are not 5 seconds behind.
+if (typeof document !== 'undefined')
+  document.addEventListener('visibilitychange', () => document.hidden && endToast());
+
 export function Toast() {
   const t = toast.value;
   const last = useRef<ToastState | null>(null); // keeps the text on screen while it slides away

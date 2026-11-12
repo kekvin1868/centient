@@ -4,7 +4,7 @@ import { useIsRestoring } from '@tanstack/react-query';
 import { App as KonstaApp } from 'konsta/react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { BottomNav, type Screen } from '../layouts/BottomNav';
-import { Toast } from '../ui/Toast';
+import { endToast, Toast } from '../ui/Toast';
 import { attempt } from '../lib/run';
 import { Home } from '../screens/Home';
 import { me } from '../lib/state';
@@ -40,6 +40,7 @@ export function App() {
   }, [restoring]);
   useEffect(() => {
     if (prev.current !== screen) {
+      endToast(); // a delete waiting on Undo is sent now, so this screen's balances include it
       setFx(randomFx());
       scrollTo(0, 0);
     }
