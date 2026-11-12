@@ -13,6 +13,7 @@ import { installmentsRoutes } from './modules/installments/routes';
 import { ledgerRoutes } from './modules/ledger/routes';
 import { lockRoutes } from './modules/lock/routes';
 import { pocketsRoutes } from './modules/pockets/routes';
+import { pushRoutes } from './modules/push/routes';
 import { quickaddRoutes } from './modules/quickadd/routes';
 import { recurringRoutes } from './modules/recurring/routes';
 import { reportsRoutes } from './modules/reports/routes';
@@ -34,6 +35,7 @@ const routes = app
   .route('/api/recurring', recurringRoutes)
   .route('/api/inbox', inboxRoutes)
   .route('/api/lock', lockRoutes)
+  .route('/api/push', pushRoutes)
   .route('/api', installmentsRoutes)
   .route('/api', reportsRoutes);
 

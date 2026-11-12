@@ -13,6 +13,8 @@ import { createLedgerService } from '../modules/ledger/service';
 import { UNLOCK_COOKIE } from '../modules/lock/routes';
 import { createLockService } from '../modules/lock/service';
 import { createPocketsService } from '../modules/pockets/service';
+import { createSender, vapidOf, type Sender } from '../modules/push/sender';
+import { createPushService } from '../modules/push/service';
 import { createQuickaddService } from '../modules/quickadd/service';
 import { createRecurringService } from '../modules/recurring/service';
 import { createReportsService } from '../modules/reports/service';
@@ -29,6 +31,7 @@ import { installmentsRepo } from '../repos/installments';
 import { lockRepo } from '../repos/lock';
 import { pricesRepo } from '../repos/prices';
 import { purgeRepo } from '../repos/purge';
+import { pushRepo } from '../repos/push';
 import { recurringRepo } from '../repos/recurring';
 import { reportsRepo } from '../repos/reports';
 import { workspacesRepo } from '../repos/workspaces';
@@ -47,6 +50,7 @@ export function createRepos(db: D1Database, store?: FileStore) {
     inbox: inboxRepo(db),
     lock: lockRepo(db),
     purge: purgeRepo(db),
+    push: pushRepo(db),
     installments: installmentsRepo(db),
     files: filesRepo(db, store),
     reports: reportsRepo(db),
@@ -66,6 +70,8 @@ export function createServices(o: {
   user: { id: string; email: string };
   now: () => number;
   fetch: typeof globalThis.fetch;
+  /** Sends Web Push; left out when the server has no VAPID keys (and in most tests). */
+  sender?: Sender | null;
 }) {
   const base = { ws: o.ws, now: o.now, repos: o.repos, catalog: createCatalog(o.ws, o.repos) };
   const ledger = createLedgerService(base);
@@ -82,6 +88,7 @@ export function createServices(o: {
     recurring: createRecurringService({ ...base, ledger }),
     inbox: createInboxService({ ...base, ledger, accounts }),
     workspace: createWorkspaceService({ ...base, ledger, fetch: o.fetch, userId: o.user.id }),
+    push: createPushService({ userId: o.user.id, repos: o.repos, sender: o.sender ?? null }),
     lock: createLockService({
       userId: o.user.id,
       email: o.user.email,
@@ -95,12 +102,15 @@ export type Services = ReturnType<typeof createServices>;
 export const init = (): MiddlewareHandler<AppEnv> => async (c, next) => {
   const repos = createRepos(c.env.DB, c.env.FILES && r2Files(c.env.FILES));
   const { userId, workspaceId } = await repos.workspaces.ensure(c.var.email);
+  const send: typeof fetch = (input, init) => fetch(input, init);
+  const vapid = vapidOf(c.env);
   const services = createServices({
     repos,
     ws: workspaceId,
     user: { id: userId, email: c.var.email },
     now: Date.now,
-    fetch: (input, init) => fetch(input, init),
+    fetch: send,
+    sender: vapid && createSender(vapid, send),
   });
   c.set('services', services);
   // The app lock: while it is on, a browser without a live unlock session reaches only /api/lock. A service

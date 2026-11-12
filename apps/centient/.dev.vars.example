@@ -1,2 +1,7 @@
 DEV_EMAIL=dev@localhost
 # Extra dev hosts, e.g. your ngrok domain (only behind ngrok OAuth): DEV_HOSTS=your-name.ngrok-free.dev
+# Bill reminders (Web Push). Make a key pair once with `npx web-push generate-vapid-keys`; in production set the
+# same three with `wrangler secret put`. Without them the app runs and reminders are simply off.
+# VAPID_SUBJECT=mailto:you@example.com
+# VAPID_PUBLIC_KEY=
+# VAPID_PRIVATE_KEY=

@@ -1,5 +1,5 @@
-// Registers the service worker (client/public/sw.js) so the app opens with no signal. Production builds only:
-// in development it would serve stale code over hot reload.
+// Registers the service worker (client/public/sw.js) so the app opens with no signal and can show bill
+// reminders. Production builds only: in development it would serve stale code over hot reload.
 export function registerServiceWorker() {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
   const sw = navigator.serviceWorker;
@@ -12,6 +12,10 @@ export function registerServiceWorker() {
       .map(url => url.pathname);
     sw.controller?.postMessage([...new Set(files)]);
   });
+  // A reminder marks the app's icon; opening the app (or coming back to it) clears the mark.
+  const seen = () => void (document.hidden || navigator.clearAppBadge?.().catch(() => {}));
+  document.addEventListener('visibilitychange', seen);
+  seen();
   // Offline support is an extra: a refused registration (private mode) must not break the app.
   addEventListener('load', () => void sw.register(`/sw.js?v=${__BUILD_ID__}`).catch(() => {}));
 }

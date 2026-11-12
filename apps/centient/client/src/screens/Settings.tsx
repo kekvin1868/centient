@@ -1,4 +1,4 @@
-// Settings: accounts, pockets, categories, hidden items, when the month starts, the app lock, import, the Inbox,
+// Settings: accounts, pockets, categories, hidden items, when the month starts, reminders, the app lock, import, the Inbox,
 // backup, reset and delete everything. "Hide"
 // keeps history; deleting an account or resetting flags data as deleted rather than erasing it.
 import { useState } from 'react';
@@ -13,6 +13,7 @@ import { EditCategorySheet } from '../features/categories/EditCategorySheet';
 import { ImportSheet } from '../features/inbox/ImportSheet';
 import { LockSettings } from '../features/lock/LockSettings';
 import { AddPocketSheet } from '../features/pockets/AddPocketSheet';
+import { PushSettings } from '../features/push/PushSettings';
 import { DeleteAccountSheet } from '../features/workspace/DeleteAccountSheet';
 import { EditPocketSheet } from '../features/pockets/EditPocketSheet';
 import { HiddenItems } from '../features/workspace/HiddenItems';
@@ -100,6 +101,7 @@ export function Settings() {
       <HiddenItems />
       <MonthStart />
       <ForecastStart />
+      <PushSettings />
       <LockSettings />
 
       <Group label="Your data">
