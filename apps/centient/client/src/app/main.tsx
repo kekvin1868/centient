@@ -6,7 +6,10 @@ import '@fontsource-variable/geist-mono';
 import { App } from './App';
 import '../styles.css';
 import '../ui/night/theme';
+import { registerServiceWorker } from '../lib/serviceWorker';
 import { persistOptions, queryClient } from '../models/query';
+
+registerServiceWorker();
 
 createRoot(document.getElementById('app')!).render(
   <PersistQueryClientProvider
