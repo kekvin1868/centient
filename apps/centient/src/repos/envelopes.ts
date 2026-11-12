@@ -16,7 +16,15 @@ export type Envelope = {
   pattern: number;
 };
 
-const PATCHABLE = ['name', 'currency_code', 'target_amount', 'target_date', 'archived_at', 'color'];
+const PATCHABLE = [
+  'name',
+  'kind',
+  'currency_code',
+  'target_amount',
+  'target_date',
+  'archived_at',
+  'color',
+];
 
 export function envelopesRepo(db: D1Database) {
   return {

@@ -107,8 +107,18 @@ export function createPocketsService({ ws, now, repos, catalog }: ServiceDeps) {
     },
 
     /** PATCH: a pocket hides only when empty (its money would vanish from view), and Main never. */
-    async update(id: string, p: Patch) {
+    async update(id: string, p: Omit<Patch, 'kind'> & { kind?: 'SPENDING' | 'SAVINGS' }) {
       const { archived, ...rest }: Record<string, unknown> = p;
+      if (p.kind) {
+        const c = await catalog.load();
+        const e = c.envelopes.find(x => x.id === id);
+        if (!e) throw new DomainError('NOT_FOUND', 'Not found');
+        if (e.kind === 'GOAL' || c.accounts.some(a => a.default_envelope_id === id))
+          throw new DomainError('POCKET_KIND', 'Only a Spending or Savings pocket can switch');
+        // A budget sits only on a Spending pocket (budgets service): keep that true.
+        if (p.kind === 'SAVINGS' && (await repos.budgets.list(ws)).some(b => b.envelope_id === id))
+          throw new DomainError('POCKET_HAS_BUDGET', 'This pocket has a budget; remove it first');
+      }
       if (archived) {
         const [c, b] = await Promise.all([catalog.load(), repos.entries.balances(ws)]);
         if (c.accounts.some(a => a.default_envelope_id === id))

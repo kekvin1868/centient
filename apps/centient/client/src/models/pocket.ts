@@ -1,7 +1,7 @@
 // Pockets: a goal's Activity (its movements with the balance after each, 50 a page, and how it stands).
 // (Creating, editing and moving money between pockets move here in their own step.)
 import { infiniteQueryOptions } from '@tanstack/react-query';
-import { call, client, patchRow, type Req, type Res, type RowPatch } from './api';
+import { call, client, type Req, type Res } from './api';
 
 type ActivityPage = Res<(typeof client.api.envelopes)[':id']['activity']['$get']>;
 /** Progress, state and what to put in each cycle (models the server's goalOutlook). */
@@ -36,7 +36,8 @@ type NewPocket = Req<typeof client.api.envelopes.$post>['json'];
 /** Pocket saves (moving money between pockets is an entry: entryApi.record). Each refreshes everything. */
 export const pocketApi = {
   create: (json: NewPocket) => call(client.api.envelopes.$post({ json })),
-  update: (id: string, json: RowPatch) => patchRow('envelopes', id, json),
+  update: (id: string, json: Req<(typeof client.api.envelopes)[':id']['$patch']>['json']) =>
+    call(client.api.envelopes[':id'].$patch({ param: { id }, json })),
 };
 
 export type PocketKind = NonNullable<NewPocket['kind']>;

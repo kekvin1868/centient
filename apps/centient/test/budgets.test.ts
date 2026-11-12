@@ -46,6 +46,24 @@ async function foodRow(today: string, spent: number, o: { from?: string; startDa
   return (await t.svc.budgets.status()).budgets[0];
 }
 
+describe('a pocket switches Spending / Savings (v2 round 2)', () => {
+  it('a Savings pocket takes no budget until switched to Spending; it cannot go back while budgeted', async () => {
+    const t = await workspace('2026-11-10');
+    const food = await t.svc.pockets.create({ accountId: t.bca, name: 'food', kind: 'SAVINGS' });
+    await expect(t.svc.budgets.set({ envelopeId: food.id, limit: 100_000 })).rejects.toMatchObject({
+      code: expect.any(String),
+    });
+    await t.svc.pockets.update(food.id, { kind: 'SPENDING' });
+    await t.svc.budgets.set({ envelopeId: food.id, limit: 100_000 });
+    await expect(t.svc.pockets.update(food.id, { kind: 'SAVINGS' })).rejects.toMatchObject({
+      code: 'POCKET_HAS_BUDGET',
+    });
+    await expect(t.svc.pockets.update(`${t.bca}:main`, { kind: 'SAVINGS' })).rejects.toMatchObject({
+      code: 'POCKET_KIND',
+    });
+  });
+});
+
 describe('budgets per currency', () => {
   it('refuses a pocket budget in another currency than the pocket', async () => {
     const t = await workspace('2026-11-10');
