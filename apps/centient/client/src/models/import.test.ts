@@ -9,7 +9,7 @@ import {
   parseMoney,
   toRows,
   type ImportOptions,
-} from './inbox';
+} from './import';
 
 const options: ImportOptions = {
   accountId: 'bca',

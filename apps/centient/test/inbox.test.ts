@@ -131,17 +131,15 @@ describe('inbox service', () => {
 
   it('add saves an entry, link saves none, dismiss drops it; each only once', async () => {
     const t = await workspace();
-    const [lunch] = await t
-      .svc()
-      .ledger.record([
-        {
-          type: 'EXPENSE',
-          accountId: t.bca,
-          categoryId: t.food,
-          amount: 40_000,
-          date: '2026-11-10',
-        },
-      ]);
+    const [lunch] = await t.svc().ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: t.food,
+        amount: 40_000,
+        date: '2026-11-10',
+      },
+    ]);
     await t
       .svc()
       .inbox.importRows([
@@ -189,17 +187,15 @@ describe('inbox service', () => {
 
   it('link needs a suggestion, and a suggestion whose entry was deleted is gone', async () => {
     const t = await workspace();
-    const [lunch] = await t
-      .svc()
-      .ledger.record([
-        {
-          type: 'EXPENSE',
-          accountId: t.bca,
-          categoryId: t.food,
-          amount: 40_000,
-          date: '2026-11-10',
-        },
-      ]);
+    const [lunch] = await t.svc().ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: t.food,
+        amount: 40_000,
+        date: '2026-11-10',
+      },
+    ]);
     await t.svc().inbox.importRows([t.row('2026-11-10', -40_000), t.row('2026-11-10', -1_000)]);
     const [dup, plain] = (await t.svc().inbox.list()).items;
     await expect(t.svc().inbox.link(plain.id)).rejects.toMatchObject({ code: 'NO_SUGGESTION' });
@@ -210,17 +206,15 @@ describe('inbox service', () => {
 
   it('adds all unmatched in one go and leaves the matched ones', async () => {
     const t = await workspace();
-    await t
-      .svc()
-      .ledger.record([
-        {
-          type: 'EXPENSE',
-          accountId: t.bca,
-          categoryId: t.food,
-          amount: 40_000,
-          date: '2026-11-10',
-        },
-      ]);
+    await t.svc().ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: t.food,
+        amount: 40_000,
+        date: '2026-11-10',
+      },
+    ]);
     const rows = Array.from({ length: 120 }, (_, i) =>
       t.row('2026-11-05', -(1_000 + i), `Shop ${i}`),
     );
@@ -235,17 +229,15 @@ describe('inbox service', () => {
 
   it('undoes an import: its entries and items go, linked entries stay', async () => {
     const t = await workspace();
-    const [lunch] = await t
-      .svc()
-      .ledger.record([
-        {
-          type: 'EXPENSE',
-          accountId: t.bca,
-          categoryId: t.food,
-          amount: 40_000,
-          date: '2026-11-10',
-        },
-      ]);
+    const [lunch] = await t.svc().ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: t.food,
+        amount: 40_000,
+        date: '2026-11-10',
+      },
+    ]);
     const first = await t.svc().inbox.importRows([t.row('2026-11-01', -9_000, 'Kept')]);
     await t.svc().inbox.addAll(first.importId);
     const second = await t

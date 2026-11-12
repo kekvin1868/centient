@@ -5,7 +5,8 @@ import { dayLabel, formatMoney } from '../../lib/format';
 import { titleCase } from '../../lib/labels';
 import { catalog } from '../../lib/state';
 import { persist } from '../../models/query';
-import { recurringApi, recurringQueries, type Prefill } from '../../models/recurring';
+import { recurringApi, recurringQueries } from '../../models/recurring';
+import type { Prefill } from '../../models/recurringForm';
 import { Group, Row } from '../../ui/List';
 import { WinButton } from '../../ui/WinButton';
 

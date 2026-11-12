@@ -1,23 +1,21 @@
 // Add or change one recurring bill: its name (known services are offered while typing), amount (or "varies"),
 // where it is paid from, category, how often and when. An existing bill can be marked paid (logs the expense
-// and moves it on), paused or removed. The form's state and rules are models/recurring; this only renders them.
+// and moves it on), paused or removed. The form's state and rules are models/recurringForm; this only renders them.
 import { Block, Button } from 'konsta/react';
 import { useId, useState } from 'react';
 import { formatMoney } from '../../lib/format';
 import { active, catalog, everyday } from '../../lib/state';
 import { persist } from '../../models/query';
+import { recurringApi, recurringQueries, type Recurring } from '../../models/recurring';
 import {
   formFrom,
-  recurringApi,
-  recurringQueries,
   REPEATS,
   toEvery,
   toRequest,
   validate,
   type Prefill,
-  type Recurring,
   type RecurringForm,
-} from '../../models/recurring';
+} from '../../models/recurringForm';
 import { AmountField } from '../../ui/AmountField';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { DateRow, InputRow, PickerRow, ToggleRow } from '../../ui/Fields';

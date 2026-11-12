@@ -1,6 +1,6 @@
 // Import a spreadsheet (CSV): pick the file (it is read on this device; only the rows you import are sent),
 // say which column is what and which account it is, check the first rows, then send them to the Inbox for
-// review. The reading rules are models/inbox; this only renders them.
+// review. The reading rules are models/import; this only renders them.
 import { Block, Button } from 'konsta/react';
 import { useMemo, useRef, useState } from 'react';
 import { parseCsv } from '../../lib/csv';
@@ -11,13 +11,12 @@ import {
   guessDayOrder,
   guessMapping,
   IMPORT_MAX,
-  inboxApi,
-  inboxQueries,
   needsPlain,
   toRows,
   type DayOrder,
   type Mapping,
-} from '../../models/inbox';
+} from '../../models/import';
+import { inboxApi, inboxQueries } from '../../models/inbox';
 import { persist } from '../../models/query';
 import { dateText, PickerRow } from '../../ui/Fields';
 import { Group, Row } from '../../ui/List';
