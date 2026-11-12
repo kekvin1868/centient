@@ -1,6 +1,7 @@
 // Cash App's keypad: a big amount over a 3×4 grid. Rupiah only, in whole rupiah (IDR has no minor digits), so
 // the digits typed are the minor units. A keyboard can also type a sum (+ - * x / ( )); it shows above the result.
 // pressKey() is pure; keypadKey() maps a keyboard press onto it; keypadValue() reads what was typed.
+import type { ReactNode } from 'react';
 import { evalAmount } from '../../lib/amount';
 import { formatMoney } from '../../lib/format';
 
@@ -51,11 +52,14 @@ export function Keypad({
   onPress,
   empty,
   refused = 0,
+  between,
 }: {
   digits: string;
   onPress: (k: string) => void;
   empty: string;
   refused?: number;
+  /** Shown between the amount and the keys (what the amount does, e.g. the pour bar). */
+  between?: ReactNode;
 }) {
   const sum = /\D/.test(digits);
   const v = keypadValue(digits);
@@ -84,6 +88,7 @@ export function Keypad({
           empty
         )}
       </div>
+      {between}
       <div className="k-keys">
         {KEYS.map(k => (
           <button

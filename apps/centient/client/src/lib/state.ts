@@ -13,6 +13,17 @@ export const qctx = signal<QAContext | null>(null);
 /** Home's account filter (null = all accounts), remembered on this device. */
 export const selectedAccount = signal<string | null>(load('account', null));
 effect(() => save('account', selectedAccount.value));
+/** The pocket new lines on Home go to (null = Main). Stays on the last one logged to; it belongs to Home's account. */
+export const selectedPocket = signal<string | null>(load('pocket', null));
+effect(() => save('pocket', selectedPocket.value));
+effect(() => {
+  const id = selectedPocket.value;
+  if (!id || !catalog.value.envelopes.length) return; // not loaded yet
+  const e = catalog.value.envelopes.find(x => x.id === id);
+  if (!e || e.archived_at || e.account_id !== selectedAccount.value) selectedPocket.value = null;
+});
+/** A card Money should open on, once (Home's REVIEW). */
+export const moneyPick = signal<string | null>(null);
 export const offline = signal(false);
 /** Entries deleted but still undoable: hidden from every list until the undo window ends. */
 export const hiddenEntries = signal<ReadonlySet<string>>(new Set());

@@ -16,11 +16,9 @@ import {
   accountBalance,
   addAccount,
   addPocket,
-  editPocket,
   kept,
+  deletePocket,
   MAX_ACCOUNTS,
-  moveBalance,
-  owes,
   removePocket,
   rename,
   setKind,
@@ -29,7 +27,7 @@ import {
 } from '../model/draft';
 import { ConfirmChanges } from '../sheets/ConfirmChanges';
 import { GuideSheet } from '../sheets/GuideSheet';
-import { MoveBalances } from '../sheets/MoveBalances';
+import { DeletePocket } from '../sheets/DeletePocket';
 import { PocketSheet } from '../sheets/PocketSheet';
 import { TypePicker } from '../sheets/TypePicker';
 import { AccountPanel } from './AccountPanel';
@@ -47,7 +45,7 @@ type Props = {
 type Open =
   | { kind: 'type' }
   | { kind: 'pocket'; key: string }
-  | { kind: 'move' }
+  | { kind: 'delete'; key: string }
   | { kind: 'confirm' }
   | { kind: 'guide' }
   | { kind: 'board' }
@@ -69,6 +67,7 @@ export function NightMenu({
   const rows = draft.length + (draft.length < MAX_ACCOUNTS ? 1 : 0);
   const a = draft[sel] as Draft[number] | undefined;
   const pocket = open?.kind === 'pocket' ? a?.pockets.find(p => p.key === open.key) : undefined;
+  const dying = open?.kind === 'delete' ? a?.pockets.find(p => p.key === open.key) : undefined;
 
   const change = (d: Draft, msg?: string) => {
     setDraft(d);
@@ -269,23 +268,27 @@ export function NightMenu({
       {pocket && a && (
         <PocketSheet
           key={pocket.key}
+          draft={draft}
           account={a}
           pocket={pocket}
           onClose={() => setOpen(null)}
-          onSave={patch => change(editPocket(draft, a.key, pocket.key, patch))}
-          onDelete={() => change(removePocket(draft, a.key, pocket.key), `${pocket.name} DELETED`)}
-          onMove={pocket.main && !owes(a.kind) ? () => setOpen({ kind: 'move' }) : undefined}
+          onSave={(next, note) => change(next, note)}
+          onDelete={() =>
+            pocket.balance
+              ? setOpen({ kind: 'delete', key: pocket.key })
+              : change(removePocket(draft, a.key, pocket.key), `${pocket.name} DELETED`)
+          }
         />
       )}
-      {open?.kind === 'move' && a && (
-        <MoveBalances
-          draft={draft}
-          account={a}
+      {dying && a && (
+        <DeletePocket
+          name={dying.name}
+          amount={dying.balance ?? 0}
           onClose={() => setOpen(null)}
-          onMove={(to, amount) =>
+          onPick={back =>
             change(
-              moveBalance(draft, a.key, to.account, to.pocket, amount),
-              `MOVED ${formatMoney(amount)} TO ${draft.find(x => x.key === to.account)?.name}`,
+              deletePocket(draft, a.key, dying.key, back),
+              `${dying.name} DELETED${back ? ' · MONEY BACK TO BALANCE' : ''}`,
             )
           }
         />

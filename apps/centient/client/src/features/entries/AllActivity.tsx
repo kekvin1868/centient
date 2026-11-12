@@ -2,7 +2,7 @@
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
 import { everyday, selectedAccount } from '../../lib/state';
-import { InputRow, PickerRow } from '../../ui/Fields';
+import { DateRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
@@ -41,8 +41,8 @@ export function AllActivity({
           options={everyday().map(a => ({ value: a.id, label: a.name }))}
           onChange={setAccount}
         />
-        <InputRow label="From" type="date" value={from} onInput={setFrom} />
-        <InputRow label="To" type="date" value={to} onInput={setTo} />
+        <DateRow label="From" value={from} onChange={setFrom} optional />
+        <DateRow label="To" value={to} onChange={setTo} optional />
       </Group>
       <EntryList
         entries={items}

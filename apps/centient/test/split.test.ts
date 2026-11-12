@@ -263,4 +263,27 @@ describe('joining a pot someone else runs (T9)', () => {
       svc(t.ws).ledger.record([{ ...t.bill({ people: 2 }, 50_000), pot }]),
     ).rejects.toMatchObject({ code: 'INVALID_SPLIT' });
   });
+
+  it('a payback gift lives in the payback: deleting either leaves the tab right (v2 #6)', async () => {
+    const t = await setup('s-gift@test');
+    await svc(t.ws).ledger.record([
+      t.bill({ people: 2, parties: [{ name: 'Sri', share: 50_000 }] }),
+    ]);
+    const sri = (await svc(t.ws).ledger.balances()).accounts.find(a => a.name === 'Sri')!.id;
+    const pay = {
+      type: 'TRANSFER',
+      fromAccountId: sri,
+      toAccountId: t.bca,
+      amount: 60_000,
+      date: '2026-10-17',
+    } as const;
+    const [id] = await svc(t.ws).ledger.record([{ ...pay, gift: 10_000 }]);
+    expect(await t.balance('Sri')).toBe(0);
+    expect(await t.balance('BCA')).toBe(9_900_000 + 60_000);
+    await svc(t.ws).ledger.remove(id);
+    expect(await t.balance('Sri')).toBe(50_000); // no gift left behind
+    await expect(
+      svc(t.ws).ledger.record([{ ...pay, fromAccountId: t.bca, toAccountId: sri, gift: 1 }]),
+    ).rejects.toMatchObject({ code: 'INVALID_GIFT' });
+  });
 });

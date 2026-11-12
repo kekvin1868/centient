@@ -2,11 +2,12 @@
 // here picks it on Home too), its free balance, actions, pockets and installments, then budgets.
 import { useQuery } from '@tanstack/react-query';
 import { BlockTitle } from 'konsta/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AccountHand } from '../features/accounts/AccountHand';
 import { PickedAccount } from '../features/accounts/PickedAccount';
 import { TotalBalance } from '../features/accounts/TotalBalance';
 import { Budgets } from '../features/budgets/Budgets';
+import { PaidBackSheet } from '../features/entries/PaidBackSheet';
 import { InstallmentsSection } from '../features/installments/InstallmentsSection';
 import { takesInstallments } from '../features/installments/plans';
 import { AccountPockets } from '../features/pockets/AccountPockets';
@@ -15,21 +16,24 @@ import { formatMoney } from '../lib/format';
 import { idrValue } from '../lib/prices';
 import { usePrices } from '../models/price';
 import { stickersOf } from '../lib/nameSticker';
-import { catalog, selectedAccount } from '../lib/state';
+import { catalog, moneyPick, selectedAccount } from '../lib/state';
 import { accountQueries } from '../models/account';
+import type { PayMode } from '../models/payback';
 
 export function Money({ onShowAccount }: { onShowAccount: () => void }) {
   const { data: bal } = useQuery(accountQueries.balances());
-  const [picked, setPicked] = useState<string | null>(selectedAccount.value);
+  const [picked, setPicked] = useState<string | null>(moneyPick.peek() ?? selectedAccount.value);
+  useEffect(() => {
+    moneyPick.value = null;
+  }, []);
   const prices = usePrices();
+  const [pay, setPay] = useState<{ tabId: string; mode: PayMode } | null>(null);
   if (!bal) return <Page title="Money" />;
-  const a =
-    bal.accounts.find(x => x.id === picked) ??
-    bal.accounts.find(x => x.kind !== 'IOU') ??
-    bal.accounts[0] ??
-    null;
+  // A person's tab at exactly 0 is settled: no card. Their next bill brings it back.
+  const held = bal.accounts.filter(x => x.kind !== 'IOU' || x.balance !== 0);
+  const a = held.find(x => x.id === picked) ?? held.find(x => x.kind !== 'IOU') ?? held[0] ?? null;
   const pockets = a ? bal.envelopes.filter(e => e.account_id === a.id && !e.archived_at) : [];
-  // Tapping the picked card again asks to drop it (null); Money always keeps one. Home has no IOU accounts.
+  // Home has no IOU accounts, so an IOU pick stays on Money.
   const pick = (id: string | null) => {
     if (!id) return;
     setPicked(id);
@@ -49,7 +53,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
         selected={a?.id ?? null}
         onPick={pick}
         pickOnSettle
-        cards={bal.accounts.map(x => {
+        cards={held.map(x => {
           const v = x.currency_code === 'IDR' ? null : idrValue(x.balance, x.currency_code, prices);
           return {
             id: x.id,
@@ -69,6 +73,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
           selectedAccount.value = x.id;
           onShowAccount();
         }}
+        onPay={(x, mode) => setPay({ tabId: x.id, mode })}
       >
         {a && a.kind !== 'IOU' && (
           <AccountPockets
@@ -82,6 +87,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
           <InstallmentsSection key={`plans:${a.id}`} account={a} />
         )}
       </PickedAccount>
+      {pay && <PaidBackSheet {...pay} onClose={() => setPay(null)} />}
       <Budgets />
     </Page>
   );

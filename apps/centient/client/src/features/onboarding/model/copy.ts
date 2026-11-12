@@ -14,8 +14,9 @@ export const KIND_NOTES: Record<string, string> = {
 /** Shown once each, after 8 quiet seconds in that place. */
 export const HINTS = {
   menu: 'Tap a row, tap again to rename. Tap the big balance or a pocket to set it. Complete guide & actions is provided on {cyan|?} symbol up top.',
-  pocket: 'Rough is fine. Punch it in, hit {pink|SET}. Not sure? {cyan|LEAVE ???}.',
-  move: "Pick where it goes, punch in how much, hit {pink|MOVE}. More than the balance holds won't go.",
+  pocket:
+    'Rough is fine. Punch it in, pick where the money comes from, hit {pink|SET}. Not sure? {cyan|LEAVE ???}.',
+  delete: '{cyan|BACK TO BALANCE} keeps the account total. {pink|REMOVE MONEY} drops it.',
   type: 'Pick a type. Tap outside to keep the old one.',
   confirm: "Look it over. {pink|CONFIRM} if it's right, tap outside to keep editing.",
   board: 'Drag the board to look around, pinch to zoom. {cyan|LINK} draws arrows pocket to pocket.',
@@ -32,11 +33,11 @@ export const GUIDE: [string, string][] = [
   ],
   [
     'BALANCE',
-    'The big number on an account: money not set aside in a pocket. {cyan|MOVE BALANCES} on it shifts some to another account.',
+    'The big number on an account: money not set aside in a pocket. Raise it with {cyan|FROM ANOTHER ACCOUNT} to take money from another account or one of its pockets.',
   ],
   [
     'POCKETS',
-    "Set money aside for savings or bills. An account's total is its balance plus its pockets.",
+    "Set money aside for savings or bills. An account's total is its balance plus its pockets. A pocket's money comes {cyan|FROM BALANCE} (the total stays), as {pink|ADDITIONAL BUDGET} (new money, the total grows) or {cyan|FROM ANOTHER ACCOUNT}. Lower a pocket and the rest goes back to the balance.",
   ],
   [
     '{pink|???}',

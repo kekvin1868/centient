@@ -32,7 +32,12 @@ export const pocketsRoutes = new Hono<AppEnv>()
       c.json(await c.var.services.pockets.activity(c.req.param('id'), c.req.valid('query').cursor)),
   )
 
-  .patch('/:id', json(patch), async c => {
-    await c.var.services.pockets.update(c.req.param('id'), c.req.valid('json'));
-    return c.json({ ok: true });
-  });
+  // A pocket's kind switches between Spending and Savings only (a goal stays a goal).
+  .patch(
+    '/:id',
+    json(patch.extend({ kind: z.enum(['SPENDING', 'SAVINGS']).optional() })),
+    async c => {
+      await c.var.services.pockets.update(c.req.param('id'), c.req.valid('json'));
+      return c.json({ ok: true });
+    },
+  );

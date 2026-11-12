@@ -1,5 +1,8 @@
-// Form rows for grouped lists. Pickers are native selects (the phone's own wheel) laid over the row.
+// Form rows for grouped lists. Pickers are native selects (the phone's own wheel) laid over the row; dates use our
+// own DatePicker, opened inline under the row.
 import { ListItem, Stepper, Toggle } from 'konsta/react';
+import { useRef, useState } from 'react';
+import { DatePicker } from './DatePicker';
 
 /** An option; ones with a `group` are listed under that heading, after the plain ones. */
 type Opt = { value: string; label: string; group?: string };
@@ -95,6 +98,79 @@ export function InputRow({
         />
       }
     />
+  );
+}
+
+/** "6 Nov 2026", or "" for no date. */
+export const dateText = (d: string) =>
+  d
+    ? new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })
+    : '';
+
+/** A date row: tap it to open the calendar under it. `optional` dates can be cleared. */
+export function DateRow({
+  label,
+  value,
+  onChange,
+  optional,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  optional?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const close = () => {
+    setOpen(false);
+    trigger.current?.focus();
+  };
+  const pick = (d: string) => {
+    onChange(d);
+    close();
+  };
+  return (
+    <>
+      <ListItem
+        title={label}
+        className="relative"
+        strongTitle={false}
+        after={
+          <span className="flex items-center gap-1">
+            {dateText(value) || <span className="opacity-40">Not set</span>}
+            <span aria-hidden="true" className="text-xs">
+              ▾
+            </span>
+          </span>
+        }
+      >
+        <button
+          ref={trigger}
+          type="button"
+          className="absolute inset-0 w-full cursor-pointer"
+          aria-label={`${label}, ${dateText(value) || 'not set'}`}
+          aria-expanded={open}
+          data-value={value}
+          onClick={() => setOpen(o => !o)}
+        />
+      </ListItem>
+      {open && (
+        <li className="px-4">
+          <DatePicker
+            label={label}
+            value={value}
+            onPick={pick}
+            onClose={close}
+            onClear={optional ? () => pick('') : undefined}
+          />
+        </li>
+      )}
+    </>
   );
 }
 

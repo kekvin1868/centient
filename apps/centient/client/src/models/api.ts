@@ -15,4 +15,11 @@ export const patchRow = (
   table: 'accounts' | 'envelopes' | 'categories',
   id: string,
   json: RowPatch,
-) => call(client.api[table][':id'].$patch({ param: { id }, json }));
+) =>
+  // ponytail: one body type for all three; a pocket's own `kind` (Spending / Savings) goes through pocketApi.update.
+  call(
+    (client.api[table][':id'] as (typeof client.api.accounts)[':id']).$patch({
+      param: { id },
+      json,
+    }),
+  );

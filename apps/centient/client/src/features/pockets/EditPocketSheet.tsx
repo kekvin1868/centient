@@ -1,19 +1,22 @@
-// Edit a pocket: name, color, goal; hide it (the server refuses while money is still in it). Main keeps its
+// Edit a pocket: name, kind (Spending / Savings; only a Spending pocket takes a budget), color, goal; hide it (the server refuses while money is still in it). Main keeps its
 // name and can't be hidden.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
 import type { Envelope } from '../../../../src/repos/envelopes';
+import { POCKET_KINDS } from '../../lib/format';
 import { pocketColor, POCKET_COLORS } from '../../lib/pocketColors';
 import { catalog } from '../../lib/state';
 import { AmountField } from '../../ui/AmountField';
 import { ColorPicker } from '../../ui/ColorPicker';
-import { InputRow } from '../../ui/Fields';
+import { DateRow, InputRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
+import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
-import type { RowPatch } from '../../models/api';
 import { pocketApi } from '../../models/pocket';
 import { persist } from '../../models/query';
+
+const KINDS = (['SPENDING', 'SAVINGS'] as const).map(k => ({ value: k, label: POCKET_KINDS[k] }));
 
 export function EditPocketSheet({
   pocket: p,
@@ -39,10 +42,12 @@ export function EditPocketSheet({
         )
       : POCKET_COLORS[0].hex,
   );
+  const [kind, setKind] = useState(p?.kind ?? 'SPENDING');
   const [target, setTarget] = useState<number | null>(p?.target_amount ?? null);
   const [date, setDate] = useState(p?.target_date ?? '');
   if (!p || !account) return null;
-  const patch = async (json: RowPatch, done: string) => {
+  const switchable = !main && p.kind !== 'GOAL';
+  const patch = async (json: Parameters<typeof pocketApi.update>[1], done: string) => {
     if (!(await persist(() => pocketApi.update(p.id, json)))) return;
     onClose();
     showToast(done);
@@ -51,6 +56,7 @@ export function EditPocketSheet({
     patch(
       {
         ...(main ? {} : { name: name.trim() }),
+        ...(switchable && kind !== p.kind ? { kind: kind as 'SPENDING' | 'SAVINGS' } : {}),
         color,
         ...(p.kind === 'GOAL' ? { target_amount: target, target_date: date || null } : {}),
       },
@@ -58,8 +64,10 @@ export function EditPocketSheet({
     );
   return (
     <Sheet open onClose={onClose} title={`${p.name} · ${account.name}`}>
+      {switchable && <Segmented label="Kind" value={kind} onChange={setKind} options={KINDS} />}
       <Group>
         {!main && <InputRow label="Name" value={name} onInput={setName} />}
+
         {p.kind === 'GOAL' && (
           <>
             <AmountField
@@ -68,7 +76,7 @@ export function EditPocketSheet({
               currency={p.currency_code}
               onChange={setTarget}
             />
-            <InputRow label="By" type="date" value={date} onInput={setDate} />
+            <DateRow label="By" value={date} onChange={setDate} optional />
           </>
         )}
       </Group>

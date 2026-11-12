@@ -9,7 +9,7 @@ import { nextPocketColor } from '../../lib/pocketColors';
 import { catalog, everyday } from '../../lib/state';
 import { AmountField } from '../../ui/AmountField';
 import { ColorPicker } from '../../ui/ColorPicker';
-import { InputRow, PickerRow } from '../../ui/Fields';
+import { DateRow, InputRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
@@ -37,7 +37,7 @@ export function AddPocketSheet({
   const [accountId, setAccountId] = useState<string | null>(account?.id ?? holders[0]?.id ?? null);
   const [name, setName] = useState('');
   const [color, setColor] = useState(nextPocketColor(colorsIn(accountId)));
-  const [kind, setKind] = useState<Envelope['kind']>('SAVINGS');
+  const [kind, setKind] = useState<Envelope['kind']>('SPENDING');
   const [target, setTarget] = useState<number | null>(null);
   const [date, setDate] = useState('');
   const inside = catalog.value.accounts.find(a => a.id === accountId);
@@ -93,7 +93,7 @@ export function AddPocketSheet({
               currency={inside?.currency_code ?? 'IDR'}
               onChange={setTarget}
             />
-            <InputRow label="By" type="date" value={date} onInput={setDate} />
+            <DateRow label="By" value={date} onChange={setDate} optional />
           </>
         )}
       </Group>

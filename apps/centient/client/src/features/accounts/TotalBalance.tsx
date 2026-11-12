@@ -3,11 +3,13 @@
 import type { Account } from '../../../../src/repos/accounts';
 import { formatMoney } from '../../lib/format';
 import { idrValue, priceAge } from '../../lib/prices';
-import { usePrices } from '../../models/price';
+import { usePrices, type Prices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 
-export function TotalBalance({ accounts }: { accounts: (Account & { balance: number })[] }) {
-  const p = usePrices();
+type Held = Pick<Account, 'currency_code'> & { balance: number };
+
+/** Every account in rupiah (crypto at its last price); `unpriced` = currencies with no rupiah price, kept apart. */
+export function totalOf(accounts: Held[], p: Prices) {
   let total = 0,
     cryptoIdr = 0;
   const unpriced = new Map<string, number>();
@@ -23,6 +25,12 @@ export function TotalBalance({ accounts }: { accounts: (Account & { balance: num
       }
     }
   }
+  return { total, cryptoIdr, unpriced, priced };
+}
+
+export function TotalBalance({ accounts }: { accounts: (Account & { balance: number })[] }) {
+  const p = usePrices();
+  const { total, cryptoIdr, unpriced, priced } = totalOf(accounts, p);
   const age = [...priced].map(c => priceAge(c, p)).find(Boolean);
   return (
     <div className="mx-4 mt-4">

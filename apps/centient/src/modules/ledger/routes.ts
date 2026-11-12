@@ -29,6 +29,9 @@ const toFilter = (q: z.infer<typeof txQuery>) => ({
   limit: q.limit,
 });
 
+/** A bill with Paid backs tied to it: what to do with the part that no longer fits (see ledger `settle`). */
+const tied = z.object({ paybacks: z.enum(['NEVER_RECEIVED', 'RETURN']).optional() });
+
 export const ledgerRoutes = new Hono<AppEnv>()
   // One command, or { commands: [...] } for several in one atomic write. Returns entry ids.
   .post(
@@ -51,8 +54,12 @@ export const ledgerRoutes = new Hono<AppEnv>()
     c.json(await c.var.services.ledger.listEntries(toFilter(c.req.valid('query')))),
   )
 
-  .patch('/entries/:id', json(command), async c => {
-    await c.var.services.ledger.edit(c.req.param('id'), c.req.valid('json'));
+  .patch('/entries/:id', json(command), query(tied), async c => {
+    await c.var.services.ledger.edit(
+      c.req.param('id'),
+      c.req.valid('json'),
+      c.req.valid('query').paybacks,
+    );
     return c.json({ ok: true });
   })
 
@@ -65,9 +72,14 @@ export const ledgerRoutes = new Hono<AppEnv>()
     },
   )
 
-  .delete('/entries/:id', async c => {
-    await c.var.services.ledger.remove(c.req.param('id'));
+  .delete('/entries/:id', query(tied), async c => {
+    await c.var.services.ledger.remove(c.req.param('id'), c.req.valid('query').paybacks);
     return c.json({ ok: true });
   })
+
+  // A person's split bills, oldest first, with their share and what they paid; `except` leaves out a Paid back being edited.
+  .get('/accounts/:id/bills', query(z.object({ except: id.optional() })), async c =>
+    c.json(await c.var.services.ledger.tabBills(c.req.param('id'), c.req.valid('query').except)),
+  )
 
   .get('/balances', async c => c.json(await c.var.services.ledger.balances()));

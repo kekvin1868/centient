@@ -75,34 +75,38 @@ test('rename, retype, set balances, add a pocket, drop and undo', async () => {
   await page.keyboard.type('2j'); // J adds 000000: Rp2.000.000
   await page.keyboard.press('Enter');
   await expect(pocket).toBeHidden();
-  await expect(menu().getByRole('option').first()).toContainText('Rp7.000.000');
+  // A pocket starts From Balance: Rent is carved out of BCA's balance, the total stays.
+  await expect(menu().getByRole('option').first()).toContainText('Rp5.000.000');
+  await expect(page.getByRole('button', { name: 'Balance, Rp3.000.000' })).toBeVisible();
 
-  // MOVE BALANCES (title bar of the balance) takes some to another account; a typed sum is worked out; undo puts it back.
+  // A balance can take from another account (its balance or a pocket, in a tree); a typed sum is worked out; more
+  // than the source holds is refused; undo puts it back.
+  await menu()
+    .getByRole('option', { name: /Dailies/ })
+    .tap();
   await page.getByRole('button', { name: /^Balance/ }).tap();
-  await pad.getByRole('button', { name: 'MOVE BALANCES' }).tap();
-  const mv = page.getByRole('dialog', { name: 'Move balances from BCA' });
-  await expect(mv.getByRole('radio', { name: /Dailies/ })).toHaveAttribute('aria-checked', 'true');
-  await page.keyboard.press('ArrowDown'); // the arrows pick the target
-  await expect(mv.getByRole('radio', { name: /Dailies/ })).toHaveAttribute('aria-checked', 'false');
-  await page.keyboard.press('ArrowUp');
-  await expect(mv.getByRole('radio', { name: /Dailies/ })).toHaveAttribute('aria-checked', 'true');
-  await page.keyboard.type('6j'); // more than the Rp5.000.000 balance: refused
-  await mv.getByRole('button', { name: 'MOVE ▸' }).tap();
-  await expect(mv).toBeVisible();
+  const dp = page.getByRole('dialog', { name: 'Balance in Dailies' });
+  await page.keyboard.type('4j');
+  await dp.getByRole('radio', { name: 'FROM ANOTHER ACCOUNT' }).tap();
+  await expect(dp.getByRole('radio', { name: /^BCA/ })).toHaveAttribute('aria-checked', 'true');
+  await expect(dp.getByRole('radio', { name: /^Rent/ })).toBeVisible();
+  await dp.getByRole('button', { name: 'SET ▸' }).tap();
+  await expect(dp).toBeVisible();
+  await expect(dp.getByRole('alert')).toContainText("BCA's balance has Rp3.000.000");
   await page.keyboard.press('Delete');
   await page.keyboard.type('500000*2+(');
-  await expect(mv.locator('.k-amt')).toHaveText('Rp1.000.000'); // half-typed: what it comes to so far
-  await expect(mv.locator('.k-sum')).toHaveClass(/bad/);
+  await expect(dp.locator('.k-amt')).toHaveText('Rp1.000.000'); // half-typed: what it comes to so far
+  await expect(dp.locator('.k-sum')).toHaveClass(/bad/);
   await page.keyboard.press('Backspace');
   await page.keyboard.press('Backspace');
-  await expect(mv.locator('.k-amt')).toHaveText('Rp1.000.000');
-  await expect(mv.locator('.k-sum')).not.toHaveClass(/bad/);
+  await expect(dp.locator('.k-amt')).toHaveText('Rp1.000.000');
+  await expect(dp.locator('.k-sum')).not.toHaveClass(/bad/);
   await page.keyboard.press('Enter');
-  await expect(mv).toBeHidden();
-  await expect(menu().getByRole('option').first()).toContainText('Rp6.000.000');
+  await expect(dp).toBeHidden();
+  await expect(menu().getByRole('option').first()).toContainText('Rp4.000.000');
   await expect(menu().getByRole('option', { name: /Dailies/ })).toContainText('Rp1.000.000');
   await page.getByRole('button', { name: 'UNDO' }).tap();
-  await expect(menu().getByRole('option').first()).toContainText('Rp7.000.000');
+  await expect(menu().getByRole('option').first()).toContainText('Rp5.000.000');
 
   await menu().getByRole('option', { name: /Miscs/ }).tap();
   await page.getByRole('button', { name: 'DROP' }).tap();
@@ -138,7 +142,7 @@ test('confirm saves names, types, balances and pockets, then Home', async () => 
   );
   expect(live.map(a => a[0])).not.toContain('Miscs');
   const b = await balances();
-  expect(b.accounts.find(a => a.name === 'BCA')!.balance).toBe(7_000_000);
+  expect(b.accounts.find(a => a.name === 'BCA')!.balance).toBe(5_000_000);
   expect(b.envelopes.find(e => e.name === 'Rent')!.balance).toBe(2_000_000);
 
   await page.reload();

@@ -1844,3 +1844,224 @@ body:has(.n-modal) .k-toast {
   font-size: 17px;
   line-height: 1.5;
 }
+
+/* ---- First run: where a pocket's money comes from (planning/features/product/onboarding-pocket-funding) ---- */
+/* The sheet scrolls in the middle so the keypad's actions stay in reach on a short phone. */
+.nier .n-sheet {
+  max-height: 100%;
+}
+.k-body {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+}
+/* The source switch: chunky keycaps, the picked one lit. */
+.k-modes {
+  display: flex;
+  gap: 6px;
+  margin: 12px 14px 0;
+}
+.k-modes button {
+  flex: 1;
+  min-height: 48px;
+  border: 1px solid var(--n-line);
+  background: none;
+  color: var(--n-dim);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.15;
+  letter-spacing: 0.08em;
+  padding: 6px 6px;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--n-line);
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.08s;
+}
+.k-modes button[aria-checked='true'] {
+  background: var(--n-ink);
+  color: var(--n-bg);
+  border-color: var(--n-ink);
+  box-shadow: 0 1px 0 var(--n-ink);
+  transform: translateY(2px);
+  text-shadow: none;
+}
+/* The tree of accounts and their pockets to take from. */
+.k-tree {
+  margin: 10px 14px 0;
+}
+.k-tree .n-pk[aria-checked='true'] {
+  background: var(--n-ink);
+  color: var(--n-bg);
+  text-shadow: none;
+}
+.k-tree .n-pk.sub {
+  padding-left: 18px;
+  font-size: 15px;
+}
+.k-tree .n-pk.sub i {
+  font-style: normal;
+  color: var(--n-dim);
+}
+.k-tree .n-pk:disabled {
+  opacity: 0.4;
+}
+/* The pour bar. */
+.k-pour {
+  margin: 12px 14px 0;
+}
+.k-pour-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  color: var(--n-dim);
+  margin-bottom: 6px;
+}
+.k-pour-head .money {
+  color: var(--n-ink);
+  letter-spacing: 0;
+}
+.k-pour-bar {
+  display: flex;
+  height: 22px;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--n-ink);
+  overflow: visible;
+}
+.k-pour-seg {
+  min-width: 4px;
+  transition: flex-grow 0.25s steps(6);
+}
+.k-pour-seg.base {
+  background: rgb(var(--n-cyan-rgb) / 0.45);
+}
+.k-pour-seg.other {
+  background: var(--n-mid);
+  outline: 1px dashed var(--n-line);
+}
+.k-pour-seg.slice {
+  background: var(--n-cyan);
+  box-shadow: 0 0 10px rgb(var(--n-cyan-rgb) / 0.6);
+}
+.k-pour-seg.new {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--n-pink) 0 4px,
+    rgb(var(--n-pink-rgb) / 0.55) 4px 8px
+  );
+  margin-right: -8px;
+  box-shadow: 0 0 10px rgb(var(--n-pink-rgb) / 0.55);
+}
+.k-pour-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
+  font-size: 13px;
+}
+.k-pour-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+.k-pour-legend .base i {
+  background: rgb(var(--n-cyan-rgb) / 0.45);
+}
+.k-pour-legend .slice i {
+  background: var(--n-cyan);
+}
+.k-pour-legend .new i {
+  background: var(--n-pink);
+}
+.k-short {
+  margin: 10px 14px 0 !important;
+  color: var(--n-pink);
+  font-size: 15px;
+}
+.k-back {
+  margin: 10px 14px 0 !important;
+}
+.k-stack {
+  display: grid;
+  gap: 8px;
+  padding: 8px 12px 14px;
+}
+
+/* ---- First run dialogs: bigger targets (44-48 px) for buttons, close and guide. ---- */
+.nier .n-ph {
+  font-size: 14px;
+  padding: 8px 8px 8px 12px;
+  min-height: 52px;
+}
+.nier .n-x {
+  width: 44px;
+  height: 40px;
+  margin: -4px -2px -4px 0;
+}
+.nier .n-x svg {
+  width: 16px;
+  height: 14px;
+}
+.nier .n-help {
+  width: 44px;
+  height: 44px;
+  font-size: 20px;
+}
+.nier .n-btn {
+  min-height: 48px;
+  padding: 14px 0;
+  font-size: 15px;
+}
+.nier .n-go {
+  min-height: 48px;
+  font-size: 16px;
+}
+.nier .k-acts {
+  gap: 8px;
+  padding: 12px 12px 14px;
+}
+.nier .k-kinds button {
+  min-height: 44px;
+  padding: 10px 16px;
+  font-size: 14px;
+}
+.nier .k-top .del {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid rgb(var(--n-pink-rgb) / 0.5);
+}
+.nier .n-pk {
+  min-height: 48px;
+}
+/* A pocket's DELETE sits in its title bar, a big outlined target. */
+.n-del {
+  min-height: 40px;
+  padding: 0 14px;
+  margin: -4px 0;
+  border: 0;
+  background: var(--n-pink);
+  color: var(--n-on-pink);
+  font-family: inherit;
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  text-shadow: none;
+}
+.n-del:active,
+.n-del:focus-visible {
+  outline: 2px solid var(--n-bg);
+  outline-offset: -4px;
+}
+.k-modes + .k-pour,
+.k-tree + .k-pour {
+  margin-bottom: 4px;
+}
+.k-keys:is(.k-pour ~ .k-keys) {
+  margin-top: 8px;
+}

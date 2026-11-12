@@ -14,11 +14,17 @@ import {
   transfer,
   type NewTransaction,
 } from '../../domain/ledger';
+import { cutsFor, peopleOf, tabsOnBill, type Link } from '../../domain/bills';
 import { commandOf } from '../../lib/entryCommand';
 import { findOrCreateTab } from './tabs';
 import type { NewEntry, TxFilter } from '../../repos/entries';
 
 export type LedgerService = ReturnType<typeof createLedgerService>;
+/** What happens to Paid backs a deleted or shrunk bill no longer has room for (see `settle`). */
+export type PaybackMode = 'NEVER_RECEIVED' | 'RETURN';
+type Transfer = Extract<Command, { type: 'TRANSFER' }>;
+const isTabOf = (c: Snapshot) => (id: string) =>
+  c.accounts.some(a => a.id === id && a.kind === 'IOU');
 
 export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
   /**
@@ -70,6 +76,8 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
   /** Checks each command against the catalog and builds its entry (a split or a fee adds a second transaction). */
   async function prepare(cmds: Command[]): Promise<NewEntry[]> {
     const { c, cmds: ready } = await withIou(await catalog.load(), cmds);
+    // ponytail: each Paid back is checked against what is saved, so two in one batch could overfill a bill together.
+    for (const cmd of ready) await checkBills(c, cmd);
     const at = now();
     const entries: NewEntry[] = ready.map(cmd => ({
       kind: 'USER',
@@ -78,6 +86,89 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
     }));
     for (const e of entries) for (const tx of e.txs) assertBalanced(tx, id => c.accountOf(id));
     return entries;
+  }
+
+  /** Live Paid back links to these bills. */
+  async function linksTo(billIds: string[]): Promise<(Link & { command: Transfer })[]> {
+    return (await repos.entries.linksTo(ws, billIds)).map(r => {
+      const command = r.command as Transfer;
+      return {
+        payback: r.id,
+        bill: r.bill,
+        tab: command.fromAccountId,
+        amount: r.amount,
+        date: command.date,
+        command,
+      };
+    });
+  }
+
+  /** A Paid back's `bills`: out of a person's tab, each bill once, on that person, never more than is left on it. */
+  async function checkBills(c: Snapshot, cmd: Command, except?: string) {
+    if (cmd.type !== 'TRANSFER' || !cmd.bills?.length) return;
+    const tab = c.account(cmd.fromAccountId);
+    if (tab.row.kind !== 'IOU')
+      throw new DomainError('NOT_IOU', "Only a person's Paid back pays a bill");
+    const ids = cmd.bills.map(b => b.entryId);
+    if (new Set(ids).size !== ids.length) throw new DomainError('INVALID_BILLS', 'Each bill once');
+    if (cmd.bills.reduce((s, b) => s + b.amount, 0) > cmd.amount - (cmd.gift ?? 0))
+      throw new DomainError('INVALID_BILLS', 'The bills add up to more than was paid back');
+    const bills = await repos.entries.billsOf(ws, tab.id);
+    const links = (await linksTo(ids)).filter(l => l.payback !== except);
+    for (const b of cmd.bills) {
+      const bill = bills.find(x => x.id === b.entryId);
+      const person =
+        bill &&
+        peopleOf(bill.id, bill.transactions, isTabOf(c), links).find(p => p.tabId === tab.id);
+      if (!person) throw new DomainError('NOT_ON_BILL', `${tab.row.name} is not on that bill`);
+      if (b.amount > person.share - person.paid)
+        throw new DomainError(
+          'BILL_OVERPAID',
+          `That's more than ${tab.row.name} has left on the bill`,
+        );
+    }
+  }
+
+  /**
+   * The statements that rewrite the Paid backs tied to a bill whose shares become `after` (empty = deleted). Without a
+   * mode, any Paid back left over a share refuses the change (PAYBACKS_TIED) so the app can ask first.
+   * NEVER_RECEIVED: the Paid back shrinks by the part that no longer fits (deleted when only its gift would be left).
+   * RETURN: the money stays; only the link shrinks, so the tab goes below 0 (you owe them).
+   */
+  async function settle(
+    c: Snapshot,
+    billId: string,
+    after: ReturnType<typeof tabsOnBill>,
+    mode?: PaybackMode,
+  ): Promise<D1PreparedStatement[]> {
+    const cuts = cutsFor(await linksTo([billId]), after);
+    if (!cuts.length) return [];
+    if (!mode)
+      throw new DomainError(
+        'PAYBACKS_TIED',
+        'Someone already paid back more than this leaves them. Was the money received?',
+      );
+    const stmts: D1PreparedStatement[] = [];
+    for (const { link, cut } of cuts) {
+      const cmd = link.command;
+      const amount = mode === 'NEVER_RECEIVED' ? cmd.amount - cut : cmd.amount;
+      if (amount - (cmd.gift ?? 0) <= 0) {
+        stmts.push(...repos.entries.removeStatements(ws, link.payback));
+        continue;
+      }
+      const bills = (cmd.bills ?? [])
+        .map(b => (b.entryId === billId ? { ...b, amount: b.amount - cut } : b))
+        .filter(b => b.amount > 0);
+      const next: Transfer = { ...cmd, amount, bills: bills.length ? bills : undefined };
+      const txs = build(c, next, now());
+      const old = await repos.entries.get(ws, link.payback);
+      for (const t of txs) {
+        if (old) t.occurredAt = old.occurred_at;
+        assertBalanced(t, x => c.accountOf(x));
+      }
+      stmts.push(...repos.entries.replaceStatements(ws, link.payback, next, txs));
+    }
+    return stmts;
   }
 
   return {
@@ -89,7 +180,7 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
     },
 
     /** Rebuilds an entry from an edited command. Its type is fixed; a same-day edit keeps the original time. */
-    async edit(id: string, cmd: Command): Promise<void> {
+    async edit(id: string, cmd: Command, mode?: PaybackMode): Promise<void> {
       const entry = await repos.entries.get(ws, id);
       if (!entry) throw new DomainError('NOT_FOUND', 'Entry not found');
       if (entry.kind !== 'USER')
@@ -107,17 +198,66 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
       if (cmd.date === entry.occurred_at.slice(0, 10))
         for (const t of txs) t.occurredAt = entry.occurred_at;
       for (const tx of txs) assertBalanced(tx, x => c.accountOf(x));
-      await repos.entries.replace(ws, id, ready, txs);
+      await checkBills(c, ready, id);
+      const tied =
+        ready.type === 'EXPENSE' ? await settle(c, id, tabsOnBill(txs, isTabOf(c)), mode) : [];
+      await repos.batch([...repos.entries.replaceStatements(ws, id, ready, txs), ...tied]);
     },
 
-    async remove(id: string): Promise<void> {
-      if (!(await repos.entries.remove(ws, id)))
-        throw new DomainError('NOT_FOUND', 'Entry not found');
+    /** Deletes an entry; a bill with Paid backs tied to it needs a mode (see `settle`). */
+    async remove(id: string, mode?: PaybackMode): Promise<void> {
+      if (!(await repos.entries.get(ws, id))) throw new DomainError('NOT_FOUND', 'Entry not found');
+      const tied = await settle(await catalog.load(), id, new Map(), mode);
+      await repos.batch([...repos.entries.removeStatements(ws, id), ...tied]);
     },
 
+    /** Entries, newest first; each split bill carries its people (share, paid, Paid backs). */
     async listEntries(f: TxFilter) {
       const page = await repos.entries.listEntries(ws, f);
-      return { ...page, items: page.items.map(e => ({ ...e, command: commandOf(e) })) };
+      const items = page.items.map(e => ({ ...e, command: commandOf(e) }));
+      const bills = items.filter(e => e.command?.type === 'EXPENSE' && e.command.split);
+      const [c, links] = await Promise.all([catalog.load(), linksTo(bills.map(b => b.id))]);
+      return {
+        ...page,
+        items: items.map(e => ({
+          ...e,
+          people: bills.includes(e) ? peopleOf(e.id, e.transactions, isTabOf(c), links) : null,
+        })),
+      };
+    },
+
+    /** A person's split bills, oldest first, with their share and what they paid (`except`: a Paid back being edited). */
+    async tabBills(tabId: string, except?: string) {
+      const c = await catalog.load();
+      if (c.account(tabId).row.kind !== 'IOU')
+        throw new DomainError('NOT_IOU', 'Only a person has bills to pay back');
+      const bills = await repos.entries.billsOf(ws, tabId);
+      const links = (await linksTo(bills.map(b => b.id))).filter(l => l.payback !== except);
+      return bills
+        .flatMap(b => {
+          const me = peopleOf(b.id, b.transactions, isTabOf(c), links).find(p => p.tabId === tabId);
+          const cmd = commandOf(b);
+          const title =
+            (cmd?.type === 'EXPENSE' && cmd.merchant) || b.transactions[0]?.note || 'Split bill';
+          // Where the bill was paid from: a Paid back for it starts there.
+          const from =
+            cmd?.type === 'EXPENSE'
+              ? { accountId: cmd.accountId, envelopeId: cmd.envelopeId ?? null }
+              : { accountId: null, envelopeId: null };
+          return me && me.share > 0
+            ? [
+                {
+                  entryId: b.id,
+                  occurredAt: b.occurred_at,
+                  title,
+                  share: me.share,
+                  paid: me.paid,
+                  ...from,
+                },
+              ]
+            : [];
+        })
+        .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt));
     },
 
     listTransactions: (f: TxFilter) => repos.entries.list(ws, f),
@@ -300,6 +440,24 @@ function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] {
           toEnvelope: c.pocketOf(to.row, cmd.toEnvelopeId),
         }),
       ];
+      // A payback's extra kept as a gift: income on the tab, in the same entry, so deleting the payback deletes it.
+      if (cmd.gift) {
+        const other = c.categoryByName('Other income');
+        if (from.row.kind !== 'IOU' || cmd.gift > cmd.amount)
+          throw new DomainError('INVALID_GIFT', 'A gift is part of what a person paid back');
+        if (!other)
+          throw new DomainError('NO_INCOME_CATEGORY', 'Create an "Other income" category first');
+        txs.push(
+          income({
+            occurredAt,
+            account: from,
+            envelope: fromEnvelope,
+            categoryId: other.id,
+            amount: cmd.gift,
+            note: `Gift from ${from.row.name}`,
+          }),
+        );
+      }
       // The admin fee is its own expense, so it shows up in spending.
       if (cmd.fee) {
         const fees = c.categoryByName('Fees');
