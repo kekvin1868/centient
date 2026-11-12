@@ -49,6 +49,11 @@ export const RULES: [rule: string, examples: string, words?: string][] = [
   ],
   ['Split a bill', 'makan 300rb bagi 3', 'bagi, bg or split, then how many people'],
   [
+    'Sums',
+    'kopi 25rb+18rb= → kopi 43.000 · dimsum 19k/3= → dimsum 6.333',
+    '= works it out as you type; Undo, backspace or Cmd/Ctrl+Z brings the sum back. To split a bill, use bagi',
+  ],
+  [
     'Another day',
     'kmrn bensin 100rb · senin makan 30rb · tgl 20 makan 30rb',
     `kemarin, kemarin lusa, ${list(days)}`,

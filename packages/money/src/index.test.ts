@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { CURRENCIES, DECIMALS, formatMoney, parseAmount, parseNumber, toMinor } from './index';
+import {
+  CURRENCIES,
+  DECIMALS,
+  evalAmount,
+  formatMoney,
+  parseAmount,
+  parseNumber,
+  toMinor,
+} from './index';
 
 describe('parseNumber', () => {
   it.each([
@@ -98,5 +106,14 @@ describe('currency list', () => {
     expect(parseAmount('eur15')).toEqual({ kind: 'exact', value: 1500, currency: 'EUR' });
     expect(parseAmount('20usd')).toEqual({ kind: 'exact', value: 2000, currency: 'USD' });
     expect(parseAmount('20chf')).toBeNull();
+  });
+});
+
+describe('evalAmount with units', () => {
+  it('reads rb / k / jt inside a sum', () => {
+    expect(evalAmount('19k/3', 'IDR')).toBe(6_333);
+    expect(evalAmount('25rb+18rb', 'IDR')).toBe(43_000);
+    expect(evalAmount('(1,5jt+500rb)*2', 'IDR')).toBe(4_000_000);
+    expect(evalAmount('2 x 15RB', 'IDR')).toBe(30_000);
   });
 });

@@ -3,6 +3,7 @@
 import { CURRENCIES } from './currencies';
 
 export { CURRENCIES, type Currency } from './currencies';
+export { evalAmount, isSum, readAmount } from './sum';
 
 /** Decimals per listed currency code (IDR 0, USD 2, JPY 0, KWD 3, USDT 6, BTC 8, ...). */
 export const DECIMALS: Record<string, number> = Object.fromEntries(
@@ -20,7 +21,7 @@ export function parseNumber(s: string): number | null {
   return Number(`${m[1].replace(/[.,]/g, '')}.${m[2] ?? '0'}`);
 }
 
-const SUFFIX: Record<string, number> = { rb: 1e3, ribu: 1e3, k: 1e3, jt: 1e6, juta: 1e6 };
+export const SUFFIX: Record<string, number> = { rb: 1e3, ribu: 1e3, k: 1e3, jt: 1e6, juta: 1e6 };
 
 /** Currency words accepted before or after a number. Rupiah words keep the rupiah rules below. */
 export const CURRENCY_WORDS: Record<string, string> = {

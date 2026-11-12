@@ -19,6 +19,8 @@ import {
   VERBS,
   type Hint,
 } from './dictionary';
+import { resolveSums } from './sums';
+export { resolveSums };
 // The word lists the client's logging guide (LogGuideSheet) shows, so it says what the parser really reads.
 export {
   CASH_WORDS,
@@ -79,7 +81,7 @@ export type Draft = {
 export const SUFFIXES = new Set(['rb', 'ribu', 'k', 'jt', 'juta', 'm', 'usd', 'usdt', 'btc']);
 
 export function parseQuickAdd(input: string, ctx: QAContext): Draft[] {
-  const text = input
+  const text = resolveSums(input)
     .replace(/\btop\s+up\b/gi, 'top-up')
     .replace(/\bkartu\s+kredit\b/gi, 'kartu-kredit')
     .replace(/\bkemarin\s+lusa\b/gi, 'kemarin-lusa')
