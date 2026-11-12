@@ -172,20 +172,28 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
     return stmts;
   }
 
+  /**
+   * The writes that save each command as one entry, with the entry ids, for a caller that batches them with
+   * its own (the Inbox marks its items in the same write). An expense that pays a recurring bill also moves
+   * that bill to its next due date.
+   */
+  async function recordStatements(cmds: Command[]) {
+    const { ids, stmts } = repos.entries.insertStatements(ws, await prepare(cmds));
+    const at = new Date(now()).toISOString();
+    const paid = cmds.some(c => c.type === 'EXPENSE')
+      ? paidBy(await repos.recurring.list(ws), cmds)
+      : [];
+    return { ids, stmts: [...stmts, ...paid.map(r => advance(repos, ws, r, at))] };
+  }
+
   return {
     prepare,
+    recordStatements,
 
-    /**
-     * Saves each command as one entry; returns the entry ids. An expense that pays a recurring bill also moves
-     * that bill to its next due date, in the same write.
-     */
+    /** Saves each command as one entry, in one write; returns the entry ids. */
     async record(cmds: Command[]): Promise<string[]> {
-      const { ids, stmts } = repos.entries.insertStatements(ws, await prepare(cmds));
-      const at = new Date(now()).toISOString();
-      const paid = cmds.some(c => c.type === 'EXPENSE')
-        ? paidBy(await repos.recurring.list(ws), cmds)
-        : [];
-      await repos.batch([...stmts, ...paid.map(r => advance(repos, ws, r, at))]);
+      const { ids, stmts } = await recordStatements(cmds);
+      await repos.batch(stmts);
       return ids;
     },
 

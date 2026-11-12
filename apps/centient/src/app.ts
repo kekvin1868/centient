@@ -8,6 +8,7 @@ import { init } from './middleware/init';
 import { accountsRoutes } from './modules/accounts/routes';
 import { budgetsRoutes } from './modules/budgets/routes';
 import { categoriesRoutes } from './modules/categories/routes';
+import { inboxRoutes } from './modules/inbox/routes';
 import { installmentsRoutes } from './modules/installments/routes';
 import { ledgerRoutes } from './modules/ledger/routes';
 import { pocketsRoutes } from './modules/pockets/routes';
@@ -30,6 +31,7 @@ const routes = app
   .route('/api/budgets', budgetsRoutes)
   .route('/api/quickadd', quickaddRoutes)
   .route('/api/recurring', recurringRoutes)
+  .route('/api/inbox', inboxRoutes)
   .route('/api', installmentsRoutes)
   .route('/api', reportsRoutes);
 

@@ -1,4 +1,4 @@
-// Settings: accounts, pockets, categories, hidden items, when the month starts, backup and reset. "Hide"
+// Settings: accounts, pockets, categories, hidden items, when the month starts, import, the Inbox, backup and reset. "Hide"
 // keeps history; deleting an account or resetting flags data as deleted rather than erasing it.
 import { useState } from 'react';
 import type { Account } from '../../../src/repos/accounts';
@@ -9,6 +9,8 @@ import { ForecastStart } from '../features/budgets/ForecastStart';
 import { EditAccountSheet } from '../features/accounts/EditAccountSheet';
 import { AddCategorySheet } from '../features/categories/AddCategorySheet';
 import { EditCategorySheet } from '../features/categories/EditCategorySheet';
+import { ImportSheet } from '../features/inbox/ImportSheet';
+import { InboxSheet } from '../features/inbox/InboxSheet';
 import { AddPocketSheet } from '../features/pockets/AddPocketSheet';
 import { EditPocketSheet } from '../features/pockets/EditPocketSheet';
 import { HiddenItems } from '../features/workspace/HiddenItems';
@@ -29,6 +31,8 @@ export function Settings() {
   const [category, setCategory] = useState<Category | null>(null);
   const [add, setAdd] = useState<'account' | 'pocket' | 'category' | null>(null);
   const [reset, setReset] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [inbox, setInbox] = useState(false);
   const cat = catalog.value;
   const close = () => setAdd(null);
 
@@ -95,6 +99,18 @@ export function Settings() {
 
       <Group label="Your data">
         <Row
+          title="Import a spreadsheet (CSV)"
+          sub="History from another app or your bank"
+          chevron
+          onClick={() => setImporting(true)}
+        />
+        <Row
+          title="Inbox"
+          sub="Imported payments waiting for your OK"
+          chevron
+          onClick={() => setInbox(true)}
+        />
+        <Row
           title="Download all as spreadsheet (CSV)"
           chevron
           onClick={() => location.assign('/api/export.csv')}
@@ -118,6 +134,13 @@ export function Settings() {
 
       {/* Sheets are keyed by what they show, so each opening starts from fresh state set at mount. */}
       <ResetSheet open={reset} onClose={() => setReset(false)} />
+      <ImportSheet
+        key={`import:${importing}`}
+        open={importing}
+        onClose={() => setImporting(false)}
+        onImported={() => setInbox(true)}
+      />
+      <InboxSheet open={inbox} onClose={() => setInbox(false)} />
       <EditAccountSheet
         key={`account:${account?.id ?? 'none'}`}
         account={account}

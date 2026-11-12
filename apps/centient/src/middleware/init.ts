@@ -6,6 +6,7 @@ import { createCatalog } from '../lib/catalog';
 import { createAccountsService } from '../modules/accounts/service';
 import { createBudgetsService } from '../modules/budgets/service';
 import { createCategoriesService } from '../modules/categories/service';
+import { createInboxService } from '../modules/inbox/service';
 import { createInstallmentsService } from '../modules/installments/service';
 import { createLedgerService } from '../modules/ledger/service';
 import { createPocketsService } from '../modules/pockets/service';
@@ -20,6 +21,7 @@ import { categoriesRepo } from '../repos/categories';
 import { entriesRepo } from '../repos/entries';
 import { envelopesRepo } from '../repos/envelopes';
 import { filesRepo, r2Files, type FileStore } from '../repos/files';
+import { inboxRepo } from '../repos/inbox';
 import { installmentsRepo } from '../repos/installments';
 import { pricesRepo } from '../repos/prices';
 import { recurringRepo } from '../repos/recurring';
@@ -37,6 +39,7 @@ export function createRepos(db: D1Database, store?: FileStore) {
     entries: entriesRepo(db),
     prices: pricesRepo(db),
     recurring: recurringRepo(db),
+    inbox: inboxRepo(db),
     installments: installmentsRepo(db),
     files: filesRepo(db, store),
     reports: reportsRepo(db),
@@ -46,7 +49,7 @@ export function createRepos(db: D1Database, store?: FileStore) {
 }
 export type Repos = ReturnType<typeof createRepos>;
 
-/** One workspace's services. Lower ones are passed into higher ones (ledger into quick add, installments, recurring, workspace). */
+/** One workspace's services. Lower ones are passed into higher ones (ledger into quick add, installments, recurring, inbox, workspace). */
 export function createServices(o: {
   repos: Repos;
   ws: string;
@@ -65,6 +68,7 @@ export function createServices(o: {
     quickadd: createQuickaddService({ ...base, ledger }),
     installments: createInstallmentsService({ ...base, ledger }),
     recurring: createRecurringService({ ...base, ledger }),
+    inbox: createInboxService({ ...base, ledger }),
     workspace: createWorkspaceService({ ...base, ledger, fetch: o.fetch }),
   };
 }
