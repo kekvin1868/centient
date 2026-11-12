@@ -66,6 +66,26 @@
   --warn: #f4c43a;
   --bad: #ff6b6b;
   --on-tone: #1a1712;
+  /* Home's stacked budget bar (features/budgets/HomeBudgets): one colour per budget, bright in both themes. */
+  --slice-1: #1ff0dc;
+  --slice-2: #e12885;
+  --slice-3: #f4a23a;
+  --slice-4: #8b7bff;
+  --slice-5: #86cecb;
+  /* Home's retro HP bar (HomeBudgets Hp): 2000s handheld palette, same in both themes (the frame is its own dark box). */
+  --hp-edge: #385040;
+  --hp-frame: #506858;
+  --hp-track: #383050;
+  --hp-rim: #ffffff;
+  --hp-label: #f8d848;
+  --hp-label-2: #f8b040;
+  --hp-label-shadow: #b89048;
+  --hp-green: #70f8a8;
+  --hp-green-shade: #58d080;
+  --hp-yellow: #f8e038;
+  --hp-yellow-shade: #c8a808;
+  --hp-red: #f85838;
+  --hp-red-shade: #a84048;
 }
 @supports (color: color(display-p3 0 0 0)) {
   :root {

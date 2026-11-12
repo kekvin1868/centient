@@ -22,6 +22,7 @@ type Acc = {
   id: string;
   name: string;
   kind: string;
+  kept_until: string | null;
   default_envelope_id: string;
   currency_code: string;
 };
@@ -61,6 +62,36 @@ test('first run: the night menu sets starting balances, then Home', async () => 
   await setMain('5000000'); // Main Account is picked first
   await menu.getByRole('option', { name: /Dailies/ }).tap();
   await setMain('300000');
+  // A pocket From Balance is carved out of the balance: Dailies stays 300.000 (Transportation case).
+  await page.getByRole('button', { name: '+ POCKET' }).tap();
+  const sheet = page.getByRole('dialog', { name: /in Dailies$/ });
+  await sheet.getByRole('textbox', { name: 'Pocket name' }).fill('Transportation');
+  for (const k of ['1', '0', '0', '000'])
+    await sheet.getByRole('button', { name: k, exact: true }).tap();
+  await expect(sheet.getByRole('radio', { name: 'FROM BALANCE' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await expect(sheet).toContainText('Rp300.000 · SAME');
+  await sheet.getByRole('radio', { name: 'ADDITIONAL BUDGET' }).tap();
+  await expect(sheet).toContainText('Rp400.000 ↑');
+  await sheet.getByRole('radio', { name: 'FROM BALANCE' }).tap();
+  await sheet.getByRole('button', { name: 'SET ▸' }).tap();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(menu.getByRole('option', { name: /Dailies/ })).toContainText('Rp300.000');
+  await expect(page.getByRole('button', { name: 'Balance, Rp200.000' })).toBeVisible();
+  // Deleting it asks; back to balance keeps the total.
+  await page.getByRole('button', { name: /^Transportation/ }).tap();
+  await page
+    .getByRole('dialog', { name: /in Dailies$/ })
+    .getByRole('button', { name: 'DELETE', exact: true })
+    .tap();
+  await page
+    .getByRole('dialog', { name: 'Delete Transportation' })
+    .getByRole('button', { name: 'BACK TO BALANCE' })
+    .tap();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Balance, Rp300.000' })).toBeVisible();
   await page.getByRole('button', { name: 'CONFIRM ▸' }).tap();
   await page
     .getByRole('dialog', { name: 'Confirm changes' })
@@ -68,8 +99,9 @@ test('first run: the night menu sets starting balances, then Home', async () => 
     .tap();
   await expect(page.getByRole('img', { name: 'Centient' })).toBeVisible();
   expect(await balance('Main Account')).toBe(5_000_000);
-  // Nothing set aside yet: everything in the Main pockets is free to spend.
-  await expect(page.getByRole('heading', { name: 'Free to spend' })).toBeVisible();
+  // All accounts: the hero is the total of every account; no budget yet, so the card under it says so.
+  await expect(page.getByRole('heading', { name: 'Total balance' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No budget yet' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'ACCOUNTS' })).toHaveCount(0); // onboarded once
 });
@@ -275,7 +307,8 @@ test('pockets live inside an account: add one, move money in, the account balanc
     page.getByRole('button', { name: 'Showing Main Account. Change account' }),
   ).toBeVisible();
   await showAll();
-  await expect(page.getByRole('region', { name: 'What you can spend' })).toContainText('3.750.000'); // Main 3.5jt + Dailies 300rb - the 50rb from the category test
+  // All accounts: the total of every account, money set aside in pockets included.
+  await expect(page.getByRole('region', { name: 'Your money' })).toContainText('Total balance');
 });
 
 test('a crypto account has no pockets yet and keeps its balance', async () => {
@@ -525,6 +558,8 @@ test('a split bill names people, re-divides live, and Equal resets it (Phase 1b)
   await who.getByRole('textbox', { name: "Person 3's share" }).fill('50000');
   await expect(who.getByRole('alert')).toContainText('Your share must be more than zero');
   await who.getByRole('textbox', { name: "Person 3's share" }).fill('20000');
+  await expect(sheet.getByTestId('your-part')).toContainText('30.000'); // v2 #5: big number is my part
+  await expect(sheet.getByText('BILL', { exact: true })).toBeVisible();
   await sheet.getByRole('button', { name: 'Log it' }).tap();
   await expect(sheet).toBeHidden();
   // Andi has his own tab with 50.000; deleting it removes the split again, so later tests are unaffected.
@@ -906,4 +941,267 @@ test('the ? keycap opens the logging guide; Enter still asks to answer the card 
   await box.press('Enter');
   await expect(page.getByText('Answer the question on the card first')).toBeVisible();
   await box.fill('');
+});
+
+test('a sum closed with = turns into its result, and dividing never splits (v2 #9)', async () => {
+  await tab('Home').tap();
+  const box = page.getByRole('textbox', { name: 'What did you spend or receive?' });
+  await box.pressSequentially('Makan Dimsum 19k/3=', { delay: 20 });
+  await expect(box).toHaveValue('Makan Dimsum 6.333');
+  await expect(page.getByText(/split with/)).toHaveCount(0);
+  // A typo in the sum: backspace, Cmd/Ctrl+Z, or the Undo key, brings the sum back without the =.
+  await box.press('Backspace');
+  await expect(box).toHaveValue('Makan Dimsum 19k/3');
+  await box.pressSequentially('=', { delay: 20 });
+  await expect(box).toHaveValue('Makan Dimsum 6.333');
+  await box.press('ControlOrMeta+z');
+  await expect(box).toHaveValue('Makan Dimsum 19k/3');
+  await box.pressSequentially('=', { delay: 20 });
+  await expect(box).toHaveValue('Makan Dimsum 6.333');
+  await page.getByRole('button', { name: 'Undo', exact: true }).tap();
+  await expect(box).toHaveValue('Makan Dimsum 19k/3');
+  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toHaveCount(0);
+  await box.fill('');
+  await box.pressSequentially('kopi 25rb+18rb=', { delay: 20 });
+  await expect(box).toHaveValue('kopi 43.000');
+  await box.fill('');
+});
+
+test('Home: total balance on All accounts, budget cards under it (v2 round 2, B1)', async () => {
+  await tab('Home').tap();
+  await showAll();
+  await expect(page.getByRole('heading', { name: 'Total balance' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Budget left' })).toBeVisible();
+  await expect(page.getByText(/^Resets in \d+ days?$/)).toBeVisible();
+  // One account: its own card only when a budget sits on one of its pockets.
+  const main = await accountId('Main Account');
+  await api('/budgets', {
+    method: 'PUT',
+    data: {
+      categoryId: await categoryId('Shopping'),
+      envelopeId: `${main}:main`,
+      limit: 1_000_000,
+    },
+  });
+  await page.reload();
+  await tab('Money').tap();
+  await pick('Main Account');
+  await tab('Home').tap();
+  const card = page.getByRole('region', { name: 'Budgets in Main Account' });
+  await expect(card).toContainText('Shopping');
+  // All accounts: the same budget has its own bar, named with its account.
+  await showAll();
+  await expect(page.getByRole('region', { name: 'Budget left' })).toContainText(
+    'Shopping · Main Account',
+  );
+  await tab('Money').tap();
+  await pick('Main Account');
+  await tab('Home').tap();
+  await expect(card).toContainText('/ Rp1.000.000');
+  const { budgets } = await (await api('/budgets')).json();
+  const made = budgets.find((b: { envelopeId: string | null }) => b.envelopeId === `${main}:main`);
+  await api(`/budgets/${made.id}`, { method: 'DELETE' });
+  await page.reload();
+  await expect(card).toHaveCount(0);
+});
+
+test('pocket stamps under the log box stay on the last pocket logged to (v2 #2)', async () => {
+  await tab('Money').tap();
+  await pick('Main Account');
+  await tab('Home').tap();
+  const stamps = page.getByRole('group', { name: 'Log to pocket' });
+  const rent = stamps.getByRole('button', { name: 'RENT' });
+  await rent.tap();
+  const before = (await balances()).envelopes.find(e => e.name === 'Rent')!.balance;
+  const box = page.getByRole('textbox', { name: 'What did you spend or receive?' });
+  await box.fill('bensin 10rb');
+  await box.press('Enter');
+  await expect(page.getByText('Logged', { exact: true })).toBeVisible();
+  await expect
+    .poll(async () => (await balances()).envelopes.find(e => e.name === 'Rent')!.balance)
+    .toBe(before - 10_000);
+  await expect(rent).toHaveAttribute('aria-pressed', 'true');
+  await page.reload();
+  await expect(rent).toHaveAttribute('aria-pressed', 'true');
+  // Another account clears it.
+  await showAll();
+  await expect(stamps).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Pick an account' })).toBeHidden();
+  const chip = page.getByRole('button', { name: /^Showing .*\. Change account$/ });
+  await chip.tap();
+  const main = page
+    .getByRole('dialog', { name: 'Pick an account' })
+    .getByRole('button', { name: /^Main Account/ });
+  await main.focus();
+  await main.press('Enter');
+  await expect(page.getByRole('button', { name: /^Showing Main Account/ })).toBeVisible();
+  await expect(rent).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('a tab: paid back, edited, extra owed, kept until a day, returned (v2 #6)', async () => {
+  const saved = await api('/transactions', {
+    method: 'POST',
+    data: {
+      type: 'EXPENSE',
+      accountId: await accountId('Main Account'),
+      categoryId: await categoryId('Food & Drink'),
+      amount: 100_000,
+      date: jakartaDay(),
+      split: { people: 2, parties: [{ name: 'Sri', share: 50_000 }] },
+    },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.reload();
+  await tab('Money').tap();
+  await pick('Sri');
+  const pay = async (amount: string) => {
+    await page.getByRole('button', { name: 'Paid back', exact: true }).tap();
+    const sheet = page.getByRole('dialog', { name: 'Paid back' });
+    await sheet.getByRole('combobox', { name: 'Into' }).selectOption({ label: 'Dailies' });
+    await sheet.getByRole('textbox', { name: 'Sri paid' }).fill(amount);
+    return sheet;
+  };
+  const dailies = await balance('Dailies');
+  // Part of it.
+  let sheet = await pay('20000');
+  await sheet.getByRole('button', { name: 'Save' }).tap();
+  await expect(sheet).toBeHidden();
+  expect(await balance('Sri')).toBe(30_000);
+  expect(await balance('Dailies')).toBe(dailies + 20_000);
+  // A typo in it: fix it from the tab's Activity, in the same sheet.
+  await page.getByRole('button', { name: 'Activity', exact: true }).tap();
+  await page
+    .getByRole('button', { name: /^Sri → Dailies/ })
+    .first()
+    .click();
+  sheet = page.getByRole('dialog', { name: 'Paid back' });
+  await sheet.getByRole('textbox', { name: 'Sri paid' }).fill('25000');
+  await sheet.getByRole('button', { name: 'Save' }).tap();
+  await expect(sheet).toBeHidden();
+  expect(await balance('Sri')).toBe(25_000);
+  expect(await balance('Dailies')).toBe(dailies + 25_000);
+  // More than the tab owes: the extra stays theirs by default.
+  await tab('Money').tap();
+  await pick('Sri');
+  sheet = await pay('30000');
+  await expect(sheet.getByText('Rp5.000 extra')).toBeVisible();
+  await sheet.getByRole('button', { name: 'Save' }).tap();
+  await expect(sheet).toBeHidden();
+  expect(await balance('Sri')).toBe(-5_000);
+  await expect(page.getByText('You owe Sri')).toBeVisible();
+  // Return part of what I owe.
+  await page.getByRole('button', { name: 'Returned', exact: true }).tap();
+  const back = page.getByRole('dialog', { name: 'Return money' });
+  await back.getByRole('combobox', { name: 'From' }).selectOption({ label: 'Dailies' });
+  await back.getByRole('textbox', { name: 'Back to Sri' }).fill('2000');
+  await back.getByRole('button', { name: 'Save' }).tap();
+  await expect(back).toBeHidden();
+  expect(await balance('Sri')).toBe(-3_000);
+  // Home flags it; REVIEW opens that person on Money.
+  await tab('Home').tap();
+  await page.getByRole('button', { name: 'Review Sri', exact: true }).tap();
+  await expect(page.getByText('You owe Sri')).toBeVisible();
+  // Keep the rest for a week: Home's strip goes calm (KEPT, return by that day).
+  await page.getByRole('button', { name: 'Kept', exact: true }).tap();
+  const keep = page.getByRole('dialog', { name: "Keep Sri's money" });
+  await keep.getByRole('button', { name: /^Return by,/ }).tap();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await keep.getByRole('button', { name: 'Save' }).tap();
+  await expect(keep).toBeHidden();
+  await tab('Home').tap();
+  const strip = page.getByRole('region', { name: 'Money to give back' });
+  await expect(strip).toContainText('KEPT');
+  await expect(strip).toContainText('Return by');
+  // Returned in full: the tab is square and the Kept day is cleared.
+  await page.getByRole('button', { name: 'Review Sri', exact: true }).tap();
+  await page.getByRole('button', { name: 'Returned', exact: true }).tap();
+  const rest = page.getByRole('dialog', { name: 'Return money' });
+  await rest.getByRole('combobox', { name: 'From' }).selectOption({ label: 'Dailies' });
+  await rest.getByRole('button', { name: 'Save' }).tap();
+  await expect(rest).toBeHidden();
+  await expect.poll(() => balance('Sri')).toBe(0);
+  expect((await accounts()).find(a => a.name === 'Sri')).toMatchObject({ kept_until: null });
+  // Settled: the card goes, and Money moves to an everyday account.
+  await expect(page.getByRole('button', { name: /^Sri,/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Update balance', exact: true })).toBeVisible();
+});
+
+test('a Paid back over two bills: divide with HP bars, people under each bill, delete asks (split paybacks)', async () => {
+  const bill = async (merchant: string, date: string, share: number) =>
+    (
+      await (
+        await api('/transactions', {
+          method: 'POST',
+          data: {
+            type: 'EXPENSE',
+            accountId: await accountId('Main Account'),
+            categoryId: await categoryId('Food & Drink'),
+            amount: share + 50_000,
+            date,
+            merchant,
+            split: { people: 2, parties: [{ name: 'Tono', share }] },
+          },
+        })
+      ).json()
+    ).ids[0] as string;
+  const kulkas = await bill('Kulkas', jakartaDay(-2), 150_000);
+  await bill('Pizza', jakartaDay(-1), 100_000);
+  await page.reload();
+  await tab('Money').tap();
+  await pick('Tono');
+  await page.getByRole('button', { name: 'Paid back', exact: true }).tap();
+  let sheet = page.getByRole('dialog', { name: 'Paid back' });
+  // Starts where the bills were paid from (round 2, C): no picking needed.
+  await expect(sheet.getByRole('combobox', { name: 'Into' })).toHaveValue(
+    await accountId('Main Account'),
+  );
+  await sheet.getByRole('textbox', { name: 'Tono paid' }).fill('190000');
+  await sheet.getByRole('button', { name: 'Next: divide over 2 bills' }).tap();
+  // Oldest first: Kulkas full, Pizza 40.000; the pool is empty.
+  sheet = page.getByRole('dialog', { name: /^Divide/ });
+  await expect(sheet.getByRole('textbox', { name: 'Amount for Kulkas' })).toHaveValue('150.000');
+  await expect(sheet.getByRole('textbox', { name: 'Amount for Pizza' })).toHaveValue('40.000');
+  // Moving money off Kulkas leaves it in the pool and blocks Save until placed.
+  await sheet.getByRole('textbox', { name: 'Amount for Kulkas' }).fill('100000');
+  await expect(sheet.getByRole('button', { name: 'Save' })).toBeDisabled();
+  await sheet.getByRole('textbox', { name: 'Amount for Kulkas' }).fill('150000');
+  await sheet.getByRole('button', { name: 'Save' }).tap();
+  await expect(sheet).toBeHidden();
+  expect(await balance('Tono')).toBe(60_000);
+  // Home on Main Account: each bill lists Tono with a chip; the Paid back sits under its bills, not on its own row.
+  await tab('Home').tap();
+  await page.getByRole('button', { name: /^Showing .*\. Change account$/ }).tap();
+  const main = page
+    .getByRole('dialog', { name: 'Pick an account' })
+    .getByRole('button', { name: /^Main Account/ });
+  await main.focus();
+  await main.press('Enter');
+  await expect(page.getByRole('button', { name: /^Kulkas/ })).toBeVisible();
+  await expect(page.getByText('PAID').first()).toBeVisible();
+  await expect(page.getByText(/OWES\s*Rp60\.000/)).toBeVisible();
+  // You are on each bill too: your part, spent from Main Account (round 2, D).
+  await expect(page.getByText('Me · Main Account').first()).toBeVisible();
+  await expect(page.getByText(/SPENT\s*Rp50\.000/).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Tono → Main Account/ })).toHaveCount(0);
+  // Deleting Kulkas asks what happened to the money; Never received takes only its part off.
+  await page.getByRole('button', { name: 'Delete Kulkas' }).focus();
+  await page.getByRole('button', { name: 'Delete Kulkas' }).click();
+  const ask = page.getByRole('dialog', { name: /Delete Kulkas/ });
+  await ask.getByRole('button', { name: 'NEVER RECEIVED' }).click();
+  await expect(ask).toBeHidden();
+  // The delete is sent when the Undo toast ends.
+  await expect
+    .poll(
+      async () =>
+        (await (await api('/entries?limit=50')).json()).items.some(
+          (e: { id: string }) => e.id === kulkas,
+        ),
+      {
+        timeout: 10_000,
+      },
+    )
+    .toBe(false);
+  expect(await balance('Tono')).toBe(60_000);
+  expect(await balance('Main Account')).toBeGreaterThan(0);
 });

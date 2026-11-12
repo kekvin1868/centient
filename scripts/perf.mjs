@@ -1,6 +1,6 @@
 // `npm run perf`: builds the app, checks what the first paint downloads against a size budget, then loads Home in
 // Chromium (iPhone 13 screen, phone CPU 4x slower) on a throwaway database and checks the load-time targets in
-// planning/features/roadmap-v2.agent.md ("Performance goals"). The local preview server does not compress, so
+// planning/features/roadmap/roadmap-v2.agent.md ("Performance goals"). The local preview server does not compress, so
 // network time is worked out from the gzip sizes (as Cloudflare serves them) plus the measured round trips.
 import { chromium, devices } from '@playwright/test';
 import { execSync, spawn } from 'node:child_process';
@@ -83,7 +83,7 @@ try {
     const home = async () => {
       const t0 = Date.now();
       await page.goto(base + '/');
-      await page.getByRole('region', { name: 'What you can spend' }).waitFor({ timeout: 30000 });
+      await page.getByRole('region', { name: 'Your money' }).waitFor({ timeout: 30000 });
       return Date.now() - t0;
     };
     const first = await home();
