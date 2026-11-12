@@ -1,7 +1,7 @@
 // The ledger: entries (what the user logged) -> transactions -> account lines (entries) + pocket lines (allocations).
 import type { NewTransaction } from '../domain/ledger';
 import { currencyRow } from './currencies';
-import { uid } from './sql';
+import { all, uid } from './sql';
 
 export type TxView = {
   id: string;
@@ -172,6 +172,38 @@ export function entriesRepo(db: D1Database) {
     });
   }
 
+  function replaceStatements(ws: string, entryId: string, command: unknown, txs: NewTransaction[]) {
+    const inGroup = 'SELECT id FROM transactions WHERE group_id = ? AND workspace_id = ?';
+    return [
+      db.prepare(`DELETE FROM entries WHERE transaction_id IN (${inGroup})`).bind(entryId, ws),
+      db.prepare(`DELETE FROM allocations WHERE transaction_id IN (${inGroup})`).bind(entryId, ws),
+      db
+        .prepare('DELETE FROM transactions WHERE group_id = ? AND workspace_id = ?')
+        .bind(entryId, ws),
+      ...txs.flatMap(t => txStatements(ws, entryId, t)),
+      db
+        .prepare(
+          "UPDATE entry_groups SET command = ?, updated_at = datetime('now') WHERE id = ? AND workspace_id = ?",
+        )
+        .bind(JSON.stringify(command), entryId, ws),
+    ];
+  }
+
+  function removeStatements(ws: string, id: string) {
+    return [
+      db
+        .prepare(
+          "UPDATE entry_groups SET deleted_at = datetime('now') WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL",
+        )
+        .bind(id, ws),
+      db
+        .prepare(
+          "UPDATE transactions SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE group_id = ? AND workspace_id = ? AND deleted_at IS NULL",
+        )
+        .bind(id, ws),
+    ];
+  }
+
   return {
     /** The statements that write these entries, for a caller that batches them with other writes. */
     insertStatements,
@@ -183,41 +215,53 @@ export function entriesRepo(db: D1Database) {
       return ids;
     },
 
+    /** The statements that replace an entry's transactions and saved command, for a caller batching more. */
+    replaceStatements,
+
     /** Replaces an entry's transactions and saved command in one atomic batch. */
     async replace(ws: string, entryId: string, command: unknown, txs: NewTransaction[]) {
-      const inGroup = 'SELECT id FROM transactions WHERE group_id = ? AND workspace_id = ?';
-      await db.batch([
-        db.prepare(`DELETE FROM entries WHERE transaction_id IN (${inGroup})`).bind(entryId, ws),
-        db
-          .prepare(`DELETE FROM allocations WHERE transaction_id IN (${inGroup})`)
-          .bind(entryId, ws),
-        db
-          .prepare('DELETE FROM transactions WHERE group_id = ? AND workspace_id = ?')
-          .bind(entryId, ws),
-        ...txs.flatMap(t => txStatements(ws, entryId, t)),
-        db
-          .prepare(
-            "UPDATE entry_groups SET command = ?, updated_at = datetime('now') WHERE id = ? AND workspace_id = ?",
-          )
-          .bind(JSON.stringify(command), entryId, ws),
-      ]);
+      await db.batch(replaceStatements(ws, entryId, command, txs));
     },
+
+    /** The statements that soft-delete an entry and its transactions. */
+    removeStatements,
 
     /** Soft-deletes the entry and all its transactions; false when it is not in this workspace. */
     async remove(ws: string, id: string) {
-      const [g] = await db.batch([
-        db
-          .prepare(
-            "UPDATE entry_groups SET deleted_at = datetime('now') WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL",
-          )
-          .bind(id, ws),
-        db
-          .prepare(
-            "UPDATE transactions SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE group_id = ? AND workspace_id = ? AND deleted_at IS NULL",
-          )
-          .bind(id, ws),
-      ]);
+      const [g] = await db.batch(removeStatements(ws, id));
       return g.meta.changes > 0;
+    },
+
+    /**
+     * Every live Paid back linking to one of these bills (its saved command's `bills`), one row per link, with the
+     * Paid back as a whole (its command) so a caller can rewrite it.
+     */
+    async linksTo(ws: string, billIds: string[]) {
+      if (!billIds.length) return [];
+      const rows = await all<{ id: string; command: string; bill: string; amount: number }>(
+        db,
+        `SELECT g.id, g.command, json_extract(b.value, '$.entryId') AS bill, json_extract(b.value, '$.amount') AS amount
+        FROM entry_groups g, json_each(g.command, '$.bills') b
+        WHERE g.workspace_id = ? AND g.deleted_at IS NULL
+          AND json_extract(b.value, '$.entryId') IN (SELECT value FROM json_each(?))`,
+        ws,
+        JSON.stringify(billIds),
+      );
+      return rows.map(r => ({ ...r, command: JSON.parse(r.command) as unknown }));
+    },
+
+    /** A person's tab's split bills (live entries whose command has a split and moves money into or out of the tab). */
+    async billsOf(ws: string, tabId: string) {
+      const groups = await all<GroupRow>(
+        db,
+        `SELECT DISTINCT g.id, g.kind, g.command, g.icon
+        FROM entry_groups g JOIN transactions t ON t.group_id = g.id JOIN entries e ON e.transaction_id = t.id
+        WHERE g.workspace_id = ? AND g.deleted_at IS NULL AND t.deleted_at IS NULL AND e.account_id = ?
+          AND json_extract(g.command, '$.type') = 'EXPENSE' AND json_extract(g.command, '$.split') IS NOT NULL`,
+        ws,
+        tabId,
+      );
+      return withTransactions(ws, groups);
     },
 
     async get(ws: string, id: string) {

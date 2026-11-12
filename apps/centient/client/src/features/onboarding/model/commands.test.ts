@@ -14,6 +14,7 @@ const acc = (id: string, name: string, kind: string): Account => ({
   due_day: null,
   reconciled_at: null,
   archived_at: null,
+  kept_until: null,
 });
 const seed = () =>
   fromCatalog(

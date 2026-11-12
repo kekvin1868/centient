@@ -12,10 +12,12 @@ export type Account = {
   due_day: number | null;
   reconciled_at: string | null;
   archived_at: string | null;
+  /** A tab below 0 you keep for now: the day you plan to return it. */
+  kept_until: string | null;
 };
 export type NewAccount = Omit<
   Account,
-  'id' | 'reconciled_at' | 'archived_at' | 'default_envelope_id'
+  'id' | 'reconciled_at' | 'archived_at' | 'default_envelope_id' | 'kept_until'
 >;
 
 // "Debit card" is stored as kind BANK + subtype DEBIT_CARD (migration 0007: the accounts table's kind CHECK
@@ -35,6 +37,7 @@ const PATCHABLE = [
   'due_day',
   'reconciled_at',
   'archived_at',
+  'kept_until',
 ];
 
 /** An account and its Main pocket (its default): currency row if new, account, pocket, then the default link. */
@@ -67,7 +70,7 @@ export function accountsRepo(db: D1Database) {
     list(ws: string) {
       return all<Account>(
         db,
-        `SELECT id, name, ${KIND_SQL} AS kind, provider, currency_code, default_envelope_id, due_day, reconciled_at, archived_at
+        `SELECT id, name, ${KIND_SQL} AS kind, provider, currency_code, default_envelope_id, due_day, reconciled_at, archived_at, kept_until
         FROM accounts WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY name`,
         ws,
       );
@@ -83,6 +86,7 @@ export function accountsRepo(db: D1Database) {
         default_envelope_id: `${id}:main`,
         reconciled_at: null,
         archived_at: null,
+        kept_until: null,
       };
     },
 

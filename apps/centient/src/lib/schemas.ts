@@ -86,6 +86,13 @@ export const command = z.discriminatedUnion('type', [
     fromEnvelopeId: id.optional(),
     toEnvelopeId: id.optional(),
     fee: money.optional(),
+    /** Paid back from a person's tab: this much of `amount` was more than they owed and is a gift (income on the tab, in this entry). */
+    gift: money.optional(),
+    /** Paid back from a person's tab: how much of it pays which split bill (entry ids). The rest is unlinked. */
+    bills: z
+      .array(z.object({ entryId: id, amount: money }))
+      .max(50)
+      .optional(),
     date: day,
     note: text(500).optional(),
   }),
@@ -112,6 +119,8 @@ export const patch = z.object({
   target_date: day.nullable().optional(),
   archived: z.boolean().optional(),
   color: hex.nullable().optional(),
+  /** A person's tab you owe: keep the money until this day (null = not kept). */
+  kept_until: day.nullable().optional(),
 });
 export type Patch = z.infer<typeof patch>;
 
