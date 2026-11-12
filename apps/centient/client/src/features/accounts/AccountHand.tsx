@@ -123,9 +123,10 @@ export function AccountHand({
     animate(focus, i, reducedMotion() ? { duration: 0 } : spring);
     if (pick && cards[i]) onPick(cards[i].id);
   };
-  // A new account count (added / hidden) keeps the turn inside the hand.
+  // A new account count (added / hidden / a tab settled) turns to the picked card, else stays inside the hand.
   useEffect(() => {
-    if (focus.get() > n - 1) turn(clamp(focus.get()), false);
+    const at = cards.findIndex(c => c.id === selected);
+    turn(at >= 0 ? at : clamp(focus.get()), false);
   }, [n]);
   const keys = (e: KeyboardEvent) => {
     const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;

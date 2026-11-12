@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { AccountChip } from '../features/accounts/AccountChip';
 import { AccountPicker } from '../features/accounts/AccountPicker';
+import { ReturnDue } from '../features/accounts/ReturnDue';
 import { Headline } from '../features/budgets/Headline';
 import { AllActivity } from '../features/entries/AllActivity';
 import type { Entry } from '../features/entries/EntryList';
@@ -26,6 +27,7 @@ export function Home({ onGoMoney }: { onGoMoney: () => void }) {
       </div>
       <Headline onGoMoney={onGoMoney} />
       <DueSoon onGo={onGoMoney} />
+      <ReturnDue onGo={onGoMoney} />
       <LogBox />
       <Recent onOpen={setOpen} onSeeAll={() => setAll(true)} />
       <AccountPicker open={picking} onClose={() => setPicking(false)} />

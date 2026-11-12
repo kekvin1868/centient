@@ -104,7 +104,15 @@ function baseRow(e: EntryView & { command: Command | null }, cat: Catalog): Entr
       return {
         emoji: '🔁',
         title: `${name(cat.accounts, c.fromAccountId)} → ${name(cat.accounts, c.toAccountId)}`,
-        sub: ['Moved', c.fee ? 'admin fee' : '', c.note ?? ''].filter(Boolean).join(' · '),
+        sub: [
+          cat.accounts.some(a => a.id === c.fromAccountId && a.kind === 'IOU')
+            ? 'Paid back'
+            : 'Moved',
+          c.fee ? 'admin fee' : '',
+          c.note ?? '',
+        ]
+          .filter(Boolean)
+          .join(' · '),
         amount: c.amount,
         currency: accCur(c.fromAccountId),
         tone: 'neutral',

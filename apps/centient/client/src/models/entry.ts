@@ -53,6 +53,11 @@ export const entryQueries = {
     }),
 };
 
+/** A bill with Paid backs tied: the money never came (shrink them) or you got it (owe it back). */
+export type PaybackMode = 'NEVER_RECEIVED' | 'RETURN';
+/** One person on a split bill, as the list sends it. */
+export type BillPerson = NonNullable<EntryItem['people']>[number];
+
 type Record_ = Req<typeof client.api.transactions.$post>['json'];
 type EditBody = Req<(typeof client.api.entries)[':id']['$patch']>['json'];
 type IconBody = Req<(typeof client.api.entries)[':id']['icon']['$patch']>['json'];
@@ -62,9 +67,11 @@ type QuickSave = Req<typeof client.api.quickadd.save.$post>['json'];
 export const entryApi = {
   /** One command or `{ commands }` written atomically (a move between pockets is an ALLOCATE). */
   record: (json: Record_) => call(client.api.transactions.$post({ json })),
-  edit: (id: string, json: EditBody) =>
-    call(client.api.entries[':id'].$patch({ param: { id }, json })),
-  remove: (id: string) => call(client.api.entries[':id'].$delete({ param: { id } })),
+  /** `paybacks`: what to do with Paid backs a shrunk bill no longer has room for (asked after PAYBACKS_TIED). */
+  edit: (id: string, json: EditBody, paybacks?: PaybackMode) =>
+    call(client.api.entries[':id'].$patch({ param: { id }, json, query: { paybacks } })),
+  remove: (id: string, paybacks?: PaybackMode) =>
+    call(client.api.entries[':id'].$delete({ param: { id }, query: { paybacks } })),
   setIcon: (id: string, json: IconBody) =>
     call(client.api.entries[':id'].icon.$patch({ param: { id }, json })),
   /** Quick-add's drafts, with what was learned from them. */
