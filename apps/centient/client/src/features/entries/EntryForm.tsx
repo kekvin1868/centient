@@ -2,10 +2,9 @@
 // The title (where / from whom) is typed like a typewriter; every other detail is a receipt line you tap to
 // change; the pocket is picked up front as stamps (Main pressed by default); the amount is the TOTAL.
 import { Minus, Plus, X } from '@phosphor-icons/react';
-import { Fragment, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type ReactNode } from 'react';
 import { amountInput, showAmount } from '../../lib/amount';
 import { formatMoney } from '../../lib/format';
-import { pocketColor } from '../../lib/pocketColors';
 import { active, catalog, everyday } from '../../lib/state';
 import { DatePicker } from '../../ui/DatePicker';
 import { LineSelect, Receipt, ReceiptLine, Rule } from '../../ui/Receipt';
@@ -15,6 +14,7 @@ import { Typewriter } from '../../ui/Typewriter';
 import type { EntryType, Form } from './form';
 import { splitView, withPeople, type Mode } from './shares';
 import { withMyPotShare, withPot } from './form';
+import { PocketStamps } from './PocketStamps';
 
 const TYPES: { value: EntryType; label: string }[] = [
   { value: 'EXPENSE', label: 'Spent' },
@@ -98,6 +98,8 @@ export function EntryForm({
   const equalShare = form.amount && form.split ? Math.floor(form.amount / form.split) : 0;
   const anyFixed = form.myShare !== null || form.parties.some(p => p.share !== null);
   const money = form.type === 'EXPENSE' || form.type === 'INCOME';
+  // My Pot, split: the big number is what the bill cost me; the whole bill is the small line it is typed on.
+  const split = form.type === 'EXPENSE' && !form.pot && (form.split ?? 1) > 1;
 
   return (
     <>
@@ -240,34 +242,18 @@ export function EntryForm({
           />
         )}
         {money && pockets.length > 0 && (
-          <div
-            className="pt-1.5"
-            role="group"
-            aria-label={form.type === 'EXPENSE' ? 'From pocket' : 'Into pocket'}
-          >
+          <div className="pt-1.5">
             <span className="block text-[12px] uppercase tracking-[0.1em] text-[var(--paper-faint)]">
               {form.type === 'EXPENSE' ? 'From pocket' : 'Into pocket'}
             </span>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {pockets.map((e, i) => {
-                const isDefault = e.id === account?.default_envelope_id;
-                return (
-                  <button
-                    key={e.id}
-                    type="button"
-                    aria-pressed={e.id === pocket}
-                    onClick={() => set({ envelopeId: isDefault ? null : e.id })}
-                    className="receipt-stamp-btn active:opacity-70"
-                    style={
-                      {
-                        '--sc': `color-mix(in oklab, ${pocketColor(e.color, i, i === 0)} 60%, #0b0f10)`,
-                      } as CSSProperties
-                    }
-                  >
-                    {e.name.toUpperCase()}
-                  </button>
-                );
-              })}
+            <div className="mt-2">
+              <PocketStamps
+                label={form.type === 'EXPENSE' ? 'From pocket' : 'Into pocket'}
+                pockets={pockets}
+                mainId={account?.default_envelope_id ?? null}
+                value={pocket}
+                onChange={envelopeId => set({ envelopeId })}
+              />
             </div>
           </div>
         )}
@@ -582,11 +568,24 @@ export function EntryForm({
           </div>
         )}
         <Total
-          label={form.pot ? 'YOUR SHARE' : 'TOTAL'}
+          label={form.pot ? 'YOUR SHARE' : split ? 'BILL' : 'TOTAL'}
+          small={split}
           value={form.amount}
           currency={currency}
           onChange={amount => onChange(withMyPotShare(form, amount))}
         />
+        {split && (
+          <div className="mt-1 flex items-baseline justify-between gap-3">
+            <span className="text-[13px] font-extrabold tracking-[0.2em]">YOUR PART</span>
+            <span
+              className="num text-[30px] font-extrabold tracking-[-0.02em]"
+              data-testid="your-part"
+            >
+              <span className="text-[0.6em]">{currency === 'IDR' ? 'Rp' : currency}</span>{' '}
+              {showAmount(shares.mine, currency)}
+            </span>
+          </div>
+        )}
         <div className="mt-3 text-center text-[11px] tracking-[0.1em] text-[var(--paper-faint)]">
           THANK YOU
         </div>
@@ -663,11 +662,13 @@ function Step({
 /** The TOTAL line: the amount, typed in place (sums too). */
 function Total({
   label,
+  small,
   value,
   currency,
   onChange,
 }: {
   label: string;
+  small?: boolean;
   value: number | null;
   currency: string;
   onChange: (minor: number | null) => void;
@@ -677,7 +678,9 @@ function Total({
     <div>
       <label className="flex items-baseline justify-between gap-3">
         <span className="text-[13px] font-extrabold tracking-[0.2em]">{label}</span>
-        <span className="flex min-w-0 items-baseline justify-end gap-1.5 text-[30px] font-extrabold tracking-[-0.02em]">
+        <span
+          className={`flex min-w-0 items-baseline justify-end gap-1.5 font-extrabold tracking-[-0.02em] ${small ? 'text-[18px]' : 'text-[30px]'}`}
+        >
           <span className="text-[0.6em]">{currency === 'IDR' ? 'Rp' : currency}</span>
           <input
             aria-label="Amount"

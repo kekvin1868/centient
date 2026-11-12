@@ -1,18 +1,33 @@
 // The log box: what you type turns into cards (chips). No Add button: Enter / Done logs every ready card,
 // flick one card up to log just it; cards with a question wait for an answer. Offline, it keeps everything
 // and retries when the connection is back.
-import { parseQuickAdd } from '@centient/quickadd';
-import { KeyReturn, PencilSimple, Question, WifiSlash } from '@phosphor-icons/react';
-import { useEffect, useMemo, useState } from 'react';
+import { parseQuickAdd, resolveSums } from '@centient/quickadd';
+import {
+  ArrowCounterClockwise,
+  KeyReturn,
+  PencilSimple,
+  Question,
+  WifiSlash,
+} from '@phosphor-icons/react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { OfflineError } from '../../lib/api';
 import { buzz } from '../../lib/motion';
-import { catalog, me, offline, qctx, selectedAccount } from '../../lib/state';
+import {
+  active,
+  catalog,
+  me,
+  offline,
+  qctx,
+  selectedAccount,
+  selectedPocket,
+} from '../../lib/state';
 import { Banner } from '../../ui/Banner';
 import { showToast } from '../../ui/Toast';
 import { blankForm, chipView, fromDraft, toCommand, type LogItem } from './form';
 import { LogChip } from './LogChip';
 import { LogGuideSheet } from './LogGuideSheet';
 import { LogSheet } from './LogSheet';
+import { PocketStamps } from './PocketStamps';
 import { entryApi } from '../../models/entry';
 import { persist } from '../../models/query';
 
@@ -23,24 +38,55 @@ export function LogBox() {
   const [sheet, setSheet] = useState<LogItem | null>(null);
   const [saving, setSaving] = useState(false);
   const [guide, setGuide] = useState(false);
+  // The last sum "=" worked out: `to` is the line it left, `from` the line as typed. Good until the line changes.
+  const [sum, setSum] = useState<{ from: string; to: string } | null>(null);
+  const undoable = sum?.to === text ? sum : null;
+  const input = useRef<HTMLInputElement>(null);
   const today = me.value?.today ?? '';
+  // Typing stays instant: the cards are worked out from a copy React may let lag a key or two behind.
+  const typed = useDeferredValue(text);
 
-  const live = useMemo(() => {
-    if (!text.trim() || !qctx.value) return [];
+  const cardsFor = (line: string) => {
+    if (!line.trim() || !qctx.value) return [];
     // The account Home shows is where a line goes unless it names one; else the last one used. Rupiah accounts only:
     // a typed "25rb" is rupiah, and on a crypto account it would be read as that coin's smallest units.
-    const home = catalog.value.accounts.find(a => a.id === selectedAccount.value);
+    // (A person's tab can be on Home for its Activity; a line is never spent from one.)
+    const shown = catalog.value.accounts.find(a => a.id === selectedAccount.value);
+    const home = shown?.kind === 'IOU' ? undefined : shown;
     const ctx = {
       ...qctx.value,
       lastAccountId: home?.currency_code === 'IDR' ? home.id : qctx.value.lastAccountId,
     };
-    return parseQuickAdd(text, ctx).map((d, i) => {
+    return parseQuickAdd(line, ctx).map((d, i) => {
       const key = `${i}:${d.text}`;
-      return edits[key] ?? fromDraft(d, key, null);
+      const item = edits[key] ?? fromDraft(d, key, null);
+      // The stamp under the box applies to lines on Home's account; one naming another account ignores it.
+      return !edits[key] && d.type !== 'TRANSFER' && home && item.form.accountId === home.id
+        ? { ...item, form: { ...item.form, envelopeId: selectedPocket.value } }
+        : item;
     });
-  }, [text, edits, qctx.value, selectedAccount.value, catalog.value]);
+  };
+  const live = useMemo(
+    () => cardsFor(typed),
+    [typed, edits, qctx.value, selectedAccount.value, selectedPocket.value, catalog.value],
+  );
   const items = [...live, ...pending];
+  const homeAccount = catalog.value.accounts.find(a => a.id === selectedAccount.value);
+  const stamps = active(catalog.value.envelopes).filter(e => e.account_id === homeAccount?.id);
   const ready = items.filter(i => chipView(i).state === 'ready');
+
+  const undoSum = () => {
+    if (!undoable) return;
+    setText(undoable.from);
+    input.current?.focus();
+  };
+  const typeLine = (v: string) => {
+    // Backspace right after a sum brings the sum back instead of eating the result.
+    if (undoable && v.length === text.length - 1) return setText(undoable.from);
+    const line = v.includes('=') ? resolveSums(v) : v;
+    if (line !== v) setSum({ from: v.replace(/=/g, '').trimEnd(), to: line });
+    setText(line);
+  };
 
   const update = (item: LogItem) => {
     if (pending.some(p => p.key === item.key))
@@ -58,7 +104,16 @@ export function LogBox() {
       );
   };
 
+  /** The stamp stays on the pocket last logged to. */
+  const remember = (item?: LogItem) => {
+    if (item && item.form.type !== 'TRANSFER' && item.form.accountId === selectedAccount.value)
+      selectedPocket.value = item.form.envelopeId;
+  };
+
   const submit = async () => {
+    // Enter can beat the deferred cards: always log what is in the box now.
+    const items = [...(typed === text ? live : cardsFor(text)), ...pending];
+    const ready = items.filter(i => chipView(i).state === 'ready');
     if (!ready.length) {
       if (items.length) showToast('Answer the question on the card first');
       return;
@@ -86,6 +141,7 @@ export function LogBox() {
     );
     setSaving(false);
     if (!ok) return;
+    remember(ready.at(-1));
     offline.value = false;
     buzz(20);
     // Cards still waiting for an answer stay, detached from the cleared box.
@@ -125,6 +181,7 @@ export function LogBox() {
       }),
     );
     if (!ok) return false;
+    remember(item);
     buzz(20);
     setSheet(null);
     remove(item);
@@ -138,6 +195,7 @@ export function LogBox() {
       form: {
         ...blankForm(today),
         accountId: selectedAccount.value ?? qctx.value?.lastAccountId ?? null,
+        envelopeId: selectedPocket.value,
       },
       candidates: [],
       askAmount: false,
@@ -205,21 +263,63 @@ export function LogBox() {
           aria-describedby="log-hint"
           autoComplete="off"
           enterKeyHint="done"
-          onChange={e => setText((e.target as HTMLInputElement).value)}
+          // A sum closed with "=" turns into its result as it is typed (19k/3= -> 6.333).
+          ref={input}
+          onKeyDown={e => {
+            // Cmd+Z / Ctrl+Z. The browser's own undo can't see a line we rewrote, so this one is ours.
+            if (
+              undoable &&
+              (e.metaKey || e.ctrlKey) &&
+              !e.shiftKey &&
+              e.key.toLowerCase() === 'z'
+            ) {
+              e.preventDefault();
+              undoSum();
+            }
+          }}
+          onChange={e => typeLine((e.target as HTMLInputElement).value)}
         />
+        {undoable && (
+          <button
+            type="button"
+            className="keycap keycap-quiet"
+            onMouseDown={e => e.preventDefault()} // keeps the phone's keyboard open
+            onClick={undoSum}
+          >
+            <span className="flex items-center gap-1">
+              <ArrowCounterClockwise size={18} weight="bold" aria-hidden="true" />
+              Undo
+            </span>
+          </button>
+        )}
         {key}
       </form>
       <p id="log-hint" className="mx-5 mt-2.5 text-[13px] text-muted">
-        {ready.length
-          ? 'Enter logs every ready card · flick one up to log just it'
-          : items.length
-            ? 'Answer the card below, then press Enter'
-            : 'Type it like a text: kopi 25rb gopay, grab 18k'}
+        {undoable
+          ? `Worked out from ${undoable.from}`
+          : ready.length
+            ? 'Enter logs every ready card · flick one up to log just it'
+            : items.length
+              ? 'Answer the card below, then press Enter'
+              : 'Type it like a text: kopi 25rb gopay, grab 18k'}
       </p>
+      {stamps.length > 1 && (
+        <div className="mx-5 mt-2.5">
+          <PocketStamps
+            label="Log to pocket"
+            pockets={stamps}
+            mainId={homeAccount?.default_envelope_id ?? null}
+            value={selectedPocket.value}
+            onChange={p => (selectedPocket.value = p)}
+          />
+        </div>
+      )}
       <div className="mx-4 mt-3">
-        {items.map(i => (
+        {items.map((i, n) => (
           <LogChip
-            key={i.key}
+            // Live cards keep their place while you type, so a key press updates them instead of remounting
+            // each one (and replaying its entrance); `i.key` (with the text) still ties edits to the words.
+            key={n < live.length ? `live:${n}` : i.key}
             item={i}
             today={today}
             onChange={update}
