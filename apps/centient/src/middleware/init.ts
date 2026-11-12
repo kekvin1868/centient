@@ -58,9 +58,10 @@ export function createServices(o: {
 }) {
   const base = { ws: o.ws, now: o.now, repos: o.repos, catalog: createCatalog(o.ws, o.repos) };
   const ledger = createLedgerService(base);
+  const accounts = createAccountsService(base);
   return {
     ledger,
-    accounts: createAccountsService(base),
+    accounts,
     pockets: createPocketsService(base),
     categories: createCategoriesService(base),
     budgets: createBudgetsService(base),
@@ -68,7 +69,7 @@ export function createServices(o: {
     quickadd: createQuickaddService({ ...base, ledger }),
     installments: createInstallmentsService({ ...base, ledger }),
     recurring: createRecurringService({ ...base, ledger }),
-    inbox: createInboxService({ ...base, ledger }),
+    inbox: createInboxService({ ...base, ledger, accounts }),
     workspace: createWorkspaceService({ ...base, ledger, fetch: o.fetch }),
   };
 }

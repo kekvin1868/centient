@@ -8,12 +8,13 @@ export type InboxItem = {
   kind: 'TRANSACTION' | 'BALANCE';
   status: 'REVIEW' | 'SAVED' | 'DISMISSED';
   import_id: string | null;
-  /** Signed: below zero is money out. */
-  amount: number;
+  /** Signed: below zero is money out. null = a photo whose amount could not be read. */
+  amount: number | null;
   occurred_at: string;
   merchant: string | null;
   note: string | null;
-  account_id: string;
+  /** null = a photo taken with no account picked. */
+  account_id: string | null;
   category_id: string | null;
   suggested_entry_id: string | null;
   entry_id: string | null;
@@ -29,31 +30,42 @@ export type NewInboxItem = Pick<
   | 'account_id'
   | 'category_id'
   | 'suggested_entry_id'
-> & { content_hash: string };
+> & {
+  content_hash: string | null;
+  kind?: InboxItem['kind'];
+  external_ref?: string;
+  raw_text?: string;
+};
 
 const COLUMNS =
   'i.id, i.source, i.kind, i.status, i.import_id, i.amount, i.occurred_at, i.merchant, i.note, i.account_id, i.category_id, i.suggested_entry_id, i.entry_id';
 // The suggested entry as it is now: gone (deleted since) reads as no suggestion.
 const SUGGESTED = `(SELECT substr(t.occurred_at, 1, 10) || '|' || COALESCE(t.merchant, '') FROM transactions t
   WHERE t.group_id = i.suggested_entry_id AND t.deleted_at IS NULL ORDER BY t.rowid LIMIT 1) AS suggested`;
-const PATCHABLE = ['status', 'category_id', 'entry_id'];
+const PATCHABLE = ['status', 'category_id', 'account_id', 'entry_id'];
 
 export function inboxRepo(db: D1Database) {
   return {
-    /** The inserts for new items, all REVIEW. An item whose content_hash is already there is skipped. */
-    insertStatements(ws: string, rows: NewInboxItem[]) {
+    /**
+     * The inserts for new items, all REVIEW. With `skipKnown` (an import) an item whose content_hash is already
+     * there is passed over; without it (one capture) the same hash or reference is a UNIQUE error, so the caller
+     * hears that it was a duplicate.
+     */
+    insertStatements(ws: string, rows: (NewInboxItem & { id?: string })[], skipKnown = true) {
       return rows.map(r =>
         db
           .prepare(
-            `INSERT OR IGNORE INTO inbox_items (id, workspace_id, source, status, import_id, content_hash, amount, occurred_at, merchant, note, account_id, category_id, suggested_entry_id)
-            VALUES (?, ?, ?, 'REVIEW', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT ${skipKnown ? 'OR IGNORE ' : ''}INTO inbox_items (id, workspace_id, source, kind, status, import_id, content_hash, external_ref, amount, occurred_at, merchant, note, account_id, category_id, suggested_entry_id, raw_text)
+            VALUES (?, ?, ?, ?, 'REVIEW', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
-            uid(),
+            r.id ?? uid(),
             ws,
             r.source,
+            r.kind ?? 'TRANSACTION',
             r.import_id,
             r.content_hash,
+            r.external_ref ?? null,
             r.amount,
             r.occurred_at,
             r.merchant,
@@ -61,6 +73,7 @@ export function inboxRepo(db: D1Database) {
             r.account_id,
             r.category_id,
             r.suggested_entry_id,
+            r.raw_text ?? null,
           ),
       );
     },

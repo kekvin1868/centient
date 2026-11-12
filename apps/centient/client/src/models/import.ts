@@ -1,6 +1,7 @@
 // Reading a spreadsheet (CSV) for import: which column is what, dates, amounts, and which rows are skipped.
 // Pure; the rows it makes are sent with inboxApi.import (./inbox).
 import { parseNumber, toMinor } from '@centient/money';
+import { readDay, type DayOrder } from './dates';
 import type { ImportRow } from './inbox';
 
 /** The most rows one import takes (the server's limit). */
@@ -59,35 +60,6 @@ export function guessMapping(headers: string[]): Mapping {
   };
 }
 
-export type DayOrder = 'DMY' | 'MDY';
-const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
-const MONTHS_ID: Record<string, string> = { mei: 'may', agu: 'aug', okt: 'oct', des: 'dec' };
-const monthOf = (word: string) => {
-  const w = word.toLowerCase().slice(0, 3);
-  return MONTHS.indexOf(MONTHS_ID[w] ?? w) + 1;
-};
-const dayOf = (y: number, m: number, d: number) => {
-  const year = y < 100 ? 2000 + y : y;
-  const day = `${year}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-  // Round-trips only for a real calendar day (no 31 February, no month 13).
-  const t = Date.parse(`${day}T00:00:00Z`);
-  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === day ? day : null;
-};
-
-/** A date cell as YYYY-MM-DD, or null: 2026-11-10 (with or without a time), 10/11/2026, 10-11-26, 10 Nov 2026, Nov 10, 2026. */
-export function parseDay(text: string, order: DayOrder): string | null {
-  const t = text.trim();
-  let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:\D|$)/);
-  if (m) return dayOf(+m[1], +m[2], +m[3]);
-  m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})(?:\D|$)/);
-  if (m) return order === 'DMY' ? dayOf(+m[3], +m[2], +m[1]) : dayOf(+m[3], +m[1], +m[2]);
-  m = t.match(/^(\d{1,2})[ -]([A-Za-z]{3,})[ -,]+(\d{4}|\d{2})/);
-  if (m) return dayOf(+m[3], monthOf(m[2]), +m[1]);
-  m = t.match(/^([A-Za-z]{3,}) (\d{1,2}),? (\d{4})/);
-  if (m) return dayOf(+m[3], monthOf(m[1]), +m[2]);
-  return null;
-}
-
 /** Month-first only when the dates prove it (a second number above 12 and never a first one); else day-first. */
 export function guessDayOrder(cells: string[]): DayOrder {
   const pairs = cells.flatMap(c => {
@@ -137,7 +109,7 @@ export function toRows(
     const skip = (why: string) => skipped.push({ line: k + 2, why });
     const type = cell(r, 'type');
     if (MOVE_WORDS.test(type)) return skip('a move between accounts');
-    const date = parseDay(cell(r, 'date'), o.order);
+    const date = readDay(cell(r, 'date'), o.order);
     if (!date) return skip(`no date in "${cell(r, 'date')}"`);
     const out = parseMoney(cell(r, 'amount'), o.currency);
     const inn = parseMoney(cell(r, 'income'), o.currency);
