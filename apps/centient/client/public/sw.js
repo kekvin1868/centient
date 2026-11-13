@@ -1,5 +1,6 @@
-// Service worker: keeps the app's shell and code on the device, so it opens with no signal. Data is not its
-// job (the query cache in models/query.ts keeps that), so /api/* is never touched.
+// Service worker: keeps the app's shell and code on the device, so it opens with no signal, and shows the bill
+// reminders the server pushes. Data is not its job (the query cache in models/query.ts keeps that), so /api/*
+// is never touched.
 // The page registers it as /sw.js?v=<build id>: a new build is a new worker with its own cache.
 const PREFIX = 'centient-';
 const CACHE = PREFIX + new URL(location.href).searchParams.get('v');
@@ -63,4 +64,31 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       saved(req, OCR).then(hit => hit ?? fetch(req).then(res => keep(req, res, OCR))),
     );
+});
+
+// A bill reminder from the server (src/cron.ts): show it and mark the app's icon. The app clears the mark when
+// it is opened (lib/serviceWorker.ts).
+self.addEventListener('push', event => {
+  const note = event.data?.json() ?? {};
+  event.waitUntil(
+    Promise.all([
+      self.registration.showNotification(note.title ?? 'Centient', {
+        body: note.body,
+        tag: note.tag,
+        icon: '/icons/icon-192.png',
+        data: { url: note.url ?? '/' },
+      }),
+      self.navigator.setAppBadge?.(),
+    ]),
+  );
+});
+
+// A tap on a reminder brings the app forward, or opens it.
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: 'window' })
+      .then(open => open[0]?.focus() ?? self.clients.openWindow(event.notification.data.url)),
+  );
 });

@@ -15,11 +15,16 @@ export function world(o: {
   const repos = createRepos(db, o.store);
   // Fresh services per call, like one per request in production. `user` matters only to what is per person
   // (the app lock, delete account); tests of those pass the real one.
-  const svc = (ws: string, user = { id: 'nobody', email: 'nobody@test' }) =>
+  const svc = (
+    ws: string,
+    user = { id: 'nobody', email: 'nobody@test' },
+    sender?: Parameters<typeof createServices>[0]['sender'],
+  ) =>
     createServices({
       repos,
       ws,
       user,
+      sender,
       now: o.now,
       fetch: o.fetch ?? (() => Promise.reject(new Error('no network in tests'))),
     });

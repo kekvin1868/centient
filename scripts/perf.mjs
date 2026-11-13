@@ -128,8 +128,44 @@ try {
       () => false,
     );
   check(opened, 'offline: Home opens from the saved shell');
+
   await ctx.close();
   await browser.close();
+
+  // 4. A pushed bill reminder becomes a notification (the push service is played by the browser's debugger).
+  // The headless shell used above has no notifications, so this step runs in the full browser.
+  const full = await chromium.launch({ channel: 'chromium' });
+  const pushCtx = await full.newContext({
+    ...devices['iPhone 13'],
+    permissions: ['notifications'],
+  });
+  const pushPage = await pushCtx.newPage();
+  await pushPage.goto(base + '/');
+  const cdp = await pushCtx.newCDPSession(pushPage);
+  await cdp.send('ServiceWorker.enable');
+  const registrationId = await new Promise(resolve => {
+    cdp.on('ServiceWorker.workerRegistrationUpdated', e => {
+      if (e.registrations[0]) resolve(e.registrations[0].registrationId);
+    });
+  });
+  // The worker must be running before it can be handed a message.
+  await pushPage.evaluate(() => navigator.serviceWorker.ready.then(() => null));
+  await cdp.send('ServiceWorker.deliverPushMessage', {
+    origin: base,
+    registrationId,
+    data: JSON.stringify({ title: 'Netflix is due today', body: 'Rp120.000', tag: 'bill:1' }),
+  });
+  const shown = await pushPage.evaluate(async () => {
+    const reg = await navigator.serviceWorker.ready;
+    for (let i = 0; i < 50; i++) {
+      const [note] = await reg.getNotifications();
+      if (note) return `${note.title} · ${note.body}`;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    return null;
+  });
+  check(shown === 'Netflix is due today · Rp120.000', `push: a reminder shows as "${shown}"`);
+  await full.close();
 } finally {
   server.kill();
 }

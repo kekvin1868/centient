@@ -14,6 +14,11 @@ database_name = "centsdb"
 database_id = "00000000-0000-0000-0000-000000000000" # replace with `wrangler d1 create centsdb` output before deploying
 migrations_dir = "migrations"
 
+# Bill reminders by Web Push go out once a day at 08:00 in Jakarta (01:00 UTC); see src/cron.ts. They need the
+# VAPID secrets (.dev.vars.example says how to make them): `wrangler secret put VAPID_PRIVATE_KEY`, and so on.
+[triggers]
+crons = ["0 1 * * *"]
+
 # Private files (proof of payment). Local dev keeps them in .wrangler/; production needs
 # `npx wrangler r2 bucket create centient-files` once.
 [[r2_buckets]]

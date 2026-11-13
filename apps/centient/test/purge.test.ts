@@ -79,6 +79,11 @@ async function filled(w: ReturnType<typeof world>, email: string) {
   await svc().recurring.hide('gym');
   await svc().inbox.importRows([{ date: '2026-11-10', amount: -5_000, accountId: bca.id }]);
   await w.repos.lock.addPasskey(userId, { id: `cred-${email}`, public_key: 'AAAA', counter: 0 });
+  await w.repos.push.save(userId, {
+    endpoint: `https://web.push.apple.com/${email}`,
+    p256dh: 'k',
+    auth: 'a',
+  });
   await w.repos.lock.setChallenge(userId, 'c', new Date(NOW + 1000).toISOString());
   await w.repos.lock.startSession(
     userId,
@@ -133,7 +138,6 @@ describe('delete account', () => {
       'envelope_categories',
       'statement_imports',
       'budget_alerts',
-      'push_subscriptions',
     ]);
     expect(files.size).toBe(filesKept + 1);
 
