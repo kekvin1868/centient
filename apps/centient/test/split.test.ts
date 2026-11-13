@@ -160,6 +160,34 @@ describe('split bill with named people', () => {
     ).rejects.toMatchObject({ code: 'TAB_HIDDEN' });
   });
 
+  it('refuses a new entry into a hidden pocket, but an old entry there stays editable', async () => {
+    const t = await setup('s5b@test');
+    const s = svc(t.ws);
+    const what = await s.pockets.create({
+      accountId: t.bill({}).accountId,
+      name: 'what',
+      kind: 'SPENDING',
+    });
+    const kopi = (amount: number) =>
+      ({ ...t.bill({}, amount), split: undefined, envelopeId: what.id }) as const;
+    const [old] = await s.ledger.record([kopi(5_000)]);
+    // Back to zero, so it can be hidden.
+    const salary = (await w.repos.categories.list(t.ws)).find(c => c.kind === 'INCOME')!.id;
+    await s.ledger.record([
+      {
+        type: 'INCOME',
+        accountId: what.account_id,
+        envelopeId: what.id,
+        categoryId: salary,
+        amount: 5_000,
+        date: '2026-10-17',
+      },
+    ]);
+    await s.pockets.update(what.id, { archived: true });
+    await expect(s.ledger.record([kopi(7_000)])).rejects.toMatchObject({ code: 'POCKET_HIDDEN' });
+    await expect(s.ledger.edit(old, kopi(6_000))).resolves.toBeGreaterThan(0);
+  });
+
   it('rebuilds the tabs when the entry is edited, and old head-count splits still work (T14)', async () => {
     const t = await setup('s6@test');
     const [id] = await svc(t.ws).ledger.record([

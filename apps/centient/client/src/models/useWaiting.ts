@@ -141,10 +141,28 @@ export function waitingLinks(except?: string) {
   return { paid, changing };
 }
 
+/**
+ * The overlay for server data fetched at `fetchedAt` (a query's dataUpdatedAt): a change the server took before
+ * then is already in that data, so it is left out. Without this a just-sent entry counts twice, in the refreshed
+ * numbers and in the overlay, until every screen's data is back (the total jumps over, then back).
+ * ponytail: a fetch already on its way when the save landed may not hold it yet; the next refetch evens it out.
+ */
+export function useOverlaySince(fetchedAt: number): Overlay {
+  const items = outboxItems.value;
+  const all = waiting.value;
+  const l = lib.value;
+  const cat = catalog.value;
+  return useMemo(() => {
+    const rest = items.filter(i => !(i.sentAt && i.sentAt <= fetchedAt));
+    if (rest.length === items.length) return all;
+    return l && rest.length ? l.overlay(rest, cat) : NOTHING;
+  }, [items, all, l, cat, fetchedAt]);
+}
+
 /** Balances as the screens show them (waiting changes counted). */
 export function useBalances(enabled = true) {
   const q = useQuery({ ...accountQueries.balances(), enabled });
-  const o = waiting.value;
+  const o = useOverlaySince(q.dataUpdatedAt);
   const data = useMemo(() => q.data && withWaiting(q.data, o), [q.data, o]);
   return { ...q, data };
 }

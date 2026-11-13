@@ -3,7 +3,7 @@
 import type { ServiceDeps } from '../../context';
 import type { Snapshot } from '../../lib/catalog';
 import type { Command } from '../../lib/schemas';
-import { assertBalanced, DomainError } from '../../domain/ledger';
+import { assertBalanced, DomainError, type NewTransaction } from '../../domain/ledger';
 import { cutsFor, peopleOf, tabsOnBill, type Link } from '../../domain/bills';
 import { build, checkParties } from '../../lib/entryBuild';
 import { commandOf } from '../../lib/entryCommand';
@@ -65,6 +65,32 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
     return { c, cmds: out };
   }
 
+  /**
+   * Refuses lines in a pocket or account that is hidden: one hidden on another device while this entry waited on a
+   * phone would otherwise take it out of sight. `keep`: ids the entry already uses (an old entry stays editable).
+   * Person tabs are left to withIou (TAB_HIDDEN).
+   */
+  function checkShown(c: Snapshot, txs: NewTransaction[], keep = new Set<string>()) {
+    for (const tx of txs) {
+      for (const { envelopeId } of tx.allocations) {
+        const e = c.envelopes.find(x => x.id === envelopeId);
+        if (e?.archived_at && !keep.has(e.id))
+          throw new DomainError(
+            'POCKET_HIDDEN',
+            `${e.name} is hidden. Show it again or pick another pocket.`,
+          );
+      }
+      for (const { accountId } of tx.entries) {
+        const a = c.accounts.find(x => x.id === accountId);
+        if (a?.archived_at && a.kind !== 'IOU' && !keep.has(a.id))
+          throw new DomainError(
+            'ACCOUNT_HIDDEN',
+            `${a.name} is hidden. Show it again or pick another account.`,
+          );
+      }
+    }
+  }
+
   /** Checks each command against the catalog and builds its entry (a split or a fee adds a second transaction). */
   async function prepare(cmds: Command[]): Promise<NewEntry[]> {
     const { c, cmds: ready } = await withIou(await catalog.load(), cmds);
@@ -76,7 +102,10 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
       command: cmd,
       txs: build(c, cmd, at),
     }));
-    for (const e of entries) for (const tx of e.txs) assertBalanced(tx, id => c.accountOf(id));
+    for (const e of entries) {
+      checkShown(c, e.txs);
+      for (const tx of e.txs) assertBalanced(tx, id => c.accountOf(id));
+    }
     return entries;
   }
 
@@ -244,6 +273,16 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
       const txs = build(c, ready, now());
       if (cmd.date === entry.occurred_at.slice(0, 10))
         for (const t of txs) t.occurredAt = entry.occurred_at;
+      checkShown(
+        c,
+        txs,
+        new Set(
+          entry.transactions.flatMap(t => [
+            ...t.entries.map(x => x.account_id),
+            ...t.allocations.map(x => x.envelope_id),
+          ]),
+        ),
+      );
       for (const tx of txs) assertBalanced(tx, x => c.accountOf(x));
       await checkBills(c, ready, id);
       const tied =

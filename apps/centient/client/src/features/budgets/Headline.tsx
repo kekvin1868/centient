@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ACCOUNT_KINDS } from '../../lib/format';
 import { selectedAccount } from '../../lib/state';
 import type { Balances } from '../../models/account';
-import { budgetsWithWaiting, useBalances, waiting } from '../../models/useWaiting';
+import { budgetsWithWaiting, useBalances, useOverlaySince } from '../../models/useWaiting';
 import { budgetQueries } from '../../models/budget';
 import { usePrices, type Prices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
@@ -47,7 +47,8 @@ function headOf(sel: string | null, bal: Balances, prices: Prices): Head {
 export function Headline({ onGoMoney }: { onGoMoney: () => void }) {
   const sel = selectedAccount.value;
   const { data: bal } = useBalances();
-  const { data: budgets } = useQuery(budgetQueries.status());
+  const { data: budgets, dataUpdatedAt } = useQuery(budgetQueries.status());
+  const overlay = useOverlaySince(dataUpdatedAt);
   const prices = usePrices();
   const head = bal ? headOf(sel, bal, prices) : null;
   const account = (sel && bal?.accounts.find(a => a.id === sel)) || null;
@@ -82,7 +83,7 @@ export function Headline({ onGoMoney }: { onGoMoney: () => void }) {
       </section>
       {budgets && (
         <HomeBudgets
-          budgets={budgetsWithWaiting(budgets.budgets, budgets.cycle, waiting.value)}
+          budgets={budgetsWithWaiting(budgets.budgets, budgets.cycle, overlay)}
           cycle={budgets.cycle}
           account={account}
           onGo={onGoMoney}

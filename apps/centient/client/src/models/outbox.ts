@@ -39,6 +39,8 @@ export type OutboxItem = {
   state: OutboxState;
   /** Tried and not delivered: its border shows at once instead of after a second. */
   held?: boolean;
+  /** When the server took it (ms): data fetched after this already counts it. */
+  sentAt?: number;
   /** Why the server refused it, in its own words. */
   reason?: string;
   code?: string;
@@ -46,11 +48,24 @@ export type OutboxItem = {
   theirs?: EntryItem;
 };
 
-type Coded = Error & { code?: string };
-/** What a failed send means. Only an answer with the server's own `code` is a refusal. */
+type Coded = Error & { code?: string; status?: number };
+/**
+ * What a failed send means. Only a 4xx answer with the server's own `code` is a refusal; a 5xx (the server
+ * failing, or a tunnel/proxy saying the server is down) is "try later" whatever it carries.
+ */
 export function verdict(item: OutboxItem, e: unknown) {
-  const code = (e as Coded | null)?.code;
-  if (e instanceof OfflineError || !code || code === 'INTERNAL') return 'later' as const;
+  const { status = 0 } = (e ?? {}) as Coded;
+  // Only the server's own codes are words; a browser error's `code` is a number (Safari's DOMException: 12).
+  const code = typeof (e as Coded | null)?.code === 'string' ? (e as Coded).code : undefined;
+  // Signed out (an expired tunnel or Access sign-in) is also "later": the next try may be signed in again.
+  if (
+    e instanceof OfflineError ||
+    !code ||
+    code === 'INTERNAL' ||
+    code === 'UNAUTHORIZED' ||
+    status >= 500
+  )
+    return 'later' as const;
   if (code === 'LOCKED') return 'locked' as const;
   if (code === 'ENTRY_CHANGED') return 'clash' as const;
   // Already gone is what a delete wanted.
@@ -73,9 +88,13 @@ export type OutboxDeps = {
   /** Runs `fn` after `ms` (the retry timer). */
   later: (fn: () => void, ms: number) => void;
   onChange: (items: OutboxItem[]) => void;
+  /** Entries that reached the server after showing as waiting (their row plays "saved"). */
+  synced?: (entryIds: string[]) => void;
 };
 
-const RETRY_MS = [5_000, 15_000, 30_000, 60_000];
+// ponytail: a flat 5s while something waits (no backoff): one small request, only with the app open and the
+// phone online. Back off here if a long outage ever drains a battery.
+const RETRY_MS = 5_000;
 const open = (i: OutboxItem) =>
   i.state === 'waiting' || i.state === 'refused' || i.state === 'clash';
 
@@ -87,8 +106,9 @@ export function createOutbox(d: OutboxDeps) {
     .map(i => (i.state === 'sending' ? { ...i, state: 'waiting', held: true } : i));
   let running: Promise<void> | null = null;
   let again = false;
-  let tries = 0;
   let timer = false;
+  /** A send found no way through since the last one that did: the next success means the connection is back. */
+  let down = false;
 
   const set = (next: OutboxItem[]) => {
     items = next;
@@ -157,7 +177,12 @@ export function createOutbox(d: OutboxDeps) {
       }
       if (outcome === 'done') {
         sent = true;
-        tries = 0;
+        if (item.held) d.synced?.([item.entryId]);
+        // The way through is back: what was refused meanwhile may have been refused by a hiccup. One more go.
+        if (down) {
+          down = false;
+          requeue();
+        }
         // The next change to this entry was made on top of this one: it starts from the version this made.
         const next = items.find(
           i => i.entryId === item.entryId && i.key !== item.key && i.op === 'edit' && open(i),
@@ -165,7 +190,7 @@ export function createOutbox(d: OutboxDeps) {
         set(
           items.map(i =>
             i.key === item.key
-              ? { ...i, state: 'sent' as const }
+              ? { ...i, state: 'sent' as const, sentAt: d.now() }
               : i === next
                 ? { ...i, base: item.op === 'edit' ? version : undefined }
                 : i,
@@ -173,6 +198,7 @@ export function createOutbox(d: OutboxDeps) {
         );
       } else if (outcome === 'later' || outcome === 'locked') {
         patch(item.key, { state: 'waiting', held: true });
+        if (outcome === 'later') down = true;
         // Locked: nothing moves until the owner unlocks (the app calls flush then).
         if (outcome === 'later') retry();
         break;
@@ -190,16 +216,19 @@ export function createOutbox(d: OutboxDeps) {
     }
   }
 
+  /** Puts refused changes back in line (a clash waits for the owner's choice). */
+  function requeue() {
+    if (items.some(i => i.state === 'refused'))
+      set(items.map(i => (i.state === 'refused' ? { ...i, ...fresh(), held: true } : i)));
+  }
+
   function retry() {
     if (timer) return;
     timer = true;
-    d.later(
-      () => {
-        timer = false;
-        void flush();
-      },
-      RETRY_MS[Math.min(tries++, RETRY_MS.length - 1)],
-    );
+    d.later(() => {
+      timer = false;
+      void flush();
+    }, RETRY_MS);
   }
 
   /**
@@ -226,6 +255,11 @@ export function createOutbox(d: OutboxDeps) {
   return {
     items: () => items,
     flush,
+    /** The connection may be back (signal returned, app reopened, unlocked): refused changes get one more go. */
+    wake() {
+      requeue();
+      return flush();
+    },
     /** Settles once the run in progress (if any) is over. */
     idle: () => running ?? Promise.resolve(),
 
@@ -333,11 +367,24 @@ export const outbox = createOutbox({
   now: () => Date.now(),
   later: (fn, ms) => void setTimeout(fn, ms),
   onChange: items => (outboxItems.value = items),
+  synced: flashSynced,
 });
+
+/** Entries that just reached the server after waiting, for about a second (their row's "saved" moment). */
+export const syncedIds = signal<ReadonlySet<string>>(new Set());
+const SYNCED_MS = 2_600; // the blink-out + check in styles.css fit inside this
+function flashSynced(ids: string[]) {
+  syncedIds.value = new Set([...syncedIds.value, ...ids]);
+  setTimeout(() => {
+    const next = new Set(syncedIds.value);
+    for (const id of ids) next.delete(id);
+    syncedIds.value = next;
+  }, SYNCED_MS);
+}
 
 /** Sends what waits whenever it may get through: at start, when the signal returns, on coming back, on unlock. */
 export function watchOutbox() {
-  const go = () => void (locked.value || outbox.flush());
+  const go = () => void (locked.value || outbox.wake());
   addEventListener('online', go);
   document.addEventListener('visibilitychange', () => document.hidden || go());
   locked.subscribe(go);

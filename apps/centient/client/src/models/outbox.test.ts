@@ -32,6 +32,7 @@ function setup(o: { stored?: OutboxItem[]; online?: boolean } = {}) {
     stored: o.stored ?? ([] as OutboxItem[]),
     sent: [] as OutboxItem[],
     refreshed: 0,
+    synced: [] as string[],
     timers: [] as (() => void)[],
     /** What the server does with the next sends, first come first served; none left = it works. */
     answers: [] as (
@@ -54,6 +55,7 @@ function setup(o: { stored?: OutboxItem[]; online?: boolean } = {}) {
     now: () => 1000 + n,
     later: fn => void world.timers.push(fn),
     onChange: () => {},
+    synced: ids => world.synced.push(...ids),
   });
   const state = () => box.items().map(i => `${i.op}:${i.entryId}:${i.state}`);
   return { box, world, state };
@@ -167,7 +169,12 @@ describe('sending', () => {
   });
 
   it('treats a server error and an answer that is not the server\'s as "try later"', async () => {
-    for (const failure of [refusal('INTERNAL'), new SyntaxError('<html>')]) {
+    const proxyDown = Object.assign(refusal('ERR_NGROK_8012'), { status: 502 });
+    // Safari's JSON parse error is a DOMException carrying a numeric code.
+    const safari = Object.assign(new Error('The string did not match the expected pattern.'), {
+      code: 12,
+    });
+    for (const failure of [refusal('INTERNAL'), new SyntaxError('<html>'), proxyDown, safari]) {
       const { box, world, state } = setup();
       world.answers.push(failure);
       const id = box.create(kopi());
@@ -198,6 +205,54 @@ describe('sending', () => {
     // Not tried again by itself.
     await box.flush();
     expect(world.sent).toHaveLength(2);
+  });
+
+  it('treats signed out as "try later"', async () => {
+    const { box, world, state } = setup();
+    world.answers.push(refusal('UNAUTHORIZED'));
+    const id = box.create(kopi());
+    await box.idle();
+    expect(state()).toEqual([`create:${id}:waiting`]);
+  });
+
+  it('gives refused entries one more go once the connection is back', async () => {
+    const { box, world, state } = setup({ online: false });
+    const a = box.create(kopi(1));
+    const b = box.create(kopi(2));
+    world.online = true;
+    // a is refused, then the server goes away under b, then comes back.
+    world.answers.push(refusal('NOT_FOUND'), new OfflineError());
+    await box.flush();
+    await box.idle();
+    expect(state()).toEqual([`create:${a}:refused`, `create:${b}:waiting`]);
+    world.timers.shift()!();
+    await box.idle();
+    // b went through, so a was tried again (and worked).
+    expect(world.sent.map(i => i.entryId)).toEqual([a, b, b, a]);
+    expect(state()).toEqual([]);
+    expect(world.synced).toEqual([b, a]);
+  });
+
+  it('wake() retries refused entries but leaves a clash for the owner', async () => {
+    const { box, world, state } = setup({ online: false });
+    const a = box.create(kopi(1));
+    const c = 'entry-c';
+    box.edit(saved(c), kopi(3));
+    world.online = true;
+    world.answers.push(refusal('VALIDATION'), refusal('ENTRY_CHANGED'));
+    await box.flush();
+    await box.idle();
+    expect(state()).toEqual([`create:${a}:refused`, `edit:${c}:clash`]);
+    await box.wake();
+    expect(state()).toEqual([`edit:${c}:clash`]);
+    expect(world.sent.filter(i => i.entryId === c)).toHaveLength(1);
+  });
+
+  it('plays "saved" only for entries that showed as waiting', async () => {
+    const { box, world } = setup();
+    box.create(kopi());
+    await box.idle();
+    expect(world.synced).toEqual([]);
   });
 
   it('stops at a locked app without a retry timer, and leaves the order alone', async () => {

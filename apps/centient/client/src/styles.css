@@ -453,7 +453,11 @@ body::after {
   width: 100%;
   text-align: start;
 }
-/* Swipeable entry rows: Konsta's hairline between rows, lined up with the text like its own. */
+/* Swipeable entry rows: Konsta's hairline between rows, lined up with the text like its own. The row holds its
+   own lines (without it every hairline lands on the list's top edge). */
+.entry-row {
+  position: relative;
+}
 .entry-row + .entry-row::before {
   content: '';
   position: absolute;
@@ -466,54 +470,49 @@ body::after {
 }
 
 /* ---- Waiting entries (models/outbox) --------------------------------------------------------------- */
-/* An entry the server does not have yet: dashes crawl around its row, clockwise. Four gradients draw the four
-   sides (a CSS dashed border cannot move). For the first second nothing shows, so a save that goes straight
-   through never flickers; a row already tried once (`data-held`) shows at once. Sending crawls twice as fast;
-   sent closes into a solid line and fades; refused or changed elsewhere is pink and still.
-   Reduced motion (the rule near the top turns animation off): the dashes show, without the crawl. */
-.entry-row[data-waiting] {
-  position: relative;
-}
-.entry-row[data-waiting]::after {
+/* An entry the server does not have yet: a still, thin dashed box 4px inside its row (so two waiting rows have a
+   gap), and a bold word with a pixel sign (EntryList). For the first second nothing shows, so a save that goes
+   straight through never flickers; a row already tried once (`data-held`) shows at once. Refused or changed
+   elsewhere: the same box in pink.
+   Sending: an 8-bit bar fills along the bottom in blocks (to 90%; the answer takes it to 100%).
+   Saved (`data-synced`, about a second, models/outbox syncedIds): the bar is full, the box blinks out like a
+   beaten enemy, then a green wash with a pixel check blinks and fades. Reduced motion: the wash shows still. */
+.entry-row[data-waiting]::after,
+.entry-row[data-synced]::after {
   --dash: var(--ink);
   content: '';
+  /* Konsta hides a list's last row's ::after (its hairline slot); this box must still show there. */
+  display: block;
   position: absolute;
-  inset: 0;
+  inset: 4px;
   z-index: 2;
   pointer-events: none;
   background:
-    linear-gradient(90deg, var(--dash) 50%, transparent 0) 0 0 / 12px 2px repeat-x,
-    linear-gradient(90deg, var(--dash) 50%, transparent 0) 0 100% / 12px 2px repeat-x,
-    linear-gradient(0deg, var(--dash) 50%, transparent 0) 0 0 / 2px 12px repeat-y,
-    linear-gradient(0deg, var(--dash) 50%, transparent 0) 100% 0 / 2px 12px repeat-y;
-  animation:
-    ants 0.6s linear infinite,
-    wait-show 0.2s 1s backwards;
+    linear-gradient(90deg, var(--dash) 50%, transparent 0) 0 0 / 8px 1.5px repeat-x,
+    linear-gradient(90deg, var(--dash) 50%, transparent 0) 0 100% / 8px 1.5px repeat-x,
+    linear-gradient(0deg, var(--dash) 50%, transparent 0) 0 0 / 1.5px 8px repeat-y,
+    linear-gradient(0deg, var(--dash) 50%, transparent 0) 100% 0 / 1.5px 8px repeat-y;
+  animation: wait-show 0.2s 1s steps(2) backwards;
 }
 .entry-row[data-waiting][data-held]::after {
-  animation: ants 0.6s linear infinite;
+  animation: none;
 }
-.entry-row[data-waiting='sending']::after {
-  animation-duration: 0.3s, 0.2s;
-}
-/* Went through without ever showing: nothing to close. */
+/* Went straight through without ever showing: nothing to play. */
 .entry-row[data-waiting='sent']::after {
   display: none;
-}
-.entry-row[data-waiting='sent'][data-held]::after {
-  display: block;
-  background: none;
-  box-shadow: inset 0 0 0 2px var(--dash);
-  animation: wait-done 0.6s 0.2s forwards;
 }
 .entry-row[data-waiting='refused']::after,
 .entry-row[data-waiting='clash']::after {
   --dash: var(--negative);
-  animation: none;
 }
+.entry-row[data-synced]::after {
+  display: block;
+  animation: wait-gone 0.6s steps(1, end) forwards;
+}
+
 .wait-word {
-  color: var(--muted);
-  animation: wait-show 0.2s 1s backwards;
+  color: var(--ink);
+  animation: wait-show 0.2s 1s steps(2) backwards;
 }
 .entry-row[data-held] .wait-word {
   animation: none;
@@ -521,24 +520,148 @@ body::after {
 .entry-row[data-waiting='refused'] .wait-word,
 .entry-row[data-waiting='clash'] .wait-word {
   color: var(--negative);
-  animation: none;
 }
-@keyframes ants {
-  to {
-    background-position:
-      12px 0,
-      -12px 100%,
-      0 -12px,
-      100% 12px;
+
+/* The sending bar: a framed track with a block fill (scaleX in 10 steps). */
+.wait-bar {
+  display: none;
+  position: absolute;
+  left: 68px;
+  right: 16px;
+  bottom: 7px;
+  height: 5px;
+  z-index: 2;
+  pointer-events: none;
+  border: 1px solid var(--ink);
+  padding: 1px;
+}
+.wait-bar::before {
+  content: '';
+  display: block;
+  height: 100%;
+  background: var(--miku);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.entry-row[data-waiting='sending'] .wait-bar,
+.entry-row[data-synced] .wait-bar {
+  display: block;
+}
+.entry-row[data-waiting='sending'] .wait-bar::before {
+  animation: wait-load 1.5s steps(9, end) forwards;
+}
+.entry-row[data-synced] .wait-bar {
+  animation: wait-gone 0.6s steps(1, end) forwards;
+}
+.entry-row[data-synced] .wait-bar::before {
+  transform: none;
+}
+
+/* The saved flash: a green wash over the row with the pixel check in its middle, blinking, then fading out in
+   steps (both together). */
+.wait-flash {
+  position: absolute;
+  inset: 4px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 30%, transparent);
+  opacity: 0;
+  animation: wait-flash 1.9s 0.55s steps(1, end) forwards;
+}
+.wait-flash svg {
+  filter: drop-shadow(2px 2px 0 var(--ink));
+  animation: wait-pop 0.3s 0.55s steps(1, end) backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .entry-row[data-synced]::after,
+  .entry-row[data-synced] .wait-bar {
+    display: none;
+  }
+  .wait-flash {
+    opacity: 1;
   }
 }
+
 @keyframes wait-show {
   from {
     opacity: 0;
   }
 }
-@keyframes wait-done {
+@keyframes wait-load {
   to {
+    transform: scaleX(0.9);
+  }
+}
+/* Hard on/off frames with a sideways jolt: a sprite flickering out. */
+@keyframes wait-gone {
+  0% {
+    opacity: 1;
+  }
+  16% {
+    opacity: 0;
+  }
+  33% {
+    opacity: 1;
+    transform: translateX(2px);
+  }
+  50% {
+    opacity: 0;
+  }
+  66% {
+    opacity: 1;
+    transform: translateX(-2px);
+  }
+  83%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes wait-pop {
+  0% {
+    scale: 0.6;
+  }
+  40% {
+    scale: 1.2;
+  }
+  70%,
+  100% {
+    scale: 1;
+  }
+}
+/* On, blink, blink, blink, then three steps down to nothing. */
+@keyframes wait-flash {
+  0% {
+    opacity: 1;
+  }
+  30% {
+    opacity: 0.15;
+  }
+  38% {
+    opacity: 1;
+  }
+  46% {
+    opacity: 0.15;
+  }
+  54% {
+    opacity: 1;
+  }
+  62% {
+    opacity: 0.15;
+  }
+  70% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 0.66;
+  }
+  88% {
+    opacity: 0.33;
+  }
+  96%,
+  100% {
     opacity: 0;
   }
 }
