@@ -38,6 +38,8 @@ export const pocketApi = {
   create: (json: NewPocket) => call(client.api.envelopes.$post({ json })),
   update: (id: string, json: Req<(typeof client.api.envelopes)[':id']['$patch']>['json']) =>
     call(client.api.envelopes[':id'].$patch({ param: { id }, json })),
+  /** Deletes a hidden pocket; what was in it moves to its account's Main pocket. */
+  remove: (id: string) => call(client.api.envelopes[':id'].$delete({ param: { id } })),
 };
 
 export type PocketKind = NonNullable<NewPocket['kind']>;

@@ -453,6 +453,21 @@ body::after {
   width: 100%;
   text-align: start;
 }
+/* A swipeable row in a Konsta list (HiddenItems): its own hairline under it, like Konsta's rows (the list hides
+   the last row's ::after). */
+.swipe-row {
+  position: relative;
+}
+.swipe-row::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  left: 16px;
+  height: 1px;
+  background: var(--edge);
+  z-index: 1;
+}
 /* Swipeable entry rows: Konsta's hairline between rows, lined up with the text like its own. The row holds its
    own lines (without it every hairline lands on the list's top edge). */
 .entry-row {
