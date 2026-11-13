@@ -4,6 +4,7 @@
 export interface FileStore {
   put(key: string, body: ArrayBuffer, contentType: string): Promise<void>;
   get(key: string): Promise<{ body: ReadableStream | ArrayBuffer; contentType: string } | null>;
+  delete(keys: string[]): Promise<void>;
 }
 
 export const r2Files = (bucket: R2Bucket): FileStore => ({
@@ -15,6 +16,9 @@ export const r2Files = (bucket: R2Bucket): FileStore => ({
     return o
       ? { body: o.body, contentType: o.httpMetadata?.contentType ?? 'application/octet-stream' }
       : null;
+  },
+  async delete(keys) {
+    if (keys.length) await bucket.delete(keys);
   },
 });
 
@@ -35,6 +39,8 @@ export function filesRepo(db: D1Database, store?: FileStore) {
     put: (key: string, body: ArrayBuffer, contentType: string) =>
       bytes().put(key, body, contentType),
     read: async (key: string) => (store ? store.get(key) : null),
+    /** Removes the bytes (the rows are the caller's to delete); nothing to do when no store is set up. */
+    erase: async (keys: string[]) => store?.delete(keys),
 
     async create(ws: string, a: Attachment) {
       await db

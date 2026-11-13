@@ -10,22 +10,35 @@ export type AuthEnv = {
   DEV_HOSTS?: string; // .dev.vars only; comma-separated extra hosts, e.g. an ngrok domain behind ngrok OAuth
 };
 
-/** Every /api request must be signed in; sets c.var.email. */
+/**
+ * Who a request is from, and how they got in: a person through Cloudflare Access (`signedInAt`: when that
+ * sign-in happened, in ms), a service token acting as the owner (the Shortcut), or the development sign-in.
+ */
+export type Identity = {
+  email: string;
+  via: 'access' | 'service' | 'dev';
+  signedInAt: number | null;
+};
+
+/** Every /api request must be signed in; sets c.var.email and c.var.identity. */
 export const auth = (): MiddlewareHandler<AppEnv> => async (c, next) => {
-  const email = await identify(c.req.raw, c.env);
-  if (!email)
+  const identity = await identify(c.req.raw, c.env);
+  if (!identity)
     return c.json({ code: 'UNAUTHORIZED', message: 'Sign in through Cloudflare Access' }, 401);
-  c.set('email', email);
+  c.set('email', identity.email);
+  c.set('identity', identity);
   await next();
 };
 
-/** Returns the signed-in email, or null. */
-export async function identify(req: Request, env: AuthEnv): Promise<string | null> {
+/** Returns who is signed in, or null. */
+export async function identify(req: Request, env: AuthEnv): Promise<Identity | null> {
   const jwt = req.headers.get('Cf-Access-Jwt-Assertion');
   if (jwt && env.ACCESS_TEAM_DOMAIN && env.ACCESS_AUD) {
     const claims = await verifyAccessJwt(jwt, env.ACCESS_TEAM_DOMAIN, env.ACCESS_AUD);
-    if (claims?.email) return claims.email;
-    if (claims?.common_name && env.SERVICE_TOKEN_EMAIL) return env.SERVICE_TOKEN_EMAIL;
+    if (claims?.email)
+      return { email: claims.email, via: 'access', signedInAt: (claims.iat ?? 0) * 1000 || null };
+    if (claims?.common_name && env.SERVICE_TOKEN_EMAIL)
+      return { email: env.SERVICE_TOKEN_EMAIL, via: 'service', signedInAt: null };
     return null;
   }
   // Development only: DEV_EMAIL and DEV_HOSTS live in .dev.vars, which is never deployed. The host
@@ -35,7 +48,8 @@ export async function identify(req: Request, env: AuthEnv): Promise<string | nul
     .split(',')
     .map(h => h.trim())
     .filter(Boolean);
-  if (env.DEV_EMAIL && (isLocalHost(host) || devHosts.includes(host))) return env.DEV_EMAIL;
+  if (env.DEV_EMAIL && (isLocalHost(host) || devHosts.includes(host)))
+    return { email: env.DEV_EMAIL, via: 'dev', signedInAt: null };
   return null;
 }
 
@@ -49,6 +63,8 @@ type Claims = {
   common_name?: string;
   aud: string | string[];
   exp: number;
+  /** When the token was issued (seconds): the sign-in it came from. */
+  iat?: number;
   iss: string;
 };
 let keyCache: { at: number; keys: Map<string, CryptoKey> } | null = null;

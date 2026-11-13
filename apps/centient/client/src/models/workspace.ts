@@ -82,4 +82,6 @@ type WorkspacePatch = Req<typeof client.api.workspace.$patch>['json'];
 export const workspaceApi = {
   update: (json: WorkspacePatch) => call(client.api.workspace.$patch({ json })),
   reset: () => call(client.api.workspace.reset.$post()),
+  /** Delete account: erases everything for good; `confirm` is the word the owner typed. */
+  purge: (confirm: string) => call(client.api.workspace.purge.$post({ json: { confirm } })),
 };
