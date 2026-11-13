@@ -12,6 +12,7 @@ import { installmentsRoutes } from './modules/installments/routes';
 import { ledgerRoutes } from './modules/ledger/routes';
 import { pocketsRoutes } from './modules/pockets/routes';
 import { quickaddRoutes } from './modules/quickadd/routes';
+import { recurringRoutes } from './modules/recurring/routes';
 import { reportsRoutes } from './modules/reports/routes';
 import { workspaceRoutes } from './modules/workspace/routes';
 
@@ -28,6 +29,7 @@ const routes = app
   .route('/api/categories', categoriesRoutes)
   .route('/api/budgets', budgetsRoutes)
   .route('/api/quickadd', quickaddRoutes)
+  .route('/api/recurring', recurringRoutes)
   .route('/api', installmentsRoutes)
   .route('/api', reportsRoutes);
 

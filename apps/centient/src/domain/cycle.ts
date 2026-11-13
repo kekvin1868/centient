@@ -45,6 +45,15 @@ export function toOccurredAt(input: string, now = Date.now()): string {
 export const addDays = (day: string, n: number) =>
   new Date(Date.parse(day) + n * 864e5).toISOString().slice(0, 10);
 
+/** `day` moved `n` months (back when negative), landing on `onDay` clamped to that month's length. */
+export function addMonths(day: string, n: number, onDay = Number(day.slice(8))): string {
+  const [y, m] = day.split('-').map(Number);
+  const months = y * 12 + (m - 1) + n;
+  const year = Math.floor(months / 12);
+  const month = (months % 12) + 1;
+  return fmt(year, month, Math.min(onDay, monthLength(year, month)));
+}
+
 /**
  * A cycle's name: the month holding most of its days, with a fixed cut-off so it never jumps between months.
  * Start day 1-15 takes the month the cycle starts in, 16-31 the month it ends in (Oct 25 - Nov 24 is "Nov").

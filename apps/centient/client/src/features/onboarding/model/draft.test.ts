@@ -26,6 +26,7 @@ const acc = (id: string, name: string, kind: string): Account => ({
   currency_code: 'IDR',
   default_envelope_id: `${id}:main`,
   due_day: null,
+  statement_day: null,
   reconciled_at: null,
   archived_at: null,
   kept_until: null,

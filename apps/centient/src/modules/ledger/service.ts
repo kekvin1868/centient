@@ -16,6 +16,7 @@ import {
 } from '../../domain/ledger';
 import { cutsFor, peopleOf, tabsOnBill, type Link } from '../../domain/bills';
 import { commandOf } from '../../lib/entryCommand';
+import { advance, paidBy } from '../recurring/advance';
 import { findOrCreateTab } from './tabs';
 import type { NewEntry, TxFilter } from '../../repos/entries';
 
@@ -174,9 +175,18 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
   return {
     prepare,
 
-    /** Saves each command as one entry; returns the entry ids. */
+    /**
+     * Saves each command as one entry; returns the entry ids. An expense that pays a recurring bill also moves
+     * that bill to its next due date, in the same write.
+     */
     async record(cmds: Command[]): Promise<string[]> {
-      return repos.entries.insert(ws, await prepare(cmds));
+      const { ids, stmts } = repos.entries.insertStatements(ws, await prepare(cmds));
+      const at = new Date(now()).toISOString();
+      const paid = cmds.some(c => c.type === 'EXPENSE')
+        ? paidBy(await repos.recurring.list(ws), cmds)
+        : [];
+      await repos.batch([...stmts, ...paid.map(r => advance(repos, ws, r, at))]);
+      return ids;
     },
 
     /** Rebuilds an entry from an edited command. Its type is fixed; a same-day edit keeps the original time. */

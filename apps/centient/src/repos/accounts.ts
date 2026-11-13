@@ -10,6 +10,8 @@ export type Account = {
   currency_code: string;
   default_envelope_id: string | null;
   due_day: number | null;
+  /** Credit card / pay later: the day of the month its statement closes. */
+  statement_day: number | null;
   reconciled_at: string | null;
   archived_at: string | null;
   /** A tab below 0 you keep for now: the day you plan to return it. */
@@ -17,7 +19,7 @@ export type Account = {
 };
 export type NewAccount = Omit<
   Account,
-  'id' | 'reconciled_at' | 'archived_at' | 'default_envelope_id' | 'kept_until'
+  'id' | 'reconciled_at' | 'archived_at' | 'default_envelope_id' | 'kept_until' | 'statement_day'
 >;
 
 // "Debit card" is stored as kind BANK + subtype DEBIT_CARD (migration 0007: the accounts table's kind CHECK
@@ -35,6 +37,7 @@ const PATCHABLE = [
   'currency_code',
   'default_envelope_id',
   'due_day',
+  'statement_day',
   'reconciled_at',
   'archived_at',
   'kept_until',
@@ -70,7 +73,7 @@ export function accountsRepo(db: D1Database) {
     list(ws: string) {
       return all<Account>(
         db,
-        `SELECT id, name, ${KIND_SQL} AS kind, provider, currency_code, default_envelope_id, due_day, reconciled_at, archived_at, kept_until
+        `SELECT id, name, ${KIND_SQL} AS kind, provider, currency_code, default_envelope_id, due_day, statement_day, reconciled_at, archived_at, kept_until
         FROM accounts WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY name`,
         ws,
       );
@@ -84,6 +87,7 @@ export function accountsRepo(db: D1Database) {
         ...a,
         id,
         default_envelope_id: `${id}:main`,
+        statement_day: null,
         reconciled_at: null,
         archived_at: null,
         kept_until: null,
@@ -134,7 +138,7 @@ export function accountsRepo(db: D1Database) {
       return out;
     },
 
-    /** Soft-deletes the account and every entry that touches it; false when it is not in this workspace. */
+    /** Soft-deletes the account, every entry that touches it and its recurring bills; false when it is not in this workspace. */
     async remove(ws: string, id: string, now: string) {
       // Whole entries go, so a split bill paid from this account disappears with its IOU half.
       // ponytail: the name gets a suffix because accounts keep UNIQUE (workspace_id, name); a partial
@@ -158,6 +162,11 @@ export function accountsRepo(db: D1Database) {
             `UPDATE accounts SET deleted_at = ?, name = name || ' (deleted ' || ? || ')' WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
           )
           .bind(now, now, id, ws),
+        db
+          .prepare(
+            'UPDATE recurring SET archived_at = ? WHERE workspace_id = ? AND account_id = ? AND archived_at IS NULL',
+          )
+          .bind(now, ws, id),
       ]);
       return acc.meta.changes > 0;
     },

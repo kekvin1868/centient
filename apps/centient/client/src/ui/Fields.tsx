@@ -72,6 +72,7 @@ export function InputRow({
   placeholder,
   type = 'text',
   inputMode,
+  list,
 }: {
   label: string;
   value: string;
@@ -79,6 +80,8 @@ export function InputRow({
   placeholder?: string;
   type?: string;
   inputMode?: 'numeric' | 'text';
+  /** Id of a `<datalist>` whose options the phone offers while typing. */
+  list?: string;
 }) {
   // Label on the left, value on the right, like PickerRow (Konsta's ListInput stacks the label above).
   return (
@@ -91,6 +94,7 @@ export function InputRow({
           className="w-[60vw] max-w-56 bg-transparent text-right outline-none placeholder:opacity-40"
           type={type}
           inputMode={inputMode}
+          list={list}
           value={value}
           placeholder={placeholder}
           aria-label={label}
