@@ -107,6 +107,28 @@ try {
     }
     await ctx.close();
   }
+
+  // 3. No signal: once the service worker has saved the shell, Home still opens.
+  const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+  const page = await ctx.newPage();
+  await page.goto(base + '/');
+  // Wait for both halves of an offline start: the shell (service worker) and the data (saved query cache).
+  await page.evaluate(async () => {
+    for (let i = 0; i < 300; i++) {
+      if ((await caches.match('/')) && localStorage.getItem('centient:queries')) return;
+      await new Promise(r => setTimeout(r, 100));
+    }
+  });
+  await ctx.setOffline(true);
+  const opened = await page
+    .reload()
+    .then(() => page.getByRole('region', { name: 'Your money' }).waitFor({ timeout: 10000 }))
+    .then(
+      () => true,
+      () => false,
+    );
+  check(opened, 'offline: Home opens from the saved shell');
+  await ctx.close();
   await browser.close();
 } finally {
   server.kill();
