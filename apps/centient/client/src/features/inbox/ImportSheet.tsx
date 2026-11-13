@@ -13,9 +13,9 @@ import {
   IMPORT_MAX,
   needsPlain,
   toRows,
-  type DayOrder,
   type Mapping,
 } from '../../models/import';
+import type { DayOrder } from '../../models/dates';
 import { inboxApi, inboxQueries } from '../../models/inbox';
 import { persist } from '../../models/query';
 import { dateText, PickerRow } from '../../ui/Fields';

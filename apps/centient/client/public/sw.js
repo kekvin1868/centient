@@ -3,13 +3,15 @@
 // The page registers it as /sw.js?v=<build id>: a new build is a new worker with its own cache.
 const PREFIX = 'centient-';
 const CACHE = PREFIX + new URL(location.href).searchParams.get('v');
+// The text reader's files (/ocr, about 8 MB) outlive builds: they change only with the reader's version.
+const OCR = 'ocr-tesseract-7';
 
 // A saved file is matched by its address alone: servers add `Vary` (preview: Origin; Cloudflare:
 // Accept-Encoding), and a hashed file or the shell is the same file whatever those headers say.
-const saved = key => caches.match(key, { cacheName: CACHE, ignoreVary: true });
+const saved = (key, cacheName = CACHE) => caches.match(key, { cacheName, ignoreVary: true });
 // Only our own good answers are kept: a sign-in redirect or an error page must never become the shell.
-const keep = async (key, res) => {
-  if (res.ok && res.type === 'basic') await (await caches.open(CACHE)).put(key, res.clone());
+const keep = async (key, res, cacheName = CACHE) => {
+  if (res.ok && res.type === 'basic') await (await caches.open(cacheName)).put(key, res.clone());
   return res;
 };
 
@@ -57,4 +59,8 @@ self.addEventListener('fetch', event => {
   // Built files carry a content hash, so a saved copy is always right.
   else if (url.pathname.startsWith('/assets/'))
     event.respondWith(saved(req).then(hit => hit ?? fetch(req).then(res => keep(req, res))));
+  else if (url.pathname.startsWith('/ocr/'))
+    event.respondWith(
+      saved(req, OCR).then(hit => hit ?? fetch(req).then(res => keep(req, res, OCR))),
+    );
 });

@@ -11,6 +11,8 @@ import {
 } from '../../domain/ledger';
 import type { Account } from '../../repos/accounts';
 
+export type AccountsService = ReturnType<typeof createAccountsService>;
+
 export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) {
   const stamp = () => new Date(now()).toISOString();
 

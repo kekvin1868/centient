@@ -5,7 +5,6 @@ import {
   guessDayOrder,
   guessMapping,
   needsPlain,
-  parseDay,
   parseMoney,
   toRows,
   type ImportOptions,
@@ -47,25 +46,6 @@ describe('guessing the columns', () => {
 });
 
 describe('dates', () => {
-  it('reads the common shapes', () => {
-    expect(parseDay('2026-11-10', 'DMY')).toBe('2026-11-10');
-    expect(parseDay('2026-11-10T09:41:00+07:00', 'DMY')).toBe('2026-11-10');
-    expect(parseDay('10/11/2026', 'DMY')).toBe('2026-11-10');
-    expect(parseDay('10/11/2026', 'MDY')).toBe('2026-10-11');
-    expect(parseDay('3-1-26 14:00', 'DMY')).toBe('2026-01-03');
-    expect(parseDay('10 Nov 2026', 'DMY')).toBe('2026-11-10');
-    expect(parseDay('4 Okt 2026', 'DMY')).toBe('2026-10-04');
-    expect(parseDay('17 Agustus 2026', 'DMY')).toBe('2026-08-17');
-    expect(parseDay('Nov 10, 2026', 'DMY')).toBe('2026-11-10');
-  });
-
-  it('refuses what is not a real day', () => {
-    expect(parseDay('31/02/2026', 'DMY')).toBeNull();
-    expect(parseDay('2026-13-01', 'DMY')).toBeNull();
-    expect(parseDay('yesterday', 'DMY')).toBeNull();
-    expect(parseDay('', 'DMY')).toBeNull();
-  });
-
   it('takes month-first only when the dates prove it', () => {
     expect(guessDayOrder(['11/10/2026', '11/25/2026'])).toBe('MDY');
     expect(guessDayOrder(['25/11/2026', '10/11/2026'])).toBe('DMY');

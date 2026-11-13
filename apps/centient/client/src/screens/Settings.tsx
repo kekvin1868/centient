@@ -10,7 +10,6 @@ import { EditAccountSheet } from '../features/accounts/EditAccountSheet';
 import { AddCategorySheet } from '../features/categories/AddCategorySheet';
 import { EditCategorySheet } from '../features/categories/EditCategorySheet';
 import { ImportSheet } from '../features/inbox/ImportSheet';
-import { InboxSheet } from '../features/inbox/InboxSheet';
 import { AddPocketSheet } from '../features/pockets/AddPocketSheet';
 import { EditPocketSheet } from '../features/pockets/EditPocketSheet';
 import { HiddenItems } from '../features/workspace/HiddenItems';
@@ -24,6 +23,7 @@ import { attempt } from '../lib/run';
 import { active, catalog, nameOf } from '../lib/state';
 import { Group, Row } from '../ui/List';
 import { Sheet } from '../ui/Sheet';
+import { Inbox } from './Inbox';
 
 export function Settings() {
   const [account, setAccount] = useState<Account | null>(null);
@@ -140,7 +140,7 @@ export function Settings() {
         onClose={() => setImporting(false)}
         onImported={() => setInbox(true)}
       />
-      <InboxSheet open={inbox} onClose={() => setInbox(false)} />
+      <Inbox open={inbox} onClose={() => setInbox(false)} />
       <EditAccountSheet
         key={`account:${account?.id ?? 'none'}`}
         account={account}

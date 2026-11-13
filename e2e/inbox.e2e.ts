@@ -137,3 +137,59 @@ test('Home shows a notice while payments wait', async () => {
   await expect(sheet('Inbox').getByText('Nothing is waiting.')).toBeVisible();
   expect(await balance()).toBe(975_000 - 18_000);
 });
+
+test('a photo of a payment screen is read on the phone and waits in the Inbox', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000); // the first read downloads the reader (about 8 MB) and starts it
+  const cat = (await (await page.request.get('/api/catalog')).json()) as {
+    accounts: { id: string; name: string }[];
+  };
+  const main = cat.accounts.find(a => a.name === 'Main Account')!;
+  // A payment screen, drawn and photographed here: the reader gets a real picture.
+  const when = new Date(`${daysAgo(1)}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  const screen = await browser.newPage({ viewport: { width: 640, height: 720 } });
+  await screen.setContent(
+    `<body style="margin:0;padding:48px;background:#fff;color:#000;font:30px/1.7 Arial">
+      Pembayaran QRIS berhasil<br>Kamu membayar<br><b>Rp 25.000</b><br>ke<br>Kopi Senja<br>
+      Waktu ${when}, 09.41<br>No. referensi 2610 0409 4127</body>`,
+  );
+  const photo = { name: 'bukti.png', mimeType: 'image/png', buffer: await screen.screenshot() };
+  await screen.close();
+
+  // Home on one account, so the payment knows where it was paid from.
+  await page.goto('/');
+  await page.evaluate(id => localStorage.setItem('centient:account', JSON.stringify(id)), main.id);
+  await page.goto('/');
+  await page.getByLabel('Photo of a receipt').setInputFiles(photo);
+  await expect(page.getByRole('status').filter({ hasText: 'Reading the photo' })).toBeVisible();
+
+  const inbox = sheet('Inbox');
+  await expect(inbox.getByText('Kopi Senja')).toBeVisible({ timeout: 90_000 });
+  const card = inbox.getByRole('listitem').filter({ hasText: 'Kopi Senja' });
+  await expect(card).toContainText('−Rp25.000');
+  await expect(card).toContainText('from a photo');
+  await expect(card).toContainText('Yesterday');
+
+  // Edit opens the entry form with what was read; logging it from there adds the entry.
+  await card.getByLabel('Category for Kopi Senja').selectOption({ label: 'Food & Drink' });
+  await card.getByRole('button', { name: 'Edit Kopi Senja' }).tap();
+  await page
+    .getByRole('dialog', { name: 'New entry' })
+    .getByRole('button', { name: 'Log it' })
+    .tap();
+  await expect(inbox.getByText('Nothing is waiting.')).toBeVisible();
+  expect(await balance()).toBe(975_000 - 18_000 - 25_000);
+
+  // The same picture again is refused.
+  await sheet('Inbox').getByRole('button', { name: 'Close' }).tap();
+  await page.getByLabel('Photo of a receipt').setInputFiles(photo);
+  await expect(page.getByText('That photo is already in the Inbox')).toBeVisible({
+    timeout: 60_000,
+  });
+});

@@ -150,7 +150,7 @@ describe('inbox service', () => {
       ]);
     const [nasi, dup, refund, junk] = (await t.svc().inbox.list()).items;
 
-    await t.svc().inbox.setCategory(nasi.id, t.food);
+    await t.svc().inbox.update(nasi.id, { categoryId: t.food });
     await t.svc().inbox.add(nasi.id);
     await t.svc().inbox.link(dup.id);
     await t.svc().inbox.add(refund.id);
@@ -274,6 +274,104 @@ describe('inbox service', () => {
       code: 'NOT_FOUND',
     });
     await t.svc().accounts.remove(t.bca);
+    expect((await t.svc().inbox.list()).waiting).toBe(0);
+  });
+});
+
+describe('capture from a photo', () => {
+  const QRIS = [
+    'Pembayaran QRIS berhasil',
+    'Kamu membayar',
+    'Rp 25.000',
+    'ke',
+    'Kopi Senja',
+    'Waktu 10 Nov 2026, 09.41',
+    'No. referensi 2610 0409 4127',
+  ].join('\n');
+  const hash = 'a'.repeat(64);
+
+  it('reads the text into a payment waiting for review, with the entry it may duplicate', async () => {
+    const t = await workspace();
+    const [coffee] = await t.svc().ledger.record([
+      {
+        type: 'EXPENSE',
+        accountId: t.bca,
+        categoryId: t.food,
+        amount: 25_000,
+        date: '2026-11-10',
+      },
+    ]);
+    const r = await t.svc().inbox.capture({ source: 'UPLOAD', rawText: QRIS, contentHash: hash });
+    expect(r).toMatchObject({ kind: 'TRANSACTION', read: true });
+    const [item] = (await t.svc().inbox.list()).items;
+    expect(item).toMatchObject({
+      id: r.id,
+      source: 'UPLOAD',
+      kind: 'TRANSACTION',
+      date: '2026-11-10',
+      amount: -25_000,
+      merchant: 'Kopi Senja',
+      accountId: null,
+      suggested: { entryId: coffee },
+    });
+    expect(await t.balance()).toBe(5_000_000 - 25_000);
+  });
+
+  it('refuses the same picture or the same reference twice', async () => {
+    const t = await workspace();
+    const capture = (o: object) =>
+      t.svc().inbox.capture({ source: 'UPLOAD', rawText: QRIS, contentHash: hash, ...o });
+    await capture({});
+    await expect(capture({})).rejects.toThrow(/UNIQUE/);
+    await expect(capture({ contentHash: 'b'.repeat(64) })).rejects.toThrow(/UNIQUE/);
+    expect((await t.svc().inbox.list()).waiting).toBe(1);
+  });
+
+  it('needs an account before it can be added; the form can correct what was read', async () => {
+    const t = await workspace();
+    const { id } = await t.svc().inbox.capture({ source: 'UPLOAD', rawText: QRIS });
+    await expect(t.svc().inbox.add(id)).rejects.toMatchObject({ code: 'INBOX_INCOMPLETE' });
+    expect(await t.svc().inbox.addAll()).toBe(0);
+    await t.svc().inbox.add(id, {
+      type: 'EXPENSE',
+      accountId: t.bca,
+      categoryId: t.food,
+      amount: 26_000,
+      date: '2026-11-10',
+      merchant: 'Kopi Senja',
+    });
+    expect(await t.balance()).toBe(5_000_000 - 26_000);
+    expect((await t.svc().inbox.list()).waiting).toBe(0);
+  });
+
+  it('keeps a photo it could not read, for the form', async () => {
+    const t = await workspace();
+    const r = await t
+      .svc()
+      .inbox.capture({ source: 'UPLOAD', rawText: 'blurry', accountId: t.bca });
+    expect(r.read).toBe(false);
+    expect((await t.svc().inbox.list()).items[0]).toMatchObject({
+      amount: null,
+      date: '2026-11-12',
+      accountId: t.bca,
+    });
+    await expect(t.svc().inbox.add(r.id)).rejects.toMatchObject({ code: 'INBOX_INCOMPLETE' });
+  });
+
+  it('turns a balance screen into a balance check on the account picked', async () => {
+    const t = await workspace();
+    const { id, kind } = await t.svc().inbox.capture({
+      source: 'UPLOAD',
+      rawText: 'Mandiri e-money\nSaldo\nRp 4.900.000',
+    });
+    expect(kind).toBe('BALANCE');
+    const tab = await t.svc().accounts.create({ name: 'Andi', kind: 'IOU' });
+    await expect(t.svc().inbox.update(id, { accountId: tab.id })).rejects.toMatchObject({
+      code: 'INBOX_ACCOUNT',
+    });
+    await t.svc().inbox.update(id, { accountId: t.bca });
+    await t.svc().inbox.add(id);
+    expect(await t.balance()).toBe(4_900_000);
     expect((await t.svc().inbox.list()).waiting).toBe(0);
   });
 });

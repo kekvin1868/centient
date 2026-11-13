@@ -20,12 +20,15 @@
     "@tanstack/query-sync-storage-persister": "5.104.5",
     "@tanstack/react-query": "5.104.5",
     "@tanstack/react-query-persist-client": "5.104.5",
+    "@tesseract.js-data/eng": "1.0.0",
+    "@tesseract.js-data/ind": "1.0.0",
     "hono": "^4.13.13",
     "html-to-image": "1.11.13",
     "konsta": "5.5.0",
     "motion": "14.0.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "tesseract.js": "7.0.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {

@@ -1,9 +1,9 @@
-// The Inbox (a sheet): payments an import brought in, waiting for your OK. Review them one by one, or add
+// The Inbox (a sheet): payments an import or a photo brought in, waiting for your OK. Review them one by one, or add
 // every one that matches no saved entry at once. The latest imports are listed with Undo.
 import { useQuery } from '@tanstack/react-query';
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { inboxApi, inboxQueries, type InboxImport } from '../../models/inbox';
+import { inboxApi, inboxQueries, type InboxImport, type InboxItem } from '../../models/inbox';
 import { persist } from '../../models/query';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { dateText } from '../../ui/Fields';
@@ -13,10 +13,23 @@ import { showToast } from '../../ui/Toast';
 import { WinButton } from '../../ui/WinButton';
 import { InboxCard } from './InboxCard';
 
-export function InboxSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function InboxSheet({
+  open,
+  onClose,
+  onEdit,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** Open a payment in the entry form (the screen composes that form). */
+  onEdit: (item: InboxItem) => void;
+}) {
   const { data } = useQuery({ ...inboxQueries.list(), enabled: open });
   const [undoing, setUndoing] = useState<InboxImport | null>(null);
-  const unmatched = data?.items.filter(i => !i.suggested).length ?? 0;
+  // What "Add all" takes: payments with nothing missing that match no saved entry.
+  const unmatched =
+    data?.items.filter(
+      i => !i.suggested && i.kind === 'TRANSACTION' && i.amount !== null && i.accountId !== null,
+    ).length ?? 0;
   const capped = data ? data.items.length < data.waiting : false;
 
   const addAll = async () => {
@@ -36,7 +49,7 @@ export function InboxSheet({ open, onClose }: { open: boolean; onClose: () => vo
               <p className="text-[15px]">
                 {data.waiting
                   ? `${data.waiting} waiting for your OK${capped ? `, the oldest ${data.items.length} shown` : ''}. Nothing is saved until you add it.`
-                  : 'Nothing is waiting. Payments you import land here first, so you can check them.'}
+                  : 'Nothing is waiting. Payments you import or photograph land here first, so you can check them.'}
               </p>
               {unmatched > 0 && (
                 <Button large rounded className="mt-3" onClick={addAll}>
@@ -46,7 +59,7 @@ export function InboxSheet({ open, onClose }: { open: boolean; onClose: () => vo
             </Block>
             <ul className="flex flex-col gap-2 px-4" aria-label="Waiting for review">
               {data.items.map(item => (
-                <InboxCard key={`inbox:${item.id}`} item={item} />
+                <InboxCard key={`inbox:${item.id}`} item={item} onEdit={onEdit} />
               ))}
             </ul>
             {data.imports.length > 0 && (

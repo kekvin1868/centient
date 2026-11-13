@@ -1,8 +1,8 @@
-// /api/inbox: payments waiting for the owner's OK (a CSV import brings them in).
+// /api/inbox: payments waiting for the owner's OK (a CSV import or a photo's text brings them in).
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../../context';
-import { day, id, json, text } from '../../lib/schemas';
+import { command, day, id, json, text } from '../../lib/schemas';
 
 const row = z.object({
   date: day,
@@ -26,6 +26,23 @@ export const inboxRoutes = new Hono<AppEnv>()
     c.json(await c.var.services.inbox.importRows(c.req.valid('json').rows), 201),
   )
 
+  // The text the phone read off a photo (or a Shortcut's Live Text). `contentHash`: the picture's SHA-256.
+  .post(
+    '/capture',
+    json(
+      z.object({
+        source: z.enum(['UPLOAD', 'SCREENSHOT', 'TEXT']),
+        rawText: z.string().max(10_000),
+        contentHash: z
+          .string()
+          .regex(/^[0-9a-f]{64}$/)
+          .optional(),
+        accountId: id.nullish(),
+      }),
+    ),
+    async c => c.json(await c.var.services.inbox.capture(c.req.valid('json')), 201),
+  )
+
   .post('/add-all', json(z.object({ importId: id.optional() })), async c =>
     c.json({ added: await c.var.services.inbox.addAll(c.req.valid('json').importId) }),
   )
@@ -34,13 +51,18 @@ export const inboxRoutes = new Hono<AppEnv>()
     c.json(await c.var.services.inbox.undoImport(c.req.param('id'))),
   )
 
-  .patch('/:id', json(z.object({ categoryId: id.nullable() })), async c => {
-    await c.var.services.inbox.setCategory(c.req.param('id'), c.req.valid('json').categoryId);
-    return c.json({ ok: true });
-  })
+  .patch(
+    '/:id',
+    json(z.object({ categoryId: id.nullable().optional(), accountId: id.optional() })),
+    async c => {
+      await c.var.services.inbox.update(c.req.param('id'), c.req.valid('json'));
+      return c.json({ ok: true });
+    },
+  )
 
-  .post('/:id/add', async c => {
-    await c.var.services.inbox.add(c.req.param('id'));
+  // `command`: the entry to save instead of the item as read (the owner corrected it in the entry form).
+  .post('/:id/add', json(z.object({ command: command.optional() })), async c => {
+    await c.var.services.inbox.add(c.req.param('id'), c.req.valid('json').command);
     return c.json({ ok: true });
   })
 

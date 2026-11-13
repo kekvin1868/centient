@@ -7,7 +7,44 @@ import { cloudflare } from '@cloudflare/vite-plugin';
 import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { createReadStream, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { defineConfig, type Plugin } from 'vite';
+
+// The text reader's files (lib/ocr.ts), served at /ocr from node_modules: its worker, the engine (the browser
+// picks one of three by what the phone's processor can do) and the Indonesian + English language data. Nothing
+// is copied into the repo; a build writes them to dist/client/ocr.
+const modules = resolve(import.meta.dirname, '../../node_modules');
+const OCR_FILES: Record<string, string> = {
+  'worker.min.js': 'tesseract.js/dist/worker.min.js',
+  'tesseract-core-lstm.wasm.js': 'tesseract.js-core/tesseract-core-lstm.wasm.js',
+  'tesseract-core-simd-lstm.wasm.js': 'tesseract.js-core/tesseract-core-simd-lstm.wasm.js',
+  'tesseract-core-relaxedsimd-lstm.wasm.js':
+    'tesseract.js-core/tesseract-core-relaxedsimd-lstm.wasm.js',
+  'eng.traineddata.gz': '@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz',
+  'ind.traineddata.gz': '@tesseract.js-data/ind/4.0.0_best_int/ind.traineddata.gz',
+};
+const ocrAssets = (): Plugin => ({
+  name: 'centient:ocr-assets',
+  configureServer(server) {
+    server.middlewares.use('/ocr', (req, res, next) => {
+      const name = (req.url ?? '').slice(1).split('?')[0];
+      if (!(name in OCR_FILES)) return next();
+      // The language files are gzip *data* the reader unpacks itself: never Content-Encoding.
+      res.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript' : 'application/gzip');
+      createReadStream(resolve(modules, OCR_FILES[name])).pipe(res);
+    });
+  },
+  generateBundle() {
+    if (this.environment.name !== 'client') return;
+    for (const [name, file] of Object.entries(OCR_FILES))
+      this.emitFile({
+        type: 'asset',
+        fileName: `ocr/${name}`,
+        source: readFileSync(resolve(modules, file)),
+      });
+  },
+});
 
 export default defineConfig({
   plugins: [
@@ -17,6 +54,7 @@ export default defineConfig({
       plugins: [['module:@preact/signals-react-transform']],
     }),
     tailwindcss(),
+    ocrAssets(),
     cloudflare({
       persistState: process.env.CENTIENT_STATE ? { path: process.env.CENTIENT_STATE } : true,
     }),
