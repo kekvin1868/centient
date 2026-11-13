@@ -1,5 +1,6 @@
 // Recurring bills (subscriptions and other bills that leave on a date): what the API sends, how they load and
-// save, the form, and how a due date reads. Split bills are another thing: see ./bills.
+// save, and how a due date reads. Home reads this, so it stays small: the form is ./recurringForm. Split bills
+// are another thing: see ./bills.
 import { queryOptions } from '@tanstack/react-query';
 import { call, client, type Req, type Res } from './api';
 import { daysBetween } from './dates';
@@ -11,7 +12,8 @@ export type Recurring = List['items'][number];
 export type CardStatement = List['cards'][number];
 /** A merchant paid about monthly that is not a bill yet ("Found in your entries"). */
 export type FoundPayment = Res<typeof client.api.recurring.found.$get>['found'][number];
-type SaveBody = Req<typeof client.api.recurring.$post>['json'];
+/** The body of a new bill (an edit takes any part of it). */
+export type RecurringBody = Req<typeof client.api.recurring.$post>['json'];
 type Patch = Req<(typeof client.api.recurring)[':id']['$patch']>['json'];
 type Paid = Req<(typeof client.api.recurring)[':id']['paid']['$post']>['json'];
 const one = client.api.recurring[':id'];
@@ -31,7 +33,7 @@ export const recurringQueries = {
 };
 
 export const recurringApi = {
-  create: (json: SaveBody) => call(client.api.recurring.$post({ json })),
+  create: (json: RecurringBody) => call(client.api.recurring.$post({ json })),
   update: (id: string, json: Patch) => call(one.$patch({ param: { id }, json })),
   remove: (id: string) => call(one.$delete({ param: { id } })),
   /** Logs the payment as an expense and moves the bill to its next due date. */
@@ -39,82 +41,6 @@ export const recurringApi = {
   /** "Not a subscription": this merchant is no longer offered under "Found in your entries". */
   hide: (merchant: string) => call(client.api.recurring.found.hide.$post({ json: { merchant } })),
 };
-
-// ---- The bill form ----
-
-type Every = SaveBody['everyMonths'];
-export const REPEATS: readonly { value: Every; label: string }[] = [
-  { value: 1, label: 'Every month' },
-  { value: 3, label: 'Every 3 months' },
-  { value: 6, label: 'Every 6 months' },
-  { value: 12, label: 'Every year' },
-];
-/** A stored or picked number of months as one the server takes; anything else reads as monthly. */
-export const toEvery = (n: number): Every => REPEATS.find(r => r.value === n)?.value ?? 1;
-export const repeatWords = (n: number) =>
-  REPEATS.find(r => r.value === n)?.label ?? `Every ${n} months`;
-
-export type RecurringForm = {
-  name: string;
-  /** Key of a known service (features/recurring/services), or null for a name typed by hand. */
-  service: string | null;
-  accountId: string | null;
-  /** null = the account's Main pocket. */
-  envelopeId: string | null;
-  categoryId: string | null;
-  amount: number | null;
-  /** The amount changes each time (electricity): none is kept, and Mark paid asks for it. */
-  varies: boolean;
-  everyMonths: Every;
-  nextDue: string;
-  /** '' = no end. */
-  endsOn: string;
-};
-/** What a new form may start with (a payment found in the entries already knows these). */
-export type Prefill = Partial<
-  Pick<RecurringForm, 'name' | 'accountId' | 'categoryId' | 'amount' | 'nextDue'>
->;
-
-export const formFrom = (
-  r: Recurring | null,
-  today: string,
-  prefill: Prefill = {},
-): RecurringForm => ({
-  name: r?.name ?? '',
-  service: r?.service ?? null,
-  accountId: r?.accountId ?? null,
-  envelopeId: r?.envelopeId ?? null,
-  categoryId: r?.categoryId ?? null,
-  amount: r?.amount ?? null,
-  varies: r ? r.amount === null : false,
-  everyMonths: toEvery(r?.everyMonths ?? 1),
-  nextDue: r?.nextDue ?? today,
-  endsOn: r?.endsOn ?? '',
-  ...prefill,
-});
-
-/** What stops saving, in the words the Save button shows; null when it can be saved. */
-export function validate(f: RecurringForm): string | null {
-  if (!f.name.trim()) return 'Give it a name';
-  if (!f.accountId) return 'Pick where it is paid from';
-  if (!f.categoryId) return 'Pick a category';
-  if (!f.varies && !f.amount) return 'Enter the amount';
-  if (f.endsOn && f.endsOn < f.nextDue) return 'It ends before it is next due';
-  return null;
-}
-
-/** The body for a new bill or an edit; call only once `validate` passes. */
-export const toRequest = (f: RecurringForm): SaveBody => ({
-  name: f.name.trim(),
-  service: f.service,
-  accountId: f.accountId!,
-  envelopeId: f.envelopeId,
-  categoryId: f.categoryId!,
-  amount: f.varies ? null : f.amount,
-  everyMonths: f.everyMonths,
-  nextDue: f.nextDue,
-  endsOn: f.endsOn || null,
-});
 
 // ---- How bills read on screen ----
 

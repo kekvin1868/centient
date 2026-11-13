@@ -6,13 +6,8 @@ import { useState } from 'react';
 import { formatMoney } from '../../lib/format';
 import { categoryEmoji } from '../../lib/labels';
 import { catalog, nameOf } from '../../lib/state';
-import {
-  dueWords,
-  recurringQueries,
-  repeatWords,
-  type Prefill,
-  type Recurring,
-} from '../../models/recurring';
+import { dueWords, recurringQueries, type Recurring } from '../../models/recurring';
+import { repeatWords, type Prefill } from '../../models/recurringForm';
 import { Group, Row } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { DueCalendar } from './DueCalendar';
