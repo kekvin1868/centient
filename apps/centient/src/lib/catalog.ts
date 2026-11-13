@@ -4,9 +4,10 @@ import { DomainError, type AccountRef, type EnvelopeRef } from '../domain/ledger
 import type { Repos } from '../middleware/init';
 import type { Account } from '../repos/accounts';
 import type { Category } from '../repos/categories';
+import type { Envelope } from '../repos/envelopes';
 
 export type Catalog = ReturnType<typeof createCatalog>;
-export type Snapshot = Awaited<ReturnType<typeof read>>;
+export type Snapshot = ReturnType<typeof snapshotOf>;
 
 /** Caches the snapshot for this request; services that change accounts, pockets or categories call invalidate(). */
 export function createCatalog(ws: string, repos: Repos) {
@@ -25,6 +26,11 @@ async function read(ws: string, repos: Repos) {
     repos.envelopes.list(ws),
     repos.categories.list(ws),
   ]);
+  return snapshotOf(accounts, envelopes, categories);
+}
+
+/** The lookups over rows already in hand. Pure: the web app makes one from its own copy of the catalog. */
+export function snapshotOf(accounts: Account[], envelopes: Envelope[], categories: Category[]) {
   const find = <T extends { id: string }>(rows: T[], id: string | undefined, what: string): T => {
     const row = rows.find(r => r.id === id);
     if (!row) throw new DomainError('NOT_FOUND', `${what} not found`);

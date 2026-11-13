@@ -7,9 +7,13 @@ import { App } from './App';
 import '../styles.css';
 import '../ui/night/theme';
 import { registerServiceWorker } from '../lib/serviceWorker';
+import { outbox, watchOutbox } from '../models/outbox';
 import { persistOptions, queryClient } from '../models/query';
 
 registerServiceWorker();
+// Entry changes kept from last time go out now, and whenever the signal or the app comes back.
+watchOutbox();
+void outbox.flush();
 
 createRoot(document.getElementById('app')!).render(
   <PersistQueryClientProvider

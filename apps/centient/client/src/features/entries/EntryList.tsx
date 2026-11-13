@@ -16,6 +16,7 @@ import { buzz, reducedMotion, retroList } from '../../lib/motion';
 import { catalog, hiddenEntries, me } from '../../lib/state';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import type { BillPerson, PaybackMode } from '../../models/entry';
+import type { WaitingMark } from '../../models/waiting';
 import { KeyChip } from '../../ui/KeyChip';
 import { BillPeople } from './BillPeople';
 import { deleteWithUndo } from './EntrySheet';
@@ -29,6 +30,17 @@ export type Entry = EntryView & {
   command: Command | null;
   pocket?: { amount: number; balanceAfter: number; currency: string };
   people?: BillPerson[] | null;
+  /** Not on the server yet (models/outbox): how its row is marked. */
+  waiting?: WaitingMark;
+};
+
+/** The word on a row that is not on the server yet; none for one that just went through. */
+const WAIT_WORD: Record<WaitingMark['state'], string> = {
+  waiting: 'waiting',
+  sending: 'sending',
+  sent: '',
+  refused: 'not sent',
+  clash: 'changed elsewhere',
 };
 
 const ACTIONS = 136; // two 64px actions + gap: how far a row slides open
@@ -62,7 +74,8 @@ export function EntryList({
   const today = me.value?.today ?? '';
   const ids = new Set(entries.map(e => e.id));
   const visible = entries.filter(
-    e => !hiddenEntries.value.has(e.id) && (keepPaybacks || !tiedHere(e, ids)),
+    // A waiting Paid back is not under its bill yet (the server lists those), so it keeps its own row.
+    e => !hiddenEntries.value.has(e.id) && (keepPaybacks || e.waiting || !tiedHere(e, ids)),
   );
   // Start animating only once the list has content: the first fill appears at once, later changes animate.
   useEffect(() => {
@@ -111,7 +124,7 @@ export function EntryList({
         onConfirm={() => {
           const e = deleting!;
           setDeleting(null);
-          deleteWithUndo(e.id);
+          deleteWithUndo(e);
         }}
       />
       <TiedSheet
@@ -123,7 +136,7 @@ export function EntryList({
         onPick={(mode: PaybackMode) => {
           const e = tied!;
           setTied(null);
-          deleteWithUndo(e.id, mode);
+          deleteWithUndo(e, mode);
         }}
       />
       <IconSheet
@@ -175,7 +188,11 @@ function EntryRow({
   const amount = `${tone === 'out' ? '-' : tone === 'in' ? '+' : ''}${formatMoney(p ? Math.abs(p.amount) : r.amount, p ? p.currency : r.currency)}`;
 
   return (
-    <li className="entry-row">
+    <li
+      className="entry-row"
+      data-waiting={e.waiting?.state}
+      data-held={e.waiting?.held || undefined}
+    >
       <div className="relative overflow-hidden">
         <div className="absolute inset-y-0 right-0 flex items-center gap-2 pr-3">
           <m.button
@@ -227,6 +244,8 @@ function EntryRow({
         >
           <button
             type="button"
+            // An entry the server has not met has nowhere to keep an icon yet.
+            disabled={Boolean(e.waiting)}
             onClick={() => {
               if (!dragged.current) onIcon();
             }}
@@ -262,6 +281,11 @@ function EntryRow({
               {p && (
                 <span className="num block text-[13px] text-muted">
                   {formatMoney(p.balanceAfter, p.currency)}
+                </span>
+              )}
+              {e.waiting && WAIT_WORD[e.waiting.state] && (
+                <span className="wait-word block text-[13px]" role="status">
+                  {WAIT_WORD[e.waiting.state]}
                 </span>
               )}
             </span>

@@ -85,3 +85,29 @@ _Avoid_: Weekday total, average day of the week, Daily wallet spending (the old 
 **Counted amount**:
 The part of an entry that counts as spending: your share of a split bill, or only the fee of a transfer. Lists opened from Insights show it, with the whole entry explained underneath, so they add up to the number you tapped.
 _Avoid_: Net amount, real amount
+
+### Offline
+
+**Waiting**:
+An entry you logged, changed or deleted that the server has not confirmed yet. It shows at once, with a crawling dashed border while it is held up, and counts in your balances.
+_Avoid_: Pending, queued, syncing
+
+**Outbox**:
+The phone's list of waiting changes, sent oldest first whenever the app is open and has signal.
+_Avoid_: Queue, sync queue
+
+**Ticket**:
+The code a save carries so the server takes it once. The same save sent again with the same ticket gets the first answer back.
+_Avoid_: Idempotency key (the header's name, in code only)
+
+**Not sent**:
+A waiting change the server refused. It stays on screen with the reason until you fix it and send it again, or discard it.
+_Avoid_: Failed, error
+
+**Changed elsewhere**:
+An edit that waited while the same entry was changed on another device. Neither version is overwritten until you pick one.
+_Avoid_: Conflict, clash (code only)
+
+**Stand-in tab**:
+A person you named on a waiting split bill who has no tab yet. They show on Money until the bill is sent and the real tab takes over.
+_Avoid_: Temporary person, placeholder

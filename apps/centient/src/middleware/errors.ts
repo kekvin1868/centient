@@ -15,7 +15,10 @@ export const onError: ErrorHandler<AppEnv> = (err, c) => {
       400,
     );
   if (err instanceof DomainError)
-    return c.json({ code: err.code, message: err.message }, err.code === 'NOT_FOUND' ? 404 : 400);
+    return c.json(
+      { code: err.code, message: err.message },
+      err.code === 'NOT_FOUND' ? 404 : err.code === 'ENTRY_CHANGED' ? 409 : 400,
+    );
   if (err instanceof HTTPException && err.status === 400)
     return c.json({ code: 'VALIDATION', message: err.message }, 400);
   const msg = String(err instanceof Error ? err.message : err);

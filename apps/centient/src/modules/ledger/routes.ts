@@ -31,6 +31,8 @@ const toFilter = (q: z.infer<typeof txQuery>) => ({
 
 /** A bill with Paid backs tied to it: what to do with the part that no longer fits (see ledger `settle`). */
 const tied = z.object({ paybacks: z.enum(['NEVER_RECEIVED', 'RETURN']).optional() });
+/** An edit kept on a phone names the version it was made against (see ledger `edit`). */
+const edited = tied.extend({ base: z.coerce.number().int().min(1).optional() });
 
 export const ledgerRoutes = new Hono<AppEnv>()
   // One command, or { commands: [...] } for several in one atomic write. Returns entry ids.
@@ -54,13 +56,17 @@ export const ledgerRoutes = new Hono<AppEnv>()
     c.json(await c.var.services.ledger.listEntries(toFilter(c.req.valid('query')))),
   )
 
-  .patch('/entries/:id', json(command), query(tied), async c => {
-    await c.var.services.ledger.edit(
+  .get('/entries/:id', async c => c.json(await c.var.services.ledger.entry(c.req.param('id'))))
+
+  .patch('/entries/:id', json(command), query(edited), async c => {
+    const q = c.req.valid('query');
+    const version = await c.var.services.ledger.edit(
       c.req.param('id'),
       c.req.valid('json'),
-      c.req.valid('query').paybacks,
+      q.paybacks,
+      q.base,
     );
-    return c.json({ ok: true });
+    return c.json({ ok: true, version });
   })
 
   .patch(

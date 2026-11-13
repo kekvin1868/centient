@@ -34,9 +34,12 @@ import { purgeRepo } from '../repos/purge';
 import { pushRepo } from '../repos/push';
 import { recurringRepo } from '../repos/recurring';
 import { reportsRepo } from '../repos/reports';
+import { ticketsRepo } from '../repos/tickets';
 import { workspacesRepo } from '../repos/workspaces';
 
 export function createRepos(db: D1Database, store?: FileStore) {
+  // A statement that must be written with this request's next save, or not at all (its ticket).
+  let riding: D1PreparedStatement | null = null;
   return {
     workspaces: workspacesRepo(db),
     accounts: accountsRepo(db),
@@ -54,8 +57,19 @@ export function createRepos(db: D1Database, store?: FileStore) {
     installments: installmentsRepo(db),
     files: filesRepo(db, store),
     reports: reportsRepo(db),
+    tickets: ticketsRepo(db),
     /** One atomic write across repos (D1 runs a batch as one transaction). */
-    batch: (stmts: D1PreparedStatement[]) => db.batch(stmts),
+    batch(stmts: D1PreparedStatement[]) {
+      const all = riding ? [...stmts, riding] : stmts;
+      riding = null;
+      return db.batch(all);
+    },
+    /** Adds a statement to the next `batch` of this request (middleware/ticket.ts). */
+    ride(stmt: D1PreparedStatement) {
+      riding = stmt;
+    },
+    /** True while the statement given to `ride` has not been written by a batch. */
+    waiting: () => riding !== null,
   };
 }
 export type Repos = ReturnType<typeof createRepos>;
@@ -113,6 +127,8 @@ export const init = (): MiddlewareHandler<AppEnv> => async (c, next) => {
     sender: vapid && createSender(vapid, send),
   });
   c.set('services', services);
+  c.set('ws', workspaceId);
+  c.set('repos', repos);
   // The app lock: while it is on, a browser without a live unlock session reaches only /api/lock. A service
   // token (the Shortcut) has no screen to unlock on and may only add to the Inbox anyway, so it passes.
   if (

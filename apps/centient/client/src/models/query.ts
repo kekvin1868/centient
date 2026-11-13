@@ -30,6 +30,9 @@ export const queryClient: QueryClient = new QueryClient({
     // Only this app changes the data and every save invalidates, so a minute of freshness saves refetches on
     // tab switches; reopening the app after that refreshes what's on screen.
     queries: { staleTime: 60_000, gcTime: DAY, retry: 2 },
+    // A save with no signal fails at once ("No connection") instead of waiting unseen for the network: the
+    // default pauses it, which looked like a hang. Entries don't come through here: they wait in models/outbox.
+    mutations: { networkMode: 'always' },
   },
   queryCache: new QueryCache({
     // A failed refresh of data already on screen: say so, the screen keeps the last data.

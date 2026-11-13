@@ -43,8 +43,13 @@ export function createQuickaddService({
     },
 
     /** Saves reviewed drafts; a merchant the user corrected is learned as an alias for next time. */
-    async save(items: { command: Command; rawMerchant?: string; suggestedMerchant?: string }[]) {
-      const ids = await ledger.record(items.map(i => i.command));
+    async save(
+      items: { id?: string; command: Command; rawMerchant?: string; suggestedMerchant?: string }[],
+    ) {
+      const ids = await ledger.record(
+        items.map(i => i.command),
+        items.map(i => i.id),
+      );
       for (const i of items) {
         const merchant = 'merchant' in i.command ? i.command.merchant?.trim() : undefined;
         if (

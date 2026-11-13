@@ -25,9 +25,17 @@ export type EntryView = {
   command: unknown | null;
   /** Emoji for the entry: its own, else the one remembered for its merchant; null = the category's. */
   icon: string | null;
+  /** Goes up by one with every edit; an edit names the version it was made against. */
+  version: number;
   transactions: TxView[];
 };
-export type NewEntry = { kind: EntryKind; command: unknown | null; txs: NewTransaction[] };
+/** `id`: made by the phone for an entry logged there (so a repeat is recognised); else made here. */
+export type NewEntry = {
+  id?: string;
+  kind: EntryKind;
+  command: unknown | null;
+  txs: NewTransaction[];
+};
 
 export type TxFilter = {
   from?: string;
@@ -44,7 +52,13 @@ export type TxFilter = {
   limit: number;
 };
 
-type GroupRow = { id: string; kind: EntryKind; command: string | null; icon: string | null };
+type GroupRow = {
+  id: string;
+  kind: EntryKind;
+  command: string | null;
+  icon: string | null;
+  version: number;
+};
 
 export function entriesRepo(db: D1Database) {
   function txStatements(ws: string, groupId: string, t: NewTransaction): D1PreparedStatement[] {
@@ -85,7 +99,7 @@ export function entriesRepo(db: D1Database) {
     const ids: string[] = [];
     const stmts: D1PreparedStatement[] = [];
     for (const g of entries) {
-      const gid = uid();
+      const gid = g.id ?? uid();
       ids.push(gid);
       stmts.push(
         db
@@ -165,6 +179,7 @@ export function entriesRepo(db: D1Database) {
           kind: g.kind,
           command: g.command === null ? null : JSON.parse(g.command),
           icon,
+          version: g.version,
           occurred_at: own[0].occurred_at,
           transactions: own,
         },
@@ -183,7 +198,7 @@ export function entriesRepo(db: D1Database) {
       ...txs.flatMap(t => txStatements(ws, entryId, t)),
       db
         .prepare(
-          "UPDATE entry_groups SET command = ?, updated_at = datetime('now') WHERE id = ? AND workspace_id = ?",
+          "UPDATE entry_groups SET command = ?, version = version + 1, updated_at = datetime('now') WHERE id = ? AND workspace_id = ?",
         )
         .bind(JSON.stringify(command), entryId, ws),
     ];
@@ -254,7 +269,7 @@ export function entriesRepo(db: D1Database) {
     async billsOf(ws: string, tabId: string) {
       const groups = await all<GroupRow>(
         db,
-        `SELECT DISTINCT g.id, g.kind, g.command, g.icon
+        `SELECT DISTINCT g.id, g.kind, g.command, g.icon, g.version
         FROM entry_groups g JOIN transactions t ON t.group_id = g.id JOIN entries e ON e.transaction_id = t.id
         WHERE g.workspace_id = ? AND g.deleted_at IS NULL AND t.deleted_at IS NULL AND e.account_id = ?
           AND json_extract(g.command, '$.type') = 'EXPENSE' AND json_extract(g.command, '$.split') IS NOT NULL`,
@@ -264,10 +279,21 @@ export function entriesRepo(db: D1Database) {
       return withTransactions(ws, groups);
     },
 
+    /** Which of these ids already name an entry, in any workspace and deleted or not (ids are never reused). */
+    async taken(ids: string[]) {
+      if (!ids.length) return new Set<string>();
+      const rows = await all<{ id: string }>(
+        db,
+        'SELECT id FROM entry_groups WHERE id IN (SELECT value FROM json_each(?))',
+        JSON.stringify(ids),
+      );
+      return new Set(rows.map(r => r.id));
+    },
+
     async get(ws: string, id: string) {
       const row = await db
         .prepare(
-          'SELECT id, kind, command, icon FROM entry_groups WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL',
+          'SELECT id, kind, command, icon, version FROM entry_groups WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL',
         )
         .bind(id, ws)
         .first<GroupRow>();
@@ -288,7 +314,7 @@ export function entriesRepo(db: D1Database) {
       const rows = (
         await db
           .prepare(
-            `SELECT g.id, g.kind, g.command, g.icon
+            `SELECT g.id, g.kind, g.command, g.icon, g.version
         FROM entry_groups g JOIN transactions t ON t.group_id = g.id
         WHERE ${where.join(' AND ')} GROUP BY g.id ${having}
         ORDER BY MIN(t.occurred_at) DESC, g.id DESC LIMIT ?`,
@@ -327,7 +353,7 @@ export function entriesRepo(db: D1Database) {
         ), running AS (
           SELECT id, at, amount, SUM(amount) OVER (ORDER BY at, id ROWS UNBOUNDED PRECEDING) AS balance_after FROM lines
         )
-        SELECT r.id, r.at, r.amount, r.balance_after, g.kind, g.command, g.icon
+        SELECT r.id, r.at, r.amount, r.balance_after, g.kind, g.command, g.icon, g.version
         FROM running r JOIN entry_groups g ON g.id = r.id
         WHERE ? IS NULL OR (r.at, r.id) < (?, ?)
         ORDER BY r.at DESC, r.id DESC LIMIT ?`,

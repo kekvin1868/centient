@@ -465,6 +465,84 @@ body::after {
   z-index: 1;
 }
 
+/* ---- Waiting entries (models/outbox) --------------------------------------------------------------- */
+/* An entry the server does not have yet: dashes crawl around its row, clockwise. Four gradients draw the four
+   sides (a CSS dashed border cannot move). For the first second nothing shows, so a save that goes straight
+   through never flickers; a row already tried once (`data-held`) shows at once. Sending crawls twice as fast;
+   sent closes into a solid line and fades; refused or changed elsewhere is pink and still.
+   Reduced motion (the rule near the top turns animation off): the dashes show, without the crawl. */
+.entry-row[data-waiting] {
+  position: relative;
+}
+.entry-row[data-waiting]::after {
+  --dash: var(--ink);
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, var(--dash) 50%, transparent 0) 0 0 / 12px 2px repeat-x,
+    linear-gradient(90deg, var(--dash) 50%, transparent 0) 0 100% / 12px 2px repeat-x,
+    linear-gradient(0deg, var(--dash) 50%, transparent 0) 0 0 / 2px 12px repeat-y,
+    linear-gradient(0deg, var(--dash) 50%, transparent 0) 100% 0 / 2px 12px repeat-y;
+  animation:
+    ants 0.6s linear infinite,
+    wait-show 0.2s 1s backwards;
+}
+.entry-row[data-waiting][data-held]::after {
+  animation: ants 0.6s linear infinite;
+}
+.entry-row[data-waiting='sending']::after {
+  animation-duration: 0.3s, 0.2s;
+}
+/* Went through without ever showing: nothing to close. */
+.entry-row[data-waiting='sent']::after {
+  display: none;
+}
+.entry-row[data-waiting='sent'][data-held]::after {
+  display: block;
+  background: none;
+  box-shadow: inset 0 0 0 2px var(--dash);
+  animation: wait-done 0.6s 0.2s forwards;
+}
+.entry-row[data-waiting='refused']::after,
+.entry-row[data-waiting='clash']::after {
+  --dash: var(--negative);
+  animation: none;
+}
+.wait-word {
+  color: var(--muted);
+  animation: wait-show 0.2s 1s backwards;
+}
+.entry-row[data-held] .wait-word {
+  animation: none;
+}
+.entry-row[data-waiting='refused'] .wait-word,
+.entry-row[data-waiting='clash'] .wait-word {
+  color: var(--negative);
+  animation: none;
+}
+@keyframes ants {
+  to {
+    background-position:
+      12px 0,
+      -12px 100%,
+      0 -12px,
+      100% 12px;
+  }
+}
+@keyframes wait-show {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes wait-done {
+  to {
+    opacity: 0;
+  }
+}
+
 /* ---- Pocket deck ---------------------------------------------------------------------------------- */
 /* The front pocket floats a little; cards behind hold still. */
 @keyframes float {

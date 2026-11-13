@@ -3,22 +3,13 @@
 import type { ServiceDeps } from '../../context';
 import type { Snapshot } from '../../lib/catalog';
 import type { Command } from '../../lib/schemas';
-import { toOccurredAt } from '../../domain/cycle';
-import {
-  allocate,
-  assertBalanced,
-  DomainError,
-  expense,
-  income,
-  splitShares,
-  transfer,
-  type NewTransaction,
-} from '../../domain/ledger';
+import { assertBalanced, DomainError } from '../../domain/ledger';
 import { cutsFor, peopleOf, tabsOnBill, type Link } from '../../domain/bills';
+import { build, checkParties } from '../../lib/entryBuild';
 import { commandOf } from '../../lib/entryCommand';
 import { advance, paidBy } from '../recurring/advance';
 import { findOrCreateTab } from './tabs';
-import type { NewEntry, TxFilter } from '../../repos/entries';
+import type { EntryView, NewEntry, TxFilter } from '../../repos/entries';
 
 export type LedgerService = ReturnType<typeof createLedgerService>;
 /** What happens to Paid backs a deleted or shrunk bill no longer has room for (see `settle`). */
@@ -177,8 +168,10 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
    * its own (the Inbox marks its items in the same write). An expense that pays a recurring bill also moves
    * that bill to its next due date.
    */
-  async function recordStatements(cmds: Command[]) {
-    const { ids, stmts } = repos.entries.insertStatements(ws, await prepare(cmds));
+  async function recordStatements(cmds: Command[], entryIds?: (string | undefined)[]) {
+    const entries = await prepare(cmds);
+    entries.forEach((e, i) => (e.id = entryIds?.[i]));
+    const { ids, stmts } = repos.entries.insertStatements(ws, entries);
     const at = new Date(now()).toISOString();
     const paid = cmds.some(c => c.type === 'EXPENSE')
       ? paidBy(await repos.recurring.list(ws), cmds)
@@ -186,21 +179,57 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
     return { ids, stmts: [...stmts, ...paid.map(r => advance(repos, ws, r, at))] };
   }
 
+  /** Entries as the lists show them: the command read back, and a split bill's people. */
+  async function views(entries: EntryView[]) {
+    const items = entries.map(e => ({ ...e, command: commandOf(e) }));
+    const bills = items.filter(e => e.command?.type === 'EXPENSE' && e.command.split);
+    const [c, links] = await Promise.all([catalog.load(), linksTo(bills.map(b => b.id))]);
+    return items.map(e => ({
+      ...e,
+      people: bills.includes(e) ? peopleOf(e.id, e.transactions, isTabOf(c), links) : null,
+    }));
+  }
+
   return {
     prepare,
     recordStatements,
 
-    /** Saves each command as one entry, in one write; returns the entry ids. */
-    async record(cmds: Command[]): Promise<string[]> {
-      const { ids, stmts } = await recordStatements(cmds);
+    /**
+     * Saves each command as one entry, in one write; returns the entry ids. `entryIds` (same order) are ids the
+     * phone made: one that already names an entry, deleted or not, was saved by an earlier try whose answer got
+     * lost, so it is skipped and reported as saved. That makes a repeat harmless.
+     */
+    async record(cmds: Command[], entryIds?: (string | undefined)[]): Promise<string[]> {
+      const given = (entryIds ?? []).filter((x): x is string => Boolean(x));
+      const taken = await repos.entries.taken(given);
+      const fresh = cmds.flatMap((cmd, i) => {
+        const id = entryIds?.[i];
+        return id && taken.has(id) ? [] : [{ cmd, id }];
+      });
+      if (!fresh.length) return given;
+      const { ids, stmts } = await recordStatements(
+        fresh.map(f => f.cmd),
+        fresh.map(f => f.id),
+      );
       await repos.batch(stmts);
-      return ids;
+      const made = [...ids];
+      return cmds.map((_, i) => {
+        const id = entryIds?.[i];
+        return id && taken.has(id) ? id : made.shift()!;
+      });
     },
 
-    /** Rebuilds an entry from an edited command. Its type is fixed; a same-day edit keeps the original time. */
-    async edit(id: string, cmd: Command, mode?: PaybackMode): Promise<void> {
+    /**
+     * Rebuilds an entry from an edited command. Its type is fixed; a same-day edit keeps the original time.
+     * `base` = the version the edit was made against (an edit kept on a phone while it had no signal): when the
+     * entry has moved on since, the edit is refused (ENTRY_CHANGED) so the owner can choose. Returns the new version.
+     * ponytail: checked before the write, not inside it; two edits landing in the same instant both pass.
+     */
+    async edit(id: string, cmd: Command, mode?: PaybackMode, base?: number): Promise<number> {
       const entry = await repos.entries.get(ws, id);
       if (!entry) throw new DomainError('NOT_FOUND', 'Entry not found');
+      if (base !== undefined && base !== entry.version)
+        throw new DomainError('ENTRY_CHANGED', 'This entry was changed somewhere else');
       if (entry.kind !== 'USER')
         throw new DomainError('NOT_EDITABLE', 'Use Update balance to change this');
       if (commandOf(entry)?.type !== cmd.type)
@@ -220,6 +249,7 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
       const tied =
         ready.type === 'EXPENSE' ? await settle(c, id, tabsOnBill(txs, isTabOf(c)), mode) : [];
       await repos.batch([...repos.entries.replaceStatements(ws, id, ready, txs), ...tied]);
+      return entry.version + 1;
     },
 
     /** Deletes an entry; a bill with Paid backs tied to it needs a mode (see `settle`). */
@@ -232,16 +262,14 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
     /** Entries, newest first; each split bill carries its people (share, paid, Paid backs). */
     async listEntries(f: TxFilter) {
       const page = await repos.entries.listEntries(ws, f);
-      const items = page.items.map(e => ({ ...e, command: commandOf(e) }));
-      const bills = items.filter(e => e.command?.type === 'EXPENSE' && e.command.split);
-      const [c, links] = await Promise.all([catalog.load(), linksTo(bills.map(b => b.id))]);
-      return {
-        ...page,
-        items: items.map(e => ({
-          ...e,
-          people: bills.includes(e) ? peopleOf(e.id, e.transactions, isTabOf(c), links) : null,
-        })),
-      };
+      return { ...page, items: await views(page.items) };
+    },
+
+    /** One entry as the list sends it (what an edit kept on a phone is compared with when it clashes). */
+    async entry(id: string) {
+      const entry = await repos.entries.get(ws, id);
+      if (!entry) throw new DomainError('NOT_FOUND', 'Entry not found');
+      return (await views([entry]))[0];
     },
 
     /** A person's split bills, oldest first, with their share and what they paid (`except`: a Paid back being edited). */
@@ -314,197 +342,3 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
     },
   };
 }
-
-/** The rules of a named split that need no tabs, checked before withIou makes any. */
-function checkParties(
-  amount: number,
-  split: NonNullable<Extract<Command, { type: 'EXPENSE' }>['split']>,
-) {
-  const ps = split.parties ?? [];
-  if (ps.length + 1 !== split.people)
-    throw new DomainError('INVALID_SPLIT', 'Split people and shares do not match');
-  if (amount - ps.reduce((s, p) => s + p.share, 0) <= 0)
-    throw new DomainError('INVALID_SHARE', 'Your share must be more than zero');
-  for (const p of ps) {
-    if (p.paid && p.paid.amount > p.share)
-      throw new DomainError('INVALID_PAYMENT', 'Nobody can hand over more than their share');
-    if (p.paid && p.covered)
-      throw new DomainError('INVALID_SPLIT', 'A person is covered or pays later, not both');
-    if (p.paid && !p.iouAccountId && !p.name)
-      throw new DomainError('PAID_NEEDS_NAME', 'Name the person who paid');
-  }
-  const keys = ps.flatMap(p =>
-    p.iouAccountId ? [p.iouAccountId] : p.name ? [`name:${p.name.trim().toLowerCase()}`] : [],
-  );
-  if (new Set(keys).size !== keys.length)
-    throw new DomainError('DUPLICATE_PARTY', 'Each person once');
-}
-
-function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] {
-  const occurredAt = toOccurredAt(cmd.date, now);
-  switch (cmd.type) {
-    case 'EXPENSE': {
-      const account = c.account(cmd.accountId);
-      const envelope = c.pocketOf(account.row, cmd.envelopeId);
-      const categoryId = c.category(cmd.categoryId, 'EXPENSE').id;
-      const base = {
-        occurredAt,
-        account,
-        envelope,
-        categoryId,
-        merchant: cmd.merchant,
-        note: cmd.note,
-        originalAmount: cmd.originalAmount,
-        originalCurrency: cmd.originalCurrency,
-      };
-      if (cmd.pot) {
-        if (cmd.split) throw new DomainError('INVALID_SPLIT', 'A pot is not a split bill');
-        if (cmd.amount > cmd.pot.total)
-          throw new DomainError('INVALID_SHARE', 'Your share cannot be more than the pot');
-        const who = cmd.pot.manager ? `, run by ${cmd.pot.manager}` : '';
-        const note = `Pot of ${cmd.pot.people} people${who}${cmd.note ? ` · ${cmd.note}` : ''}`;
-        return [expense({ ...base, amount: cmd.amount, note })];
-      }
-      if (!cmd.split) return [expense({ ...base, amount: cmd.amount })];
-      // Split bill: my share is spending; the rest is money the others owe me.
-      const ps = cmd.split.parties;
-      const owed = (iouId: string, amount: number, note: string) => {
-        const iou = c.account(iouId);
-        if (iou.row.kind !== 'IOU')
-          throw new DomainError('NOT_IOU', 'Split must go to an IOU account');
-        return transfer({
-          occurredAt,
-          from: account,
-          to: iou,
-          amount,
-          merchant: cmd.merchant,
-          note,
-          fromEnvelope: envelope,
-          toEnvelope: c.defaultEnvelope(iou.row),
-        });
-      };
-      // A person handing money over now: out of their tab, into one of my accounts.
-      const paidBack = (
-        iouId: string,
-        paid: { amount: number; accountId: string },
-        note: string,
-      ) => {
-        const to = c.account(paid.accountId);
-        if (to.row.kind === 'IOU')
-          throw new DomainError('INVALID_PAYMENT', 'Pick one of your own accounts');
-        return transfer({
-          occurredAt,
-          from: c.account(iouId),
-          to,
-          amount: paid.amount,
-          merchant: cmd.merchant,
-          note,
-          fromEnvelope: c.defaultEnvelope(c.account(iouId).row),
-          toEnvelope: c.defaultEnvelope(to.row),
-        });
-      };
-      const tail = cmd.note ? ` · ${cmd.note}` : '';
-      if (!ps) {
-        const { mine, others } = splitShares(cmd.amount, cmd.split.people);
-        const note = `Split ${cmd.split.people} ways${tail}`;
-        return [
-          expense({ ...base, amount: mine, note }),
-          owed(cmd.split.iouAccountId!, others, note),
-        ];
-      }
-      const mine = cmd.amount - ps.reduce((s, p) => s + p.share, 0);
-      const named = ps.filter(p => p.iouAccountId);
-      const lump = ps.filter(p => !p.iouAccountId).reduce((s, p) => s + p.share, 0);
-      const names = named.map(p => c.account(p.iouAccountId!).row.name);
-      const unnamed = ps.length - named.length;
-      const note = `Split with ${[...names, ...(unnamed ? [`${unnamed} more`] : [])].join(', ')}${tail}`;
-      return [
-        expense({ ...base, amount: mine, note }),
-        ...named.flatMap(p => [
-          ...(p.share > 0 ? [owed(p.iouAccountId!, p.share, note)] : []),
-          ...(p.paid ? [paidBack(p.iouAccountId!, p.paid, note)] : []),
-        ]),
-        ...(lump > 0 ? [owed(cmd.split.iouAccountId!, lump, note)] : []),
-      ];
-    }
-    case 'INCOME': {
-      const account = c.account(cmd.accountId);
-      const envelope = c.pocketOf(account.row, cmd.envelopeId);
-      return [
-        income({
-          occurredAt,
-          account,
-          envelope,
-          categoryId: c.category(cmd.categoryId, 'INCOME').id,
-          amount: cmd.amount,
-          merchant: cmd.merchant,
-          note: cmd.note,
-        }),
-      ];
-    }
-    case 'TRANSFER': {
-      const from = c.account(cmd.fromAccountId);
-      const to = c.account(cmd.toAccountId);
-      const fromEnvelope = c.pocketOf(from.row, cmd.fromEnvelopeId);
-      const txs = [
-        transfer({
-          occurredAt,
-          from,
-          to,
-          amount: cmd.amount,
-          toAmount: cmd.toAmount,
-          note: cmd.note,
-          fromEnvelope,
-          toEnvelope: c.pocketOf(to.row, cmd.toEnvelopeId),
-        }),
-      ];
-      // A payback's extra kept as a gift: income on the tab, in the same entry, so deleting the payback deletes it.
-      if (cmd.gift) {
-        const other = c.categoryByName('Other income');
-        if (from.row.kind !== 'IOU' || cmd.gift > cmd.amount)
-          throw new DomainError('INVALID_GIFT', 'A gift is part of what a person paid back');
-        if (!other)
-          throw new DomainError('NO_INCOME_CATEGORY', 'Create an "Other income" category first');
-        txs.push(
-          income({
-            occurredAt,
-            account: from,
-            envelope: fromEnvelope,
-            categoryId: other.id,
-            amount: cmd.gift,
-            note: `Gift from ${from.row.name}`,
-          }),
-        );
-      }
-      // The admin fee is its own expense, so it shows up in spending.
-      if (cmd.fee) {
-        const fees = c.categoryByName('Fees');
-        if (!fees)
-          throw new DomainError('NO_FEES_CATEGORY', 'Create a "Fees" expense category first');
-        txs.push(
-          expense({
-            occurredAt,
-            account: from,
-            envelope: fromEnvelope,
-            categoryId: fees.id,
-            amount: cmd.fee,
-            note: 'Transfer fee',
-          }),
-        );
-      }
-      return txs;
-    }
-    case 'ALLOCATE':
-      return [
-        allocate({
-          occurredAt,
-          from: c.envelope(cmd.fromEnvelopeId),
-          to: c.envelope(cmd.toEnvelopeId),
-          amount: cmd.amount,
-          note: cmd.note,
-        }),
-      ];
-  }
-}
-
-/** The saved command, or one read back from a single transaction saved before entries existed. */

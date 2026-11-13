@@ -1,12 +1,12 @@
 // Pick the account Home shows from a dealt hand; the joker is "all accounts".
 import { useQuery } from '@tanstack/react-query';
 import { everyday, selectedAccount } from '../../lib/state';
-import { accountQueries } from '../../models/account';
+import { useBalances } from '../../models/useWaiting';
 import { Sheet } from '../../ui/Sheet';
 import { AccountHand } from './AccountHand';
 
 export function AccountPicker({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { data } = useQuery({ ...accountQueries.balances(), enabled: open });
+  const { data } = useBalances(open);
   const bal = Object.fromEntries((data?.accounts ?? []).map(a => [a.id, a.balance]));
   const pick = (id: string | null) => {
     selectedAccount.value = id;

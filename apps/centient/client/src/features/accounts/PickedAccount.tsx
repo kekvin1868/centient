@@ -10,7 +10,7 @@ import { idrValue, priceAge } from '../../lib/prices';
 import { usePrices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 import { UpdateBalanceSheet } from './UpdateBalanceSheet';
-import { me } from '../../lib/state';
+import { isStandIn, me } from '../../lib/state';
 import { accountApi } from '../../models/account';
 import type { PayMode } from '../../models/payback';
 import { persist } from '../../models/query';
@@ -79,25 +79,31 @@ export function PickedAccount({
               </div>
             )}
             {a.currency_code !== 'IDR' && <CryptoValue account={a} />}
-            <div className="mt-4 flex gap-3">
-              {iou ? (
-                <Button
-                  large
-                  rounded
-                  className="flex-1"
-                  onClick={() => onPay(a, iouBelow ? 'RETURN' : 'PAID')}
-                >
-                  {iouBelow ? 'Returned' : 'Paid back'}
+            {isStandIn(a.id) ? (
+              <p className="mt-4 text-[15px] text-muted" role="status">
+                Waiting to send. {a.name} gets a tab, and Paid back, once the bill is sent.
+              </p>
+            ) : (
+              <div className="mt-4 flex gap-3">
+                {iou ? (
+                  <Button
+                    large
+                    rounded
+                    className="flex-1"
+                    onClick={() => onPay(a, iouBelow ? 'RETURN' : 'PAID')}
+                  >
+                    {iouBelow ? 'Returned' : 'Paid back'}
+                  </Button>
+                ) : (
+                  <Button large rounded className="flex-1" onClick={() => setUpdating(a)}>
+                    Update balance
+                  </Button>
+                )}
+                <Button large rounded tonal className="flex-1" onClick={() => onShow(a)}>
+                  Activity
                 </Button>
-              ) : (
-                <Button large rounded className="flex-1" onClick={() => setUpdating(a)}>
-                  Update balance
-                </Button>
-              )}
-              <Button large rounded tonal className="flex-1" onClick={() => onShow(a)}>
-                Activity
-              </Button>
-            </div>
+              </div>
+            )}
             {iouBelow && (
               <div className="mt-3 flex items-center gap-3">
                 <span className="min-w-0 flex-1 text-[14px] text-muted">

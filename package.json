@@ -10,6 +10,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p apps/centient && tsc --noEmit -p apps/centient/client",
     "dev": "npm run dev -w apps/centient",
+    "phone": "npm run phone -w apps/centient",
     "e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

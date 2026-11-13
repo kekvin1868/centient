@@ -3,7 +3,7 @@ import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
 import { everyday } from '../../lib/state';
 import { entryApi } from '../../models/entry';
-import { persist } from '../../models/query';
+import { attempt } from '../../lib/run';
 import type { Account } from '../../models/workspace';
 import { AmountField } from '../../ui/AmountField';
 import { PickerRow } from '../../ui/Fields';
@@ -32,8 +32,8 @@ export function PayCardSheet({
   const error = !from ? 'Pick the account that paid' : !amount ? 'Enter the amount' : null;
   const save = async () => {
     if (!from || !amount) return;
-    const paid = await persist(() =>
-      entryApi.record({
+    const paid = await attempt(() =>
+      entryApi.log({
         type: 'TRANSFER',
         fromAccountId: from,
         toAccountId: card.id,

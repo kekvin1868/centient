@@ -40,9 +40,10 @@ npm run build -w apps/centient   # production build into apps/centient/dist/
 
 ## Test on a phone
 
-- Same Wi-Fi: run `npm run dev`, then open `http://<your Mac's address from ipconfig getifaddr en0>:8787`. Use Share > Add to Home Screen to install it.
+- Same Wi-Fi: run `npm run dev`, then open `http://<your Mac's address from ipconfig getifaddr en0>:8787`. Use Share > Add to Home Screen to install it. Good for looks and flows only: a plain `http://` address has no service worker, so **the app cannot open with no signal there**, and push, passkeys and the camera are off too.
+- Everything a phone can do (opening offline, the offline queue after closing the app, push, the app lock): `npm run phone` serves the **production build** on port 8787 (same local data as `npm run dev`); put it behind https with the ngrok line below. Use ngrok's free static domain (`--url <name>.ngrok-free.app`): a new address each time is a new Home Screen app with nothing saved.
 - From anywhere, with ngrok:
   create `apps/centient/ngrok.policy.yml` (Google sign-in, your email only), run
   `ngrok http 8787 --traffic-policy-file ngrok.policy.yml`, set `DEV_HOSTS=<your ngrok host>` in
-  `apps/centient/.dev.vars`, then `npm run dev`. Never run the tunnel without the policy file.
+  `apps/centient/.dev.vars`, then `npm run dev` (or `npm run phone`). Never run the tunnel without the policy file.
   ngrok's domains are already in `server.allowedHosts` (`apps/centient/vite.config.ts`); a custom domain needs adding there.

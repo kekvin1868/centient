@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { downloadBackup } from '../../lib/backup';
 import { rememberLock } from '../../lib/lockState';
 import { attempt } from '../../lib/run';
+import { outbox } from '../../models/outbox';
 import { persister, queryClient } from '../../models/query';
 import { workspaceApi } from '../../models/workspace';
 import { InputRow, ToggleRow } from '../../ui/Fields';
@@ -27,6 +28,7 @@ export function DeleteAccountSheet({ open, onClose }: { open: boolean; onClose: 
     if (!ok) return;
     // Nothing of it stays on this device either: saved data, and the lock that went with the account.
     queryClient.clear();
+    outbox.clear();
     await persister.removeClient();
     rememberLock(false);
     location.assign('/');
