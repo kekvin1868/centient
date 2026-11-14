@@ -68,8 +68,6 @@ export function createRepos(db: D1Database, store?: FileStore) {
     ride(stmt: D1PreparedStatement) {
       riding = stmt;
     },
-    /** True while the statement given to `ride` has not been written by a batch. */
-    waiting: () => riding !== null,
   };
 }
 export type Repos = ReturnType<typeof createRepos>;
