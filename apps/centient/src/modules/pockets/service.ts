@@ -106,6 +106,25 @@ export function createPocketsService({ ws, now, repos, catalog }: ServiceDeps) {
       };
     },
 
+    /**
+     * Deletes a hidden pocket for good: what was in it moves to the account's Main pocket (repos.envelopes.remove).
+     * Only from hidden (Settings > Hidden), so it is a second, deliberate step; Main never goes.
+     */
+    async remove(id: string) {
+      const c = await catalog.load();
+      const e = c.envelopes.find(x => x.id === id);
+      if (!e) throw new DomainError('NOT_FOUND', 'Pocket not found');
+      const account = c.accounts.find(a => a.id === e.account_id);
+      if (!account?.default_envelope_id || account.default_envelope_id === id)
+        throw new DomainError('MAIN_POCKET', "Main is where the account's money lives; it stays");
+      if (!e.archived_at)
+        throw new DomainError('POCKET_NOT_HIDDEN', 'Hide the pocket first, then delete it');
+      // SQLite's datetime('now') format: the entries this deletes are matched by it.
+      const at = new Date(now()).toISOString().replace('T', ' ').slice(0, 19);
+      await repos.envelopes.remove(ws, id, account.default_envelope_id, at);
+      catalog.invalidate();
+    },
+
     /** PATCH: a pocket hides only when empty (its money would vanish from view), and Main never. */
     async update(id: string, p: Omit<Patch, 'kind'> & { kind?: 'SPENDING' | 'SAVINGS' }) {
       const { archived, ...rest }: Record<string, unknown> = p;

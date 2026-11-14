@@ -40,4 +40,10 @@ export const pocketsRoutes = new Hono<AppEnv>()
       await c.var.services.pockets.update(c.req.param('id'), c.req.valid('json'));
       return c.json({ ok: true });
     },
-  );
+  )
+
+  // Deletes a hidden pocket; what was in it moves to the account's Main pocket.
+  .delete('/:id', async c => {
+    await c.var.services.pockets.remove(c.req.param('id'));
+    return c.json({ ok: true });
+  });

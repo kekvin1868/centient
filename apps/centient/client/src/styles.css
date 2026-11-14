@@ -453,20 +453,29 @@ body::after {
   width: 100%;
   text-align: start;
 }
-/* Swipeable entry rows: Konsta's hairline between rows, lined up with the text like its own. The row holds its
-   own lines (without it every hairline lands on the list's top edge). */
-.entry-row {
+/* Swipeable rows hold their own hairline (Konsta draws its own on its rows, and the row's slide would hide it).
+   Entry rows (EntryList): a line between rows, lined up with the text after the icon; without it every hairline
+   lands on the list's top edge. A hidden pocket's row (HiddenItems): a line under it, like Konsta's own rows. */
+.entry-row,
+.swipe-row {
   position: relative;
 }
-.entry-row + .entry-row::before {
+.entry-row + .entry-row::before,
+.swipe-row::after {
   content: '';
   position: absolute;
-  top: 0;
   right: 0;
-  left: 68px;
   height: 1px;
   background: var(--edge);
   z-index: 1;
+}
+.entry-row + .entry-row::before {
+  top: 0;
+  left: 68px;
+}
+.swipe-row::after {
+  bottom: 0;
+  left: 16px;
 }
 
 /* ---- Waiting entries (models/outbox) --------------------------------------------------------------- */
