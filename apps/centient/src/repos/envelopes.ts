@@ -63,15 +63,15 @@ export function envelopesRepo(db: D1Database) {
 
     /**
      * Deletes a pocket into its account's Main pocket `main`, in one batch:
-     * - each line in it moves to Main; where an entry already has a Main line (a move between them) the two merge,
-     *   and a move that nets to nothing is deleted with its entry
+     * - each line in it moves to Main; a move between the two (it would be Main to Main) is deleted with its entry
      * - saved commands, bills on a date and inbox payments that name it name Main instead
      * - its budgets and category links go; the row is flagged and renamed (its name is free again)
      * `at`: the time written as deleted_at (SQLite's datetime format, so it matches the entries it deletes).
      */
     async remove(ws: string, id: string, main: string, at: string) {
-      const both = 'SELECT transaction_id FROM allocations WHERE envelope_id = ?';
-      // Entries whose pocket line and Main line cancel out: a move between the two (an allocation row is never 0).
+      // A move between the pocket and Main: its two lines cancel out (an allocation row is never 0).
+      // ponytail: no builder puts two lines of one account in a transaction any other way (SAME_ACCOUNT, allocate
+      // always cancels); one that did would fail this batch on the allocations primary key, writing nothing.
       const evens = `SELECT x.transaction_id FROM allocations x JOIN allocations m ON m.transaction_id = x.transaction_id
         WHERE x.envelope_id = ? AND m.envelope_id = ? AND x.amount + m.amount = 0`;
       const nameTo = (key: string) =>
@@ -103,16 +103,6 @@ export function envelopesRepo(db: D1Database) {
             `DELETE FROM allocations WHERE envelope_id IN (?, ?) AND transaction_id IN (${evens})`,
           )
           .bind(id, main, id, main),
-        // Any other entry with lines in both: Main's line takes the pocket's amount, the pocket's goes.
-        db
-          .prepare(
-            `UPDATE allocations SET amount = amount + (SELECT x.amount FROM allocations x WHERE x.transaction_id = allocations.transaction_id AND x.envelope_id = ?)
-            WHERE envelope_id = ? AND transaction_id IN (${both})`,
-          )
-          .bind(id, main, id),
-        db
-          .prepare(`DELETE FROM allocations WHERE envelope_id = ? AND transaction_id IN (${both})`)
-          .bind(id, main),
         // Everything else simply moves.
         db.prepare('UPDATE allocations SET envelope_id = ? WHERE envelope_id = ?').bind(main, id),
         nameTo('envelopeId'),
