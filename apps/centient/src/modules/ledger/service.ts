@@ -230,7 +230,7 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
      */
     async record(cmds: Command[], entryIds?: (string | undefined)[]): Promise<string[]> {
       const given = (entryIds ?? []).filter((x): x is string => Boolean(x));
-      const taken = await repos.entries.taken(given);
+      const taken = await repos.entries.taken(ws, given);
       const fresh = cmds.flatMap((cmd, i) => {
         const id = entryIds?.[i];
         return id && taken.has(id) ? [] : [{ cmd, id }];

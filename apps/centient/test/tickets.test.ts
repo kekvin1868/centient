@@ -149,6 +149,16 @@ describe('entry ids made by the phone', () => {
     expect(await spent()).toBe(3);
   });
 
+  it('refuses an id another workspace already has, instead of calling it saved', async () => {
+    await save();
+    env.DEV_EMAIL = 'someone-else@test';
+    const { body: catalog } = await call('GET', '/api/catalog');
+    food = catalog.categories.find((c: any) => c.name === 'Food & Drink').id;
+    bca = (await call('POST', '/api/accounts', { name: 'BCA', kind: 'BANK' })).body.id;
+    expect((await save()).status).toBe(409);
+    expect(await spent()).toBe(0);
+  });
+
   it('refuses an id that is not a UUID', async () => {
     expect(
       (await call('POST', '/api/quickadd/save', { items: [{ id: 'x', command: kopi() }] })).status,

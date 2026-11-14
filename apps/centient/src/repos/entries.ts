@@ -279,12 +279,16 @@ export function entriesRepo(db: D1Database) {
       return withTransactions(ws, groups);
     },
 
-    /** Which of these ids already name an entry, in any workspace and deleted or not (ids are never reused). */
-    async taken(ids: string[]) {
+    /**
+     * Which of these ids already name an entry in this workspace, deleted or not (ids are never reused). An id
+     * taken in another workspace is not "already saved": its insert fails on the primary key instead (409).
+     */
+    async taken(ws: string, ids: string[]) {
       if (!ids.length) return new Set<string>();
       const rows = await all<{ id: string }>(
         db,
-        'SELECT id FROM entry_groups WHERE id IN (SELECT value FROM json_each(?))',
+        'SELECT id FROM entry_groups WHERE workspace_id = ? AND id IN (SELECT value FROM json_each(?))',
+        ws,
         JSON.stringify(ids),
       );
       return new Set(rows.map(r => r.id));
