@@ -6,7 +6,8 @@
     "dev": "wrangler d1 migrations apply DB --local && vite dev",
     "build": "vite build",
     "phone": "wrangler d1 migrations apply DB --local && vite build && vite preview --host --port 8787",
-    "deploy": "wrangler d1 migrations apply DB --remote && vite build && wrangler deploy"
+    "predeploy": "cd ../.. && npm run typecheck && npm test",
+    "deploy": "vite build && wrangler d1 migrations apply DB --remote && wrangler deploy"
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "2.0.0",
