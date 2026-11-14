@@ -89,7 +89,7 @@ _Avoid_: Net amount, real amount
 ### Offline
 
 **Waiting**:
-An entry you logged, changed or deleted that the server has not confirmed yet. It shows at once, with a crawling dashed border while it is held up, and counts in your balances.
+An entry you logged, changed or deleted that the server has not confirmed yet. It shows at once, in a thin dashed box with a pixel warning sign while it is held up, and counts in your balances. When it goes through, the box blinks out and a green check flashes.
 _Avoid_: Pending, queued, syncing
 
 **Outbox**:
