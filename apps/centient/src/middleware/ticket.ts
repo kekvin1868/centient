@@ -12,7 +12,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import type { AppEnv } from '../context';
 import type { Ticket } from '../repos/tickets';
 
-/** How long a ticket is remembered; the daily job (src/index.ts) forgets older ones. */
+/** How long a ticket is remembered; the daily job (src/cron.ts) forgets older ones. */
 export const TICKET_DAYS = 30;
 const MAX_ANSWER = 8000; // a longer answer is not kept; the repeat gets a plain "saved"
 
