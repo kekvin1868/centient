@@ -5,6 +5,7 @@ import type { AppEnv } from './context';
 import { auth } from './middleware/auth';
 import { onError } from './middleware/errors';
 import { init } from './middleware/init';
+import { ticket } from './middleware/ticket';
 import { accountsRoutes } from './modules/accounts/routes';
 import { budgetsRoutes } from './modules/budgets/routes';
 import { categoriesRoutes } from './modules/categories/routes';
@@ -22,7 +23,7 @@ import { workspaceRoutes } from './modules/workspace/routes';
 export const app = new Hono<AppEnv>();
 
 app.onError(onError);
-app.use('/api/*', auth(), init());
+app.use('/api/*', auth(), init(), ticket());
 
 const routes = app
   .route('/api', workspaceRoutes)

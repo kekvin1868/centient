@@ -21,11 +21,11 @@ import { idrValue } from '../lib/prices';
 import { usePrices } from '../models/price';
 import { stickersOf } from '../lib/nameSticker';
 import { catalog, moneyPick, selectedAccount } from '../lib/state';
-import { accountQueries } from '../models/account';
+import { useBalances } from '../models/useWaiting';
 import type { PayMode } from '../models/payback';
 
 export function Money({ onShowAccount }: { onShowAccount: () => void }) {
-  const { data: bal } = useQuery(accountQueries.balances());
+  const { data: bal } = useBalances();
   const [picked, setPicked] = useState<string | null>(moneyPick.peek() ?? selectedAccount.value);
   useEffect(() => {
     moneyPick.value = null;

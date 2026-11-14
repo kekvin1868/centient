@@ -1,27 +1,12 @@
 // The log box: what you type turns into cards (chips). No Add button: Enter / Done logs every ready card,
-// flick one card up to log just it; cards with a question wait for an answer. Offline, it keeps everything
-// and retries when the connection is back.
+// flick one card up to log just it; cards with a question wait for an answer. Entries go through the outbox
+// (models/outbox), so logging works with no signal: the row shows at once and is sent when it can be.
 import { parseQuickAdd, resolveSums } from '@centient/quickadd';
-import {
-  ArrowCounterClockwise,
-  KeyReturn,
-  PencilSimple,
-  Question,
-  WifiSlash,
-} from '@phosphor-icons/react';
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { OfflineError } from '../../lib/api';
+import { ArrowCounterClockwise, KeyReturn, PencilSimple, Question } from '@phosphor-icons/react';
+import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { buzz } from '../../lib/motion';
-import {
-  active,
-  catalog,
-  me,
-  offline,
-  qctx,
-  selectedAccount,
-  selectedPocket,
-} from '../../lib/state';
-import { Banner } from '../../ui/Banner';
+import { attempt } from '../../lib/run';
+import { active, catalog, me, qctx, selectedAccount, selectedPocket } from '../../lib/state';
 import { showToast } from '../../ui/Toast';
 import { blankForm, chipView, fromDraft, toCommand, type LogItem } from './form';
 import { LogChip } from './LogChip';
@@ -29,7 +14,6 @@ import { LogGuideSheet } from './LogGuideSheet';
 import { LogSheet } from './LogSheet';
 import { PocketStamps } from './PocketStamps';
 import { entryApi } from '../../models/entry';
-import { persist } from '../../models/query';
 
 export function LogBox() {
   const [text, setText] = useState('');
@@ -110,6 +94,16 @@ export function LogBox() {
       selectedPocket.value = item.form.envelopeId;
   };
 
+  /** A card as what is saved: its entry (with what quick add learns from it) and any entry that covers a gap. */
+  const saves = (i: LogItem) => {
+    const r = toCommand(i.form);
+    if ('error' in r) throw new Error(r.error);
+    const learn = i.rawMerchant
+      ? { rawMerchant: i.rawMerchant, suggestedMerchant: i.suggestedMerchant }
+      : undefined;
+    return [{ command: r.command, learn }, ...(r.extra ?? []).map(command => ({ command }))];
+  };
+
   const submit = async () => {
     // Enter can beat the deferred cards: always log what is in the box now.
     const items = [...(typed === text ? live : cardsFor(text)), ...pending];
@@ -119,30 +113,10 @@ export function LogBox() {
       return;
     }
     setSaving(true);
-    const ok = await persist(
-      () =>
-        entryApi.quickSave({
-          items: ready.flatMap(i => {
-            const r = toCommand(i.form);
-            if ('error' in r) throw new Error(r.error);
-            return [
-              {
-                command: r.command,
-                rawMerchant: i.rawMerchant || undefined,
-                suggestedMerchant: i.rawMerchant ? i.suggestedMerchant : undefined,
-              },
-              ...(r.extra ?? []).map(command => ({ command })),
-            ];
-          }),
-        }),
-      undefined,
-      // Offline: keep everything and show the banner; it retries when the connection is back.
-      e => (e instanceof OfflineError ? (offline.value = true) : showToast(e.message)),
-    );
+    const ok = await attempt(() => entryApi.logAll(ready.flatMap(saves)));
     setSaving(false);
     if (!ok) return;
     remember(ready.at(-1));
-    offline.value = false;
     buzz(20);
     // Cards still waiting for an answer stay, detached from the cleared box.
     setPending(
@@ -155,32 +129,9 @@ export function LogBox() {
     showToast(ready.length === 1 ? 'Logged' : `Logged ${ready.length} entries`);
   };
 
-  // Offline: keep everything, try again as soon as the connection is back.
-  useEffect(() => {
-    const retry = () => {
-      if (offline.value) submit();
-    };
-    addEventListener('online', retry);
-    return () => removeEventListener('online', retry);
-  });
-
   /** Logs one card (flicked up, or saved from its sheet). */
   const logOne = async (item: LogItem) => {
-    const r = toCommand(item.form);
-    if ('error' in r) return false;
-    const ok = await persist(() =>
-      entryApi.quickSave({
-        items: [
-          {
-            command: r.command,
-            rawMerchant: item.rawMerchant || undefined,
-            suggestedMerchant: item.rawMerchant ? item.suggestedMerchant : undefined,
-          },
-          ...(r.extra ?? []).map(command => ({ command })),
-        ],
-      }),
-    );
-    if (!ok) return false;
+    if (!(await attempt(() => entryApi.logAll(saves(item))))) return false;
     remember(item);
     buzz(20);
     setSheet(null);
@@ -240,11 +191,6 @@ export function LogBox() {
 
   return (
     <section>
-      {offline.value && (
-        <Banner>
-          <WifiSlash size={18} aria-hidden="true" /> No connection, your entry is still here.
-        </Banner>
-      )}
       <form
         className="panel mx-4 flex items-center gap-2 rounded-[18px] bg-white py-1.5 pl-4 pr-1.5 dark:bg-raised"
         onSubmit={e => {

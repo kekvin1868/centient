@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { formatMoney } from '../../lib/format';
 import { me, moneyPick } from '../../lib/state';
-import { accountQueries } from '../../models/account';
+import { useBalances } from '../../models/useWaiting';
 import { dateText } from '../../ui/Fields';
 import { KeyChip } from '../../ui/KeyChip';
 
@@ -22,7 +22,7 @@ export function returnState(keptUntil: string | null, today: string) {
 }
 
 export function ReturnDue({ onGo }: { onGo: () => void }) {
-  const { data } = useQuery(accountQueries.balances());
+  const { data } = useBalances();
   const today = me.value?.today ?? '';
   const due = data?.accounts.filter(a => a.kind === 'IOU' && a.balance < 0 && !a.archived_at);
   if (!due?.length) return null;

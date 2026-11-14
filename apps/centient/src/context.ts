@@ -13,7 +13,7 @@ export type Env = AuthEnv & {
 };
 export type AppEnv = {
   Bindings: Env;
-  Variables: { email: string; identity: Identity; services: Services };
+  Variables: { email: string; identity: Identity; services: Services; ws: string; repos: Repos };
 };
 
 /** What every service is built with: the request's workspace (from the session, never from input), the clock, data access. */

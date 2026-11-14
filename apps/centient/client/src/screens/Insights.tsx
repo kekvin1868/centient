@@ -23,6 +23,7 @@ import {
 } from '../features/insights/insights';
 import { SavingsBars } from '../features/insights/SavingsBars';
 import { PeriodBar, type Kind } from '../features/insights/PeriodBar';
+import { waiting } from '../models/useWaiting';
 import { Page } from '../layouts/Page';
 import { budgetQueries } from '../models/budget';
 import { reportQueries, type Insights as InsightsData } from '../models/report';
@@ -119,6 +120,11 @@ export function Insights() {
         onGo={setDate}
       />
       <CurrencyChips currencies={data.currencies} value={cur} onChange={setCurrency} />
+      {waiting.value.count > 0 && (
+        <p className="px-4 pb-2 text-[15px] text-muted" role="status">
+          {waiting.value.count} waiting entr{waiting.value.count === 1 ? 'y' : 'ies'} not included.
+        </p>
+      )}
       <div ref={screen}>
         <section data-report>
           <InsightsHeadline

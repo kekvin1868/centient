@@ -1,12 +1,14 @@
-// Worker entry: HTTP requests go to the app; the daily cron sends bill reminders. Static files are served by
-// Workers assets before this runs.
+// Worker entry: HTTP requests go to the app; the daily cron (src/cron.ts) sends bill reminders and forgets old
+// tickets. Static files are served by Workers assets before this runs.
 import { app } from './app';
 import type { Env } from './context';
-import { remindDue } from './cron';
+import { forgetTickets, remindDue } from './cron';
 
 export default {
   fetch: app.fetch,
   scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(remindDue(env, Date.now()));
+    const now = Date.now();
+    ctx.waitUntil(remindDue(env, now));
+    ctx.waitUntil(forgetTickets(env, now));
   },
 };

@@ -36,6 +36,7 @@ async function filled(w: ReturnType<typeof world>, email: string) {
     },
   ]);
   await svc().ledger.setIcon(bill, { icon: '🍜', forMerchant: true });
+  await w.repos.tickets.answer(ws, 'ticket-1', 'POST /api/transactions x', 201, null);
   await svc().quickadd.save([
     {
       command: {

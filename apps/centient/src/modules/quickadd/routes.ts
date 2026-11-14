@@ -18,6 +18,8 @@ export const quickaddRoutes = new Hono<AppEnv>()
         items: z
           .array(
             z.object({
+              /** Made by the phone, so the same entry sent twice is saved once. */
+              id: z.uuid().optional(),
               command,
               rawMerchant: text(120).optional(),
               suggestedMerchant: text(120).optional(),

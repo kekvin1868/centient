@@ -36,8 +36,17 @@ export const recurringApi = {
   create: (json: RecurringBody) => call(client.api.recurring.$post({ json })),
   update: (id: string, json: Patch) => call(one.$patch({ param: { id }, json })),
   remove: (id: string) => call(one.$delete({ param: { id } })),
-  /** Logs the payment as an expense and moves the bill to its next due date. */
-  paid: (id: string, json: Paid) => call(one.paid.$post({ param: { id }, json })),
+  /**
+   * Logs the payment as an expense and moves the bill to its next due date. `due` (the date being paid) makes
+   * the save's ticket: the same bill marked paid twice for the same date (a double tap, a retry) moves it once.
+   */
+  paid: (id: string, json: Paid, due: string) =>
+    call(
+      one.paid.$post(
+        { param: { id }, json },
+        { headers: { 'Idempotency-Key': `paid:${id}:${due}` } },
+      ),
+    ),
   /** "Not a subscription": this merchant is no longer offered under "Found in your entries". */
   hide: (merchant: string) => call(client.api.recurring.found.hide.$post({ json: { merchant } })),
 };

@@ -6,6 +6,7 @@ import { attempt } from '../../lib/run';
 import { ToggleRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
+import { outbox } from '../../models/outbox';
 import { persister, queryClient } from '../../models/query';
 import { workspaceApi } from '../../models/workspace';
 
@@ -22,6 +23,7 @@ export function ResetSheet({ open, onClose }: { open: boolean; onClose: () => vo
     if (!ok) return;
     // A clean start: forget the data kept on this device, then reload into the fresh workspace.
     queryClient.clear();
+    outbox.clear();
     await persister.removeClient();
     location.assign('/');
   };

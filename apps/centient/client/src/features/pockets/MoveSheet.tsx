@@ -14,7 +14,7 @@ import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
 import type { Pocket } from './PocketCards';
 import { entryApi } from '../../models/entry';
-import { persist } from '../../models/query';
+import { attempt } from '../../lib/run';
 
 type Bal = Account & { balance: number };
 /** Pocket ids of this account; `to` may also be `account:<id>` (another account's balance). */
@@ -64,8 +64,8 @@ export function MoveSheet({
   const save = async () => {
     if (error) return;
     const date = me.value!.today;
-    const ok = await persist(() =>
-      entryApi.record(
+    const ok = await attempt(() =>
+      entryApi.log(
         toAccount
           ? {
               type: 'TRANSFER',

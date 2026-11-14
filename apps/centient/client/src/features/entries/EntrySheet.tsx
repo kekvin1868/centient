@@ -1,37 +1,43 @@
 // Open an entry: edit it (your own entries; the sheet only saves) or see a system entry's details.
-// deleteWithUndo (used by the row's swipe action) hides it at once and offers Undo for 5 s; the delete
-// request is sent only when the Undo window ends.
+// deleteWithUndo (used by the row's swipe action) hides it at once and offers Undo for 5 s; the delete is
+// queued only when the Undo window ends.
+// Saves go through the outbox (models/outbox), so they work with no signal. An entry the server refused opens
+// with its reason, Send again and Discard; one changed somewhere else opens ClashSheet.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
 import { fromCommand, toCommand, type Form } from './form';
 import { formatMoney } from '../../lib/format';
 import { entryRow } from '../../lib/labels';
+import { attempt } from '../../lib/run';
 import { catalog, hiddenEntries, nameOf } from '../../lib/state';
 import type { Entry } from './EntryList';
+import { ClashSheet } from './ClashSheet';
 import { EntryForm } from './EntryForm';
 import { PaidBackSheet } from './PaidBackSheet';
+import { Banner } from '../../ui/Banner';
 import { Group, Row } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
-import { errorText } from '../../lib/run';
 import { BillPeople } from './BillPeople';
 import { TiedSheet } from './TiedSheet';
 import { entryApi, type PaybackMode } from '../../models/entry';
-import { persist } from '../../models/query';
+import { outbox } from '../../models/outbox';
+import { leavesPaybacksOver } from '../../models/useWaiting';
 
 /** `paybacks`: a bill with Paid backs tied, as answered in TiedSheet. */
-export function deleteWithUndo(id: string, paybacks?: PaybackMode) {
+export function deleteWithUndo(entry: Entry, paybacks?: PaybackMode) {
   const hide = (on: boolean) => {
     const next = new Set(hiddenEntries.value);
-    if (on) next.add(id);
-    else next.delete(id);
+    if (on) next.add(entry.id);
+    else next.delete(entry.id);
     hiddenEntries.value = next;
   };
   hide(true);
   showToast('Deleted', {
     action: { label: 'Undo', run: () => hide(false) },
-    onExpire: async () => {
-      await persist(() => entryApi.remove(id, paybacks));
+    onExpire: () => {
+      // From here the outbox hides it (and brings it back, marked, if the server refuses).
+      entryApi.remove(entry, paybacks);
       hide(false);
     },
   });
@@ -45,6 +51,8 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
   // The edit leaves someone's Paid backs over their new share: ask what happened to that money.
   const [tied, setTied] = useState(false);
   if (!entry) return null;
+  const mark = entry.waiting;
+  if (mark?.state === 'clash') return <ClashSheet entry={entry} onClose={onClose} />;
   // A payback from a person's tab opens the sheet it was made in.
   const c = entry.command;
   if (
@@ -54,29 +62,51 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
     return <PaidBackSheet tabId={c.fromAccountId} mode="PAID" entry={entry} onClose={onClose} />;
   const row = entryRow(entry, catalog.value);
   const result = form ? toCommand(form) : null;
+  const refused = mark?.state === 'refused';
+  const discard = () => {
+    outbox.discard(entry.id);
+    onClose();
+    showToast(mark?.op === 'create' ? 'Discarded' : 'Change dropped');
+  };
 
   const save = async (paybacks?: PaybackMode) => {
     if (!result || 'error' in result) return;
-    let asked = false;
-    const ok = await persist(
-      () => entryApi.edit(entry.id, result.command, paybacks),
-      undefined,
-      e => {
-        if ((e as { code?: string }).code === 'PAYBACKS_TIED') asked = true;
-        else showToast(errorText(e));
-      },
-    );
-    if (asked) return setTied(true);
-    if (ok) {
+    const { command } = result;
+    const ok = await attempt(async () => {
+      // Asked before the edit is queued: by the time it is sent the sheet is long closed.
+      if (!paybacks && (await leavesPaybacksOver(entry, command))) return setTied(true);
+      await entryApi.edit(entry, command, paybacks);
       onClose();
       showToast('Saved');
-    }
+    });
+    if (!ok) setTied(false);
   };
 
   return (
     // Deleting lives on the row (swipe left, or focus its actions), so editing only saves.
-    <Sheet open onClose={onClose} title={form ? 'Edit' : row.title}>
-      {form ? (
+    <Sheet open onClose={onClose} title={form ? (refused ? 'Not sent' : 'Edit') : row.title}>
+      {refused && (
+        <Banner>
+          {mark.reason ?? 'The server refused this.'} Fix it and send again, or discard it.
+        </Banner>
+      )}
+      {refused && mark.op === 'remove' ? (
+        <Block className="space-y-3">
+          <Button
+            large
+            rounded
+            onClick={() => {
+              outbox.resend(entry.id);
+              onClose();
+            }}
+          >
+            Try deleting again
+          </Button>
+          <Button large rounded tonal onClick={discard}>
+            Keep the entry
+          </Button>
+        </Block>
+      ) : form ? (
         <>
           <EntryForm form={form} onChange={setForm} lockType />
           {entry.people?.length ? (
@@ -91,10 +121,15 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
               </li>
             </Group>
           ) : null}
-          <Block>
+          <Block className="space-y-3">
             <Button large rounded disabled={'error' in (result ?? {})} onClick={() => save()}>
-              {result && 'error' in result ? result.error : 'Save'}
+              {result && 'error' in result ? result.error : refused ? 'Send again' : 'Save'}
             </Button>
+            {refused && (
+              <Button large rounded tonal onClick={discard}>
+                Discard
+              </Button>
+            )}
           </Block>
           <TiedSheet
             open={tied}

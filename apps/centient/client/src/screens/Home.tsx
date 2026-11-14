@@ -7,6 +7,7 @@ import { Headline } from '../features/budgets/Headline';
 import type { Entry } from '../features/entries/EntryList';
 import { EntrySheet } from '../features/entries/EntrySheet';
 import { LogBox } from '../features/entries/LogBox';
+import { NotSent } from '../features/entries/NotSent';
 import { Recent } from '../features/entries/Recent';
 import { InboxNotice } from '../features/inbox/InboxNotice';
 import { PhotoButton } from '../features/inbox/PhotoButton';
@@ -44,6 +45,7 @@ export function Home({ onGoMoney }: { onGoMoney: () => void }) {
       <DueSoon onGo={onGoMoney} />
       <ReturnDue onGo={onGoMoney} />
       <LogBox />
+      <NotSent onOpen={setOpen} />
       <PhotoButton onCaptured={() => setInbox(true)} />
       <InboxNotice onOpen={() => setInbox(true)} />
       <ComingUp onOpen={() => setSubscriptions(true)} />

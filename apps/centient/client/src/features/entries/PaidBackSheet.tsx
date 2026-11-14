@@ -8,7 +8,8 @@ import { useState } from 'react';
 import { formatMoney } from '../../lib/format';
 import { titleCase } from '../../lib/labels';
 import { active, catalog, everyday, me } from '../../lib/state';
-import { accountApi, accountQueries } from '../../models/account';
+import { attempt } from '../../lib/run';
+import { accountApi } from '../../models/account';
 import {
   billQueries,
   billSource,
@@ -23,6 +24,8 @@ import {
 import { entryApi } from '../../models/entry';
 import { extraOf, moveCommand, type PayMode } from '../../models/payback';
 import { persist } from '../../models/query';
+import { useBalances, waitingLinks } from '../../models/useWaiting';
+import { Banner } from '../../ui/Banner';
 import { AmountField } from '../../ui/AmountField';
 import { dateText, DateRow, PickerRow } from '../../ui/Fields';
 import { HpBar } from '../../ui/HpBar';
@@ -47,11 +50,17 @@ export function PaidBackSheet({
   entry?: Entry;
   onClose: () => void;
 }) {
-  const { data } = useQuery(accountQueries.balances());
-  const { data: bills } = useQuery({
+  const { data } = useBalances();
+  const { data: served, fetchStatus } = useQuery({
     ...billQueries.ofTab(tabId, entry?.id),
     enabled: mode === 'PAID',
   });
+  // Bills as the phone knows them: what waiting Paid backs already cover counts as paid, and a bill with a
+  // change of its own still waiting takes no Paid back until that is sent.
+  const queued = waitingLinks(entry?.id);
+  const bills = served
+    ?.filter(b => !queued.changing.has(b.entryId))
+    .map(b => ({ ...b, paid: b.paid + (queued.paid.get(b.entryId) ?? 0) }));
   const saved = entry?.command?.type === 'TRANSFER' ? entry.command : null;
   const tab = data?.accounts.find(a => a.id === tabId);
   // What the tab stands at without this payback.
@@ -67,6 +76,15 @@ export function PaidBackSheet({
   const [gift, setGift] = useState<'OWE' | 'GIFT'>(saved?.gift ? 'GIFT' : 'OWE');
   /** Set once Save opens the divide step. */
   const [bars, setBars] = useState<Bar[] | null>(null);
+  // The bills come from the server; with no signal and none kept on this phone there is nothing to divide over.
+  if (data && tab && mode === 'PAID' && !bills && fetchStatus === 'paused')
+    return (
+      <Sheet open onClose={onClose} title="Paid back">
+        <Banner>
+          This needs a connection once, to load {tab.name}'s bills. Try again with signal.
+        </Banner>
+      </Sheet>
+    );
   if (!data || !tab || (mode === 'PAID' && !bills)) return null;
 
   const shown = amount === undefined ? full : amount; // opens on the whole tab
@@ -102,9 +120,7 @@ export function PaidBackSheet({
       gift: giftAmount,
       bills: links,
     });
-    const done = await persist(() =>
-      entry ? entryApi.edit(entry.id, move) : entryApi.record(move),
-    );
+    const done = await attempt(() => (entry ? entryApi.edit(entry, move) : entryApi.log(move)));
     if (!done) return;
     // Everything you owed is back: the Kept day is done with.
     if (mode === 'RETURN' && shown >= full && tab.kept_until)

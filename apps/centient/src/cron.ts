@@ -1,11 +1,14 @@
-// The Worker's daily job (wrangler.toml `[triggers]`, 08:00 in Jakarta): bill reminders by Web Push. Like
+// The Worker's daily job (wrangler.toml `[triggers]`, 08:00 in Jakarta): bill reminders by Web Push, and old
+// tickets forgotten. Like
 // middleware/init.ts for a request, this is where bindings are read and services are built, once per workspace.
 import type { Env } from './context';
 import { addDays, jakartaToday } from './domain/cycle';
 import { dueNotes, REMIND_DAYS_AHEAD } from './domain/reminders';
 import { createRepos, createServices } from './middleware/init';
+import { TICKET_DAYS } from './middleware/ticket';
 import { createSender, vapidOf } from './modules/push/sender';
 import { r2Files } from './repos/files';
+import { ticketsRepo } from './repos/tickets';
 
 /**
  * Sends today's reminders to every subscribed browser of every workspace with a bill due today or in three
@@ -49,4 +52,9 @@ export async function remindDue(
     }
   }
   return sent;
+}
+
+/** Forgets tickets older than TICKET_DAYS (middleware/ticket.ts), in every workspace; returns how many. */
+export function forgetTickets(env: Env, now: number) {
+  return ticketsRepo(env.DB).sweep(new Date(now - TICKET_DAYS * 86_400_000).toISOString());
 }

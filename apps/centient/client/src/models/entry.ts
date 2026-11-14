@@ -1,6 +1,9 @@
 // Entries (what the user logged): the lists on Home and in All activity, 20 or 50 at a time with Load more.
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
+import type { Command } from '../../../src/lib/schemas';
 import { call, client, type Req, type Res } from './api';
+import { outbox, type Learn, type SavedEntry } from './outbox';
+import { checkEntry } from './useWaiting';
 
 export type EntryPage = Res<typeof client.api.entries.$get>;
 export type EntryItem = EntryPage['items'][number];
@@ -59,21 +62,32 @@ export type PaybackMode = 'NEVER_RECEIVED' | 'RETURN';
 export type BillPerson = NonNullable<EntryItem['people']>[number];
 
 type Record_ = Req<typeof client.api.transactions.$post>['json'];
-type EditBody = Req<(typeof client.api.entries)[':id']['$patch']>['json'];
 type IconBody = Req<(typeof client.api.entries)[':id']['icon']['$patch']>['json'];
-type QuickSave = Req<typeof client.api.quickadd.save.$post>['json'];
 
-/** Entry saves. Each refreshes everything: an entry moves balances, budgets, Insights and its lists. */
+/**
+ * Entry saves. `log`, `edit` and `remove` go through the outbox (models/outbox): the change shows at once and is
+ * sent when it can be, so they work with no signal. They resolve as soon as the change is queued; a refusal the
+ * phone can see coming (a share of zero, a pocket of another account) is thrown before that.
+ */
 export const entryApi = {
-  /** One command or `{ commands }` written atomically (a move between pockets is an ALLOCATE). */
+  /** One new entry; resolves with the id it will have. */
+  async log(command: Command, learn?: Learn) {
+    await checkEntry(command);
+    return outbox.create(command, learn);
+  },
+  /** Several new entries: all are checked first, then all are queued, so a refusal never leaves half of them. */
+  async logAll(list: { command: Command; learn?: Learn }[]) {
+    for (const x of list) await checkEntry(x.command);
+    return list.map(x => outbox.create(x.command, x.learn));
+  },
+  /** Several entries written atomically, straight to the server (the first run, the Inbox): needs signal. */
   record: (json: Record_) => call(client.api.transactions.$post({ json })),
-  /** `paybacks`: what to do with Paid backs a shrunk bill no longer has room for (asked after PAYBACKS_TIED). */
-  edit: (id: string, json: EditBody, paybacks?: PaybackMode) =>
-    call(client.api.entries[':id'].$patch({ param: { id }, json, query: { paybacks } })),
-  remove: (id: string, paybacks?: PaybackMode) =>
-    call(client.api.entries[':id'].$delete({ param: { id }, query: { paybacks } })),
+  /** `entry`: the entry as the screen shows it. `paybacks`: what to do with Paid backs a shrunk bill has no room for. */
+  async edit(entry: SavedEntry, command: Command, paybacks?: PaybackMode) {
+    await checkEntry(command);
+    outbox.edit(entry, command, paybacks);
+  },
+  remove: (entry: SavedEntry, paybacks?: PaybackMode) => outbox.remove(entry, paybacks),
   setIcon: (id: string, json: IconBody) =>
     call(client.api.entries[':id'].icon.$patch({ param: { id }, json })),
-  /** Quick-add's drafts, with what was learned from them. */
-  quickSave: (json: QuickSave) => call(client.api.quickadd.save.$post({ json })),
 };

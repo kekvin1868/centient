@@ -24,7 +24,6 @@ effect(() => {
 });
 /** A card Money should open on, once (Home's REVIEW). */
 export const moneyPick = signal<string | null>(null);
-export const offline = signal(false);
 /** Entries deleted but still undoable: hidden from every list until the undo window ends. */
 export const hiddenEntries = signal<ReadonlySet<string>>(new Set());
 
@@ -32,5 +31,8 @@ export const active = <T extends { archived_at: string | null }>(rows: T[]) =>
   rows.filter(r => !r.archived_at);
 /** Accounts you pay from or into: everything except "Friends owe you". */
 export const everyday = () => active(catalog.value.accounts).filter(a => a.kind !== 'IOU');
+/** A person on a split bill that is still waiting to be sent, with no tab on the server yet (models/waiting). */
+export const isStandIn = (id: string | null | undefined) => Boolean(id?.startsWith('waiting:'));
+/** A row's name; a stand-in tab's name is read from its id (`waiting:IDR:Andi`). */
 export const nameOf = (rows: { id: string; name: string }[], id: string | null | undefined) =>
-  rows.find(r => r.id === id)?.name ?? '';
+  rows.find(r => r.id === id)?.name ?? (isStandIn(id) ? id!.split(':').slice(2).join(':') : '');

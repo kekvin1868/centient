@@ -16,6 +16,7 @@ const STATEMENTS = [
   under('budget_limits', 'budget_id', 'budgets'),
   under('budget_alerts', 'budget_id', 'budgets'),
   under('envelope_categories', 'envelope_id', 'envelopes'),
+  inWs('tickets'),
   inWs('inbox_items'),
   inWs('statement_imports'),
   inWs('recurring'),

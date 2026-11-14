@@ -165,7 +165,7 @@ export function RecurringSheet({
                 disabled={!paying}
                 onClick={() =>
                   done(
-                    () => recurringApi.paid(item.id, { amount: paying ?? undefined }),
+                    () => recurringApi.paid(item.id, { amount: paying ?? undefined }, item.nextDue),
                     `${item.name} logged`,
                     true,
                   )

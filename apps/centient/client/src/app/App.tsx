@@ -11,6 +11,7 @@ import { locked } from '../lib/lockState';
 import { attempt } from '../lib/run';
 import { Home } from '../screens/Home';
 import { me } from '../lib/state';
+import { waitingLib } from '../models/useWaiting';
 import { loadBasics, seedBasics, useBasicsLive } from '../models/workspace';
 import { randomFx, type Fx } from '../ui/night/tv';
 
@@ -46,7 +47,12 @@ export function App() {
     if (restoring || isLocked) return;
     if (seedBasics()) setReady(true);
     attempt(loadBasics).then(() => setReady(true));
-    whenIdle(() => void Promise.all([loadMoney(), loadInsights(), loadSettings()]));
+    whenIdle(
+      () =>
+        void Promise.all([loadMoney(), loadInsights(), loadSettings(), waitingLib()]).catch(
+          () => {},
+        ),
+    );
   }, [restoring, isLocked]);
   useEffect(() => {
     if (prev.current !== screen) {

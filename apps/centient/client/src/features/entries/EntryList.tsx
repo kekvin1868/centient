@@ -16,6 +16,9 @@ import { buzz, reducedMotion, retroList } from '../../lib/motion';
 import { catalog, hiddenEntries, me } from '../../lib/state';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import type { BillPerson, PaybackMode } from '../../models/entry';
+import type { WaitingMark } from '../../models/waiting';
+import { syncedIds } from '../../models/outbox';
+import { PixelSign, type Sign } from '../../ui/PixelSign';
 import { KeyChip } from '../../ui/KeyChip';
 import { BillPeople } from './BillPeople';
 import { deleteWithUndo } from './EntrySheet';
@@ -29,6 +32,22 @@ export type Entry = EntryView & {
   command: Command | null;
   pocket?: { amount: number; balanceAfter: number; currency: string };
   people?: BillPerson[] | null;
+  /** Not on the server yet (models/outbox): how its row is marked. */
+  waiting?: WaitingMark;
+};
+
+/** The word on a row that is not on the server yet; none for one that just went through. */
+const WAIT_WORD: Record<WaitingMark['state'], string> = {
+  waiting: 'waiting',
+  sending: 'sending',
+  sent: '',
+  refused: 'not sent',
+  clash: 'changed elsewhere',
+};
+const WAIT_SIGN: Partial<Record<WaitingMark['state'], Sign>> = {
+  waiting: 'warn',
+  refused: 'stop',
+  clash: 'stop',
 };
 
 const ACTIONS = 136; // two 64px actions + gap: how far a row slides open
@@ -62,7 +81,8 @@ export function EntryList({
   const today = me.value?.today ?? '';
   const ids = new Set(entries.map(e => e.id));
   const visible = entries.filter(
-    e => !hiddenEntries.value.has(e.id) && (keepPaybacks || !tiedHere(e, ids)),
+    // A waiting Paid back is not under its bill yet (the server lists those), so it keeps its own row.
+    e => !hiddenEntries.value.has(e.id) && (keepPaybacks || e.waiting || !tiedHere(e, ids)),
   );
   // Start animating only once the list has content: the first fill appears at once, later changes animate.
   useEffect(() => {
@@ -111,7 +131,7 @@ export function EntryList({
         onConfirm={() => {
           const e = deleting!;
           setDeleting(null);
-          deleteWithUndo(e.id);
+          deleteWithUndo(e);
         }}
       />
       <TiedSheet
@@ -123,7 +143,7 @@ export function EntryList({
         onPick={(mode: PaybackMode) => {
           const e = tied!;
           setTied(null);
-          deleteWithUndo(e.id, mode);
+          deleteWithUndo(e, mode);
         }}
       />
       <IconSheet
@@ -174,8 +194,16 @@ function EntryRow({
   const returned = c?.type === 'TRANSFER' && isTab(c.toAccountId) && !isTab(c.fromAccountId);
   const amount = `${tone === 'out' ? '-' : tone === 'in' ? '+' : ''}${formatMoney(p ? Math.abs(p.amount) : r.amount, p ? p.currency : r.currency)}`;
 
+  // Just reached the server after waiting: its border blinks out and a check shows (styles.css, Waiting entries).
+  const synced = syncedIds.value.has(e.id);
+  const sign = e.waiting && WAIT_SIGN[e.waiting.state];
   return (
-    <li className="entry-row">
+    <li
+      className="entry-row"
+      data-waiting={e.waiting?.state}
+      data-held={e.waiting?.held || undefined}
+      data-synced={synced || undefined}
+    >
       <div className="relative overflow-hidden">
         <div className="absolute inset-y-0 right-0 flex items-center gap-2 pr-3">
           <m.button
@@ -227,6 +255,8 @@ function EntryRow({
         >
           <button
             type="button"
+            // An entry the server has not met has nowhere to keep an icon yet.
+            disabled={Boolean(e.waiting)}
             onClick={() => {
               if (!dragged.current) onIcon();
             }}
@@ -264,6 +294,15 @@ function EntryRow({
                   {formatMoney(p.balanceAfter, p.currency)}
                 </span>
               )}
+              {e.waiting && WAIT_WORD[e.waiting.state] && (
+                <span
+                  className="wait-word flex items-center justify-end gap-1 text-[13px] font-bold"
+                  role="status"
+                >
+                  {sign && <PixelSign sign={sign} size={11} />}
+                  {WAIT_WORD[e.waiting.state]}
+                </span>
+              )}
             </span>
           </button>
         </m.div>
@@ -271,6 +310,12 @@ function EntryRow({
       {e.people?.length ? (
         <BillPeople bill={e.command} people={e.people} currency={r.currency} onMore={onOpen} />
       ) : null}
+      {(e.waiting || synced) && <span key="bar" className="wait-bar" aria-hidden />}
+      {synced && (
+        <span key="check" className="wait-flash" aria-hidden>
+          <PixelSign sign="check" size={30} />
+        </span>
+      )}
     </li>
   );
 }
