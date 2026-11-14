@@ -31,6 +31,29 @@ export function pushRepo(db: D1Database) {
         .run();
     },
 
+    /** How many "Send a test" tries this person has used. */
+    async testsUsed(userId: string) {
+      const row = await db
+        .prepare('SELECT push_tests FROM users WHERE id = ?')
+        .bind(userId)
+        .first<{ push_tests: number }>();
+      return row?.push_tests ?? 0;
+    },
+
+    /**
+     * Counts one more test, unless `max` are used already. Resolves with the new count, or null when none are
+     * left. Check and count are one statement, so two quick taps can't both take the last test.
+     */
+    async useTest(userId: string, max: number) {
+      const row = await db
+        .prepare(
+          'UPDATE users SET push_tests = push_tests + 1 WHERE id = ? AND push_tests < ? RETURNING push_tests',
+        )
+        .bind(userId, max)
+        .first<{ push_tests: number }>();
+      return row?.push_tests ?? null;
+    },
+
     /** Drops subscriptions the push service says are gone (the browser unsubscribed or was wiped). */
     async forget(endpoints: string[]) {
       if (!endpoints.length) return;

@@ -5,7 +5,7 @@ import type { AppEnv } from '../../context';
 import { json } from '../../lib/schemas';
 
 export const pushRoutes = new Hono<AppEnv>()
-  .get('/', c => c.json(c.var.services.push.info()))
+  .get('/', async c => c.json(await c.var.services.push.info()))
 
   // What PushManager.subscribe() gave this browser (its toJSON()).
   .post(

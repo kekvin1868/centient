@@ -13,6 +13,10 @@ const PUSH_HOSTS = [
   'updates.push.services.mozilla.com',
   'notify.windows.com',
 ];
+/** "Send a test" tries per person, for good: each one is a request against the free plan's daily limits. */
+export const PUSH_TESTS = 3;
+const testsLeft = (used: number) => Math.max(0, PUSH_TESTS - used);
+
 const knownHost = (endpoint: string) => {
   try {
     const { protocol, hostname } = new URL(endpoint);
@@ -40,8 +44,12 @@ export function createPushService({
   };
 
   return {
-    /** Whether reminders can be turned on, and the key a browser subscribes with. */
-    info: () => ({ available: sender !== null, publicKey: sender?.publicKey ?? null }),
+    /** Whether reminders can be turned on, the key a browser subscribes with, and the tests left. */
+    info: async () => ({
+      available: sender !== null,
+      publicKey: sender?.publicKey ?? null,
+      testsLeft: testsLeft(await repos.push.testsUsed(userId)),
+    }),
 
     async subscribe(s: Subscription) {
       ready();
@@ -52,9 +60,18 @@ export function createPushService({
 
     unsubscribe: (endpoint: string) => repos.push.remove(userId, endpoint),
 
-    /** Sends "Reminders are on" to every browser of this person; says how many it reached. */
+    /**
+     * Sends "Reminders are on" to every browser of this person and uses up one test; says how many browsers it
+     * reached and the tests left. With no browser to send to, nothing is sent and no test is used.
+     */
     async test() {
+      ready();
       const subscriptions = await repos.push.ofUser(userId);
+      if (!subscriptions.length)
+        return { sent: 0, testsLeft: testsLeft(await repos.push.testsUsed(userId)) };
+      const used = await repos.push.useTest(userId, PUSH_TESTS);
+      if (used === null)
+        throw new DomainError('PUSH_TESTS_USED', `You've used all ${PUSH_TESTS} tests`);
       const gone = await ready().send(subscriptions, {
         title: 'Reminders are on',
         body: 'Centient will tell you 3 days before a bill is due, and on the day.',
@@ -62,7 +79,7 @@ export function createPushService({
         url: '/',
       });
       await repos.push.forget(gone);
-      return { sent: subscriptions.length - gone.length };
+      return { sent: subscriptions.length - gone.length, testsLeft: testsLeft(used) };
     },
   };
 }

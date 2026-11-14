@@ -7,6 +7,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useAutoLock } from '../features/lock/useAutoLock';
 import { BottomNav, type Screen } from '../layouts/BottomNav';
 import { endToast, Toast } from '../ui/Toast';
+import { signedOut } from '../lib/api';
 import { locked } from '../lib/lockState';
 import { attempt } from '../lib/run';
 import { Home } from '../screens/Home';
@@ -85,6 +86,17 @@ export function App() {
           </div>
           <BottomNav current={screen} onGo={setScreen} />
         </>
+      )}
+      {/* The sign-in ran out while the app was open (lib/api). A Home Screen app has no reload button, so this
+          is it: the reload meets Cloudflare Access's sign-in page. Above dialogs (9000), below the toast. */}
+      {signedOut.value && (
+        <button
+          type="button"
+          className="fixed inset-x-0 top-0 z-[9400] bg-pink px-4 pb-2 pt-[calc(env(safe-area-inset-top)+8px)] text-[15px] text-white"
+          onClick={() => location.reload()}
+        >
+          Signed out. Tap to sign in again.
+        </button>
       )}
       <Toast />
     </KonstaApp>
