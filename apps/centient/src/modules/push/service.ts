@@ -14,7 +14,7 @@ const PUSH_HOSTS = [
   'notify.windows.com',
 ];
 /** "Send a test" tries per person, for good: each one is a request against the free plan's daily limits. */
-export const PUSH_TESTS = 5;
+export const PUSH_TESTS = 3;
 const testsLeft = (used: number) => Math.max(0, PUSH_TESTS - used);
 
 const knownHost = (endpoint: string) => {

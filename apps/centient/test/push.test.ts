@@ -190,7 +190,7 @@ describe('push service', () => {
 
   it('is off without server keys', async () => {
     const t = await person();
-    expect(await t.push().info()).toEqual({ available: false, publicKey: null, testsLeft: 5 });
+    expect(await t.push().info()).toEqual({ available: false, publicKey: null, testsLeft: 3 });
     await expect(
       t.push().subscribe({ endpoint: 'https://web.push.apple.com/a', p256dh: 'k', auth: 'a' }),
     ).rejects.toMatchObject({ code: 'PUSH_OFF' });
@@ -204,7 +204,7 @@ describe('push service', () => {
     expect(await t.push().info()).toEqual({
       available: true,
       publicKey: keys.publicKey,
-      testsLeft: 5,
+      testsLeft: 3,
     });
     const mine = await phone();
     for (const endpoint of ['http://web.push.apple.com/a', 'https://evil.test/a', 'nope'])
@@ -215,22 +215,22 @@ describe('push service', () => {
     await t.push().subscribe(mine.subscription);
     expect(await t.w.repos.push.ofUser(t.userId)).toHaveLength(1);
 
-    expect(await t.push().test()).toEqual({ sent: 1, testsLeft: 4 });
+    expect(await t.push().test()).toEqual({ sent: 1, testsLeft: 2 });
     expect(await mine.read(service.posts[0].body)).toMatchObject({ title: 'Reminders are on' });
     await t.push().unsubscribe(mine.subscription.endpoint);
     expect(await t.w.repos.push.ofUser(t.userId)).toEqual([]);
   });
 
-  it('allows 5 tests per person, then refuses without sending', async () => {
+  it('allows 3 tests per person, then refuses without sending', async () => {
     const service = pushService();
     const t = await person(createSender(await vapidKeys(), service.fetch));
-    expect(await t.push().test()).toEqual({ sent: 0, testsLeft: 5 }); // no browser yet: costs no test
+    expect(await t.push().test()).toEqual({ sent: 0, testsLeft: 3 }); // no browser yet: costs no test
     await t.push().subscribe((await phone()).subscription);
     const left = [];
-    for (let i = 0; i < 5; i++) left.push((await t.push().test()).testsLeft);
-    expect(left).toEqual([4, 3, 2, 1, 0]);
+    for (let i = 0; i < 3; i++) left.push((await t.push().test()).testsLeft);
+    expect(left).toEqual([2, 1, 0]);
     await expect(t.push().test()).rejects.toMatchObject({ code: 'PUSH_TESTS_USED' });
-    expect(service.posts).toHaveLength(5);
+    expect(service.posts).toHaveLength(3);
     expect((await t.push().info()).testsLeft).toBe(0);
   });
 });
