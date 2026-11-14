@@ -31,6 +31,23 @@ export function pushRepo(db: D1Database) {
         .run();
     },
 
+    async testsUsed(userId: string) {
+      const row = await db
+        .prepare('SELECT push_tests FROM users WHERE id = ?')
+        .bind(userId)
+        .first<{ push_tests: number }>();
+      return row?.push_tests ?? 0;
+    },
+
+    /** Counts one test if fewer than `max` were used; false when none are left. One statement, so two taps can't both get the last one. */
+    async useTest(userId: string, max: number) {
+      const { meta } = await db
+        .prepare('UPDATE users SET push_tests = push_tests + 1 WHERE id = ? AND push_tests < ?')
+        .bind(userId, max)
+        .run();
+      return meta.changes > 0;
+    },
+
     /** Drops subscriptions the push service says are gone (the browser unsubscribed or was wiped). */
     async forget(endpoints: string[]) {
       if (!endpoints.length) return;

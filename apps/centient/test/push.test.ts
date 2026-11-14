@@ -190,7 +190,7 @@ describe('push service', () => {
 
   it('is off without server keys', async () => {
     const t = await person();
-    expect(t.push().info()).toEqual({ available: false, publicKey: null });
+    expect(await t.push().info()).toEqual({ available: false, publicKey: null, testsLeft: 5 });
     await expect(
       t.push().subscribe({ endpoint: 'https://web.push.apple.com/a', p256dh: 'k', auth: 'a' }),
     ).rejects.toMatchObject({ code: 'PUSH_OFF' });
@@ -201,7 +201,11 @@ describe('push service', () => {
     const keys = await vapidKeys();
     const service = pushService();
     const t = await person(createSender(keys, service.fetch));
-    expect(t.push().info()).toEqual({ available: true, publicKey: keys.publicKey });
+    expect(await t.push().info()).toEqual({
+      available: true,
+      publicKey: keys.publicKey,
+      testsLeft: 5,
+    });
     const mine = await phone();
     for (const endpoint of ['http://web.push.apple.com/a', 'https://evil.test/a', 'nope'])
       await expect(t.push().subscribe({ ...mine.subscription, endpoint })).rejects.toMatchObject({
@@ -211,10 +215,22 @@ describe('push service', () => {
     await t.push().subscribe(mine.subscription);
     expect(await t.w.repos.push.ofUser(t.userId)).toHaveLength(1);
 
-    expect(await t.push().test()).toEqual({ sent: 1 });
+    expect(await t.push().test()).toEqual({ sent: 1, testsLeft: 4 });
     expect(await mine.read(service.posts[0].body)).toMatchObject({ title: 'Reminders are on' });
     await t.push().unsubscribe(mine.subscription.endpoint);
     expect(await t.w.repos.push.ofUser(t.userId)).toEqual([]);
+  });
+
+  it('allows 5 tests per person, then refuses without sending', async () => {
+    const service = pushService();
+    const t = await person(createSender(await vapidKeys(), service.fetch));
+    await t.push().subscribe((await phone()).subscription);
+    const left = [];
+    for (let i = 0; i < 5; i++) left.push((await t.push().test()).testsLeft);
+    expect(left).toEqual([4, 3, 2, 1, 0]);
+    await expect(t.push().test()).rejects.toMatchObject({ code: 'PUSH_TESTS_USED' });
+    expect(service.posts).toHaveLength(5);
+    expect((await t.push().info()).testsLeft).toBe(0);
   });
 });
 

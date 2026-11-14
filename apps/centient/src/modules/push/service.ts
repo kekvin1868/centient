@@ -13,6 +13,9 @@ const PUSH_HOSTS = [
   'updates.push.services.mozilla.com',
   'notify.windows.com',
 ];
+/** "Send a test" tries per person, for good: each one is a request against the free plan's daily limits. */
+export const PUSH_TESTS = 5;
+
 const knownHost = (endpoint: string) => {
   try {
     const { protocol, hostname } = new URL(endpoint);
@@ -40,8 +43,12 @@ export function createPushService({
   };
 
   return {
-    /** Whether reminders can be turned on, and the key a browser subscribes with. */
-    info: () => ({ available: sender !== null, publicKey: sender?.publicKey ?? null }),
+    /** Whether reminders can be turned on, the key a browser subscribes with, and the tests left. */
+    info: async () => ({
+      available: sender !== null,
+      publicKey: sender?.publicKey ?? null,
+      testsLeft: PUSH_TESTS - (await repos.push.testsUsed(userId)),
+    }),
 
     async subscribe(s: Subscription) {
       ready();
@@ -52,17 +59,23 @@ export function createPushService({
 
     unsubscribe: (endpoint: string) => repos.push.remove(userId, endpoint),
 
-    /** Sends "Reminders are on" to every browser of this person; says how many it reached. */
+    /** Sends "Reminders are on" to every browser of this person; says how many it reached. Uses up one test. */
     async test() {
+      const out = ready();
+      if (!(await repos.push.useTest(userId, PUSH_TESTS)))
+        throw new DomainError('PUSH_TESTS_USED', `All ${PUSH_TESTS} tests are used`);
       const subscriptions = await repos.push.ofUser(userId);
-      const gone = await ready().send(subscriptions, {
+      const gone = await out.send(subscriptions, {
         title: 'Reminders are on',
         body: 'Centient will tell you 3 days before a bill is due, and on the day.',
         tag: 'test',
         url: '/',
       });
       await repos.push.forget(gone);
-      return { sent: subscriptions.length - gone.length };
+      return {
+        sent: subscriptions.length - gone.length,
+        testsLeft: PUSH_TESTS - (await repos.push.testsUsed(userId)),
+      };
     },
   };
 }
