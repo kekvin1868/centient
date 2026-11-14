@@ -5,14 +5,14 @@
 // on its own row (except in a person's own Activity, `keepPaybacks`). Deleting a bill people paid back asks first.
 import autoAnimate from '@formkit/auto-animate';
 import { PencilSimple, Trash } from '@phosphor-icons/react';
-import { animate, useMotionValue, useTransform } from 'motion/react';
+import { useTransform } from 'motion/react';
 import * as m from 'motion/react-m';
 import { useEffect, useRef, useState } from 'react';
 import type { EntryView } from '../../../../src/repos/entries';
 import type { Command } from '../../../../src/lib/schemas';
 import { dayLabel, formatMoney } from '../../lib/format';
 import { entryRow } from '../../lib/labels';
-import { buzz, reducedMotion, retroList } from '../../lib/motion';
+import { retroList, useSwipe } from '../../lib/motion';
 import { catalog, hiddenEntries, me } from '../../lib/state';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import type { BillPerson, PaybackMode } from '../../models/entry';
@@ -171,21 +171,10 @@ function EntryRow({
   onIcon: () => void;
 }) {
   const r = entryRow(e, catalog.value);
-  const x = useMotionValue(0);
+  const { x, drag, dragged } = useSwipe(ACTIONS, open, onSwipe);
   // The actions "unlock" as the row slides: they grow from small and faint to full size.
   const reveal = useTransform(x, [-ACTIONS, -24, 0], [1, 0.55, 0.4]);
   const fade = useTransform(x, [-ACTIONS, -40, 0], [1, 0.3, 0]);
-  const dragged = useRef(false);
-  const settle = (to: number) =>
-    animate(
-      x,
-      to,
-      reducedMotion() ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 36 },
-    );
-  // Follow the list: another row opening (or an action) closes this one.
-  useEffect(() => {
-    settle(open ? -ACTIONS : 0);
-  }, [open]);
   const p = e.pocket;
   const tone = p ? (p.amount < 0 ? 'out' : 'in') : r.tone;
   const isTab = (id: string) => catalog.value.accounts.some(a => a.id === id && a.kind === 'IOU');
@@ -231,26 +220,7 @@ function EntryRow({
           </m.button>
         </div>
         <m.div
-          style={{ x }}
-          drag="x"
-          dragConstraints={{ left: -ACTIONS, right: 0 }}
-          dragElastic={{ left: 0.15, right: 0.02 }}
-          dragMomentum={false}
-          onDragStart={() => {
-            dragged.current = true;
-          }}
-          onDragEnd={(_, info) => {
-            setTimeout(() => {
-              dragged.current = false;
-            });
-            const opening = info.offset.x < -50 || info.velocity.x < -350;
-            const closing = info.offset.x > 30 || info.velocity.x > 350;
-            const next = open ? !closing : opening;
-            if (next !== open) {
-              if (next) buzz();
-              onSwipe(next);
-            } else settle(open ? -ACTIONS : 0);
-          }}
+          {...drag}
           className="relative flex items-center gap-3 bg-ios-light-surface-1 py-2.5 pl-4 pr-4 dark:bg-ios-dark-surface-1 touch-pan-y"
         >
           <button
