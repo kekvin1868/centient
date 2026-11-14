@@ -7,9 +7,9 @@ import { useMemo } from 'react';
 import { catalog } from '../lib/state';
 import { accountQueries, type Balances } from './account';
 import type { Budget, BudgetCycle } from './budget';
-import type { EntryFilter, EntryItem } from './entry';
-import { outboxItems } from './outbox';
-import type { Overlay, WaitingEntry } from './waiting';
+import type { EntryFilter } from './entry';
+import { outboxItems, type SavedEntry } from './outbox';
+import type { Overlay, WaitingMark } from './waiting';
 
 export const NOTHING: Overlay = {
   entries: [],
@@ -64,10 +64,8 @@ export async function leavesPaybacksOver(
   return m ? m.leavesPaybacksOver(bill, command, catalog.value, Date.now()) : false;
 }
 
-export type ListedEntry = Omit<EntryItem, 'people'> & {
-  people?: EntryItem['people'];
-  waiting?: WaitingEntry['waiting'];
-};
+/** A row of an entry list: the server's entry, or a waiting one (marked). */
+export type ListedEntry = SavedEntry & { waiting?: WaitingMark };
 
 const matches = (e: ListedEntry, f: EntryFilter) => {
   const day = e.occurred_at.slice(0, 10);

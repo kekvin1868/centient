@@ -8,7 +8,7 @@ import type { Command } from '../../../src/lib/schemas';
 import { assertBalanced, type NewTransaction } from '../../../src/domain/ledger';
 import { cutsFor, peopleOf, tabsOnBill, type Link } from '../../../src/domain/bills';
 import type { EntryItem } from './entry';
-import type { OutboxItem, OutboxState } from './outbox';
+import type { OutboxItem, OutboxState, SavedEntry } from './outbox';
 import type { Catalog } from './workspace';
 
 /** How a waiting row is marked. */
@@ -18,10 +18,7 @@ export type WaitingMark = {
   reason?: string;
   op: OutboxItem['op'];
 };
-export type WaitingEntry = Omit<EntryItem, 'people'> & {
-  people?: EntryItem['people'];
-  waiting: WaitingMark;
-};
+export type WaitingEntry = SavedEntry & { waiting: WaitingMark };
 /** A person named on a waiting split bill who has no tab on the server yet. */
 export type StandIn = { id: string; name: string; currency: string; balance: number };
 /** Waiting spending, for budgets: positive = more spent. `day` is YYYY-MM-DD. */
@@ -133,6 +130,22 @@ export function check(cmd: Command, cat: Catalog, now: number): void {
   transactions(cmd, cat, now);
 }
 
+/** A tab: a person's IOU account, or a stand-in for one the server has not made yet. */
+const tabTest = (cat: Catalog) => (id: string) =>
+  id.startsWith(STAND_IN) || cat.accounts.some(a => a.id === id && a.kind === 'IOU');
+
+/** A bill's Paid backs, as the links the bill rules (domain/bills) work with. */
+const linksOf = (billId: string, people: EntryItem['people'] | undefined): Link[] =>
+  (people ?? []).flatMap(p =>
+    p.paybacks.map(b => ({
+      payback: b.entryId,
+      bill: billId,
+      tab: p.tabId,
+      amount: b.amount,
+      date: b.date,
+    })),
+  );
+
 /** True when a bill's new shares leave a Paid back over someone's share: the owner is asked what happened to it. */
 export function leavesPaybacksOver(
   bill: { id: string; people?: EntryItem['people'] },
@@ -140,19 +153,9 @@ export function leavesPaybacksOver(
   cat: Catalog,
   now: number,
 ): boolean {
-  const links: Link[] = (bill.people ?? []).flatMap(p =>
-    p.paybacks.map(b => ({
-      payback: b.entryId,
-      bill: bill.id,
-      tab: p.tabId,
-      amount: b.amount,
-      date: b.date,
-    })),
-  );
+  const links = linksOf(bill.id, bill.people);
   if (!links.length) return false;
-  const isTab = (id: string) =>
-    id.startsWith(STAND_IN) || cat.accounts.some(a => a.id === id && a.kind === 'IOU');
-  return cutsFor(links, tabsOnBill(transactions(cmd, cat, now), isTab)).length > 0;
+  return cutsFor(links, tabsOnBill(transactions(cmd, cat, now), tabTest(cat))).length > 0;
 }
 
 function linesOf(
@@ -212,8 +215,7 @@ export function overlay(items: OutboxItem[], cat: Catalog): Overlay {
     problems: 0,
   };
   if (!cat.accounts.length) return out;
-  const isTab = (id: string) =>
-    id.startsWith(STAND_IN) || cat.accounts.some(a => a.id === id && a.kind === 'IOU');
+  const isTab = tabTest(cat);
 
   const byEntry = new Map<string, OutboxItem[]>();
   for (const i of items) byEntry.set(i.entryId, [...(byEntry.get(i.entryId) ?? []), i]);
@@ -253,15 +255,7 @@ export function overlay(items: OutboxItem[], cat: Catalog): Overlay {
       if (saved && item.command!.date === saved.occurred_at.slice(0, 10))
         for (const t of txs) t.occurredAt = saved.occurred_at;
       const view = viewOf(entryId, txs);
-      const links: Link[] = (saved?.people ?? []).flatMap(p =>
-        p.paybacks.map(b => ({
-          payback: b.entryId,
-          bill: entryId,
-          tab: p.tabId,
-          amount: b.amount,
-          date: b.date,
-        })),
-      );
+      const links = linksOf(entryId, saved?.people);
       const split = item.command!.type === 'EXPENSE' && item.command!.split;
       shown = {
         id: entryId,
@@ -297,6 +291,3 @@ export function overlay(items: OutboxItem[], cat: Catalog): Overlay {
   }));
   return out;
 }
-
-/** A stand-in tab's name, read from its id (`waiting:IDR:Andi`). */
-export const standInName = (id: string) => id.slice(id.indexOf(':', STAND_IN.length) + 1);

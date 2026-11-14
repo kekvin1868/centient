@@ -63,7 +63,6 @@ export type BillPerson = NonNullable<EntryItem['people']>[number];
 
 type Record_ = Req<typeof client.api.transactions.$post>['json'];
 type IconBody = Req<(typeof client.api.entries)[':id']['icon']['$patch']>['json'];
-type QuickSave = Req<typeof client.api.quickadd.save.$post>['json'];
 
 /**
  * Entry saves. `log`, `edit` and `remove` go through the outbox (models/outbox): the change shows at once and is
@@ -91,6 +90,4 @@ export const entryApi = {
   remove: (entry: SavedEntry, paybacks?: PaybackMode) => outbox.remove(entry, paybacks),
   setIcon: (id: string, json: IconBody) =>
     call(client.api.entries[':id'].icon.$patch({ param: { id }, json })),
-  /** Quick-add's drafts, with what was learned from them. */
-  quickSave: (json: QuickSave) => call(client.api.quickadd.save.$post({ json })),
 };

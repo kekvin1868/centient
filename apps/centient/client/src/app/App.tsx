@@ -1,7 +1,6 @@
 // App shell: the lock screen while the app lock is up, else first run, then four screens behind a tab bar,
 // inside Konsta's iOS theme. A tab change redraws
 // the screen with a random retro effect (TV, glitch or render).
-import { waitingLib } from '../models/useWaiting';
 import { useIsRestoring } from '@tanstack/react-query';
 import { App as KonstaApp } from 'konsta/react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
@@ -12,6 +11,7 @@ import { locked } from '../lib/lockState';
 import { attempt } from '../lib/run';
 import { Home } from '../screens/Home';
 import { me } from '../lib/state';
+import { waitingLib } from '../models/useWaiting';
 import { loadBasics, seedBasics, useBasicsLive } from '../models/workspace';
 import { randomFx, type Fx } from '../ui/night/tv';
 

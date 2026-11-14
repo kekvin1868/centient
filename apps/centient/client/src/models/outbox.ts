@@ -12,10 +12,10 @@ import { locked } from '../lib/lockState';
 import { load, save } from '../lib/storage';
 import { call, client } from './api';
 import type { EntryItem, PaybackMode } from './entry';
+import { queryClient } from './query';
 
 /** An entry as a screen holds it (a goal's log sends no `people`). */
 export type SavedEntry = Omit<EntryItem, 'people'> & { people?: EntryItem['people'] };
-import { queryClient } from './query';
 
 /** What quick add learns from an entry: the word typed and the merchant it was read as. */
 export type Learn = { rawMerchant?: string; suggestedMerchant?: string };
