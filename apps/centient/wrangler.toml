@@ -1,6 +1,13 @@
 name = "cts"
 main = "src/index.ts"
 compatibility_date = "2026-06-01"
+# The one public address is cts.<account>.workers.dev, behind Cloudflare Access. Preview addresses (one per
+# uploaded version) would be more doors to guard, so there are none.
+preview_urls = false
+
+# Logs and errors of every request and of the daily job, kept by Cloudflare (Workers & Pages > cts > Logs).
+[observability]
+enabled = true
 
 # The Vite plugin builds the client and points assets at it. Unknown paths serve index.html (the SPA);
 # /api/* always reaches the Worker.
@@ -11,7 +18,7 @@ run_worker_first = ["/api/*"]
 [[d1_databases]]
 binding = "DB"
 database_name = "centsdb"
-database_id = "00000000-0000-0000-0000-000000000000" # replace with `wrangler d1 create centsdb` output before deploying
+database_id = "6d9d7080-634e-4377-a37b-82d547096add" # made with `wrangler d1 create centsdb --location apac`; an id, not a secret
 migrations_dir = "migrations"
 
 # Bill reminders by Web Push go out once a day at 08:00 in Jakarta (01:00 UTC); see src/cron.ts. They need the
@@ -25,8 +32,9 @@ crons = ["0 1 * * *"]
 binding = "FILES"
 bucket_name = "centient-files"
 
-# Production identity: set these once Cloudflare Access protects the hostname.
-# [vars]
-# ACCESS_TEAM_DOMAIN = "yourteam.cloudflareaccess.com"
-# ACCESS_AUD = "<application audience tag>"
-# SERVICE_TOKEN_EMAIL = "you@example.com"
+# Production identity (src/middleware/auth.ts). Not written here: this repo is public, so the settings live only
+# in Cloudflare, set once each with `npx wrangler secret put <NAME>`:
+#   ACCESS_TEAM_DOMAIN   yourteam.cloudflareaccess.com (no https://)
+#   ACCESS_AUD           the Access application's audience tag
+#   SERVICE_TOKEN_EMAIL  the owner's email, only once the Shortcut signs in with a service token
+# Until the first two are set, every /api request is answered 401.

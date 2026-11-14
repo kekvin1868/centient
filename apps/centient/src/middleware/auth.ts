@@ -75,8 +75,11 @@ const b64url = (s: string) =>
     c => c.charCodeAt(0),
   );
 
-async function accessKeys(teamDomain: string): Promise<Map<string, CryptoKey>> {
-  if (keyCache && Date.now() - keyCache.at < 3600e3) return keyCache.keys;
+async function accessKeys(teamDomain: string, kid: string): Promise<Map<string, CryptoKey>> {
+  // Access changes its signing key every 6 weeks, so a key id we do not hold means our copy is old: fetch
+  // again, but at most once a minute, so a made-up id cannot turn every request into a fetch.
+  const age = keyCache ? Date.now() - keyCache.at : Infinity;
+  if (keyCache && age < 3600e3 && (keyCache.keys.has(kid) || age < 60e3)) return keyCache.keys;
   const res = await fetch(`https://${teamDomain}/cdn-cgi/access/certs`);
   const { keys } = (await res.json()) as { keys: (JsonWebKey & { kid: string })[] };
   const map = new Map<string, CryptoKey>();
@@ -107,7 +110,7 @@ async function verifyAccessJwt(
   try {
     const header = JSON.parse(new TextDecoder().decode(b64url(h))) as { kid: string; alg: string };
     if (header.alg !== 'RS256') return null;
-    const key = (await accessKeys(teamDomain)).get(header.kid);
+    const key = (await accessKeys(teamDomain, header.kid)).get(header.kid);
     if (!key) return null;
     const ok = await crypto.subtle.verify(
       'RSASSA-PKCS1-v1_5',
