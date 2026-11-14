@@ -15,6 +15,7 @@ const PUSH_HOSTS = [
 ];
 /** "Send a test" tries per person, for good: each one is a request against the free plan's daily limits. */
 export const PUSH_TESTS = 5;
+const testsLeft = (used: number) => Math.max(0, PUSH_TESTS - used);
 
 const knownHost = (endpoint: string) => {
   try {
@@ -47,7 +48,7 @@ export function createPushService({
     info: async () => ({
       available: sender !== null,
       publicKey: sender?.publicKey ?? null,
-      testsLeft: PUSH_TESTS - (await repos.push.testsUsed(userId)),
+      testsLeft: testsLeft(await repos.push.testsUsed(userId)),
     }),
 
     async subscribe(s: Subscription) {
@@ -59,23 +60,26 @@ export function createPushService({
 
     unsubscribe: (endpoint: string) => repos.push.remove(userId, endpoint),
 
-    /** Sends "Reminders are on" to every browser of this person; says how many it reached. Uses up one test. */
+    /**
+     * Sends "Reminders are on" to every browser of this person and uses up one test; says how many browsers it
+     * reached and the tests left. With no browser to send to, nothing is sent and no test is used.
+     */
     async test() {
-      const out = ready();
-      if (!(await repos.push.useTest(userId, PUSH_TESTS)))
-        throw new DomainError('PUSH_TESTS_USED', `All ${PUSH_TESTS} tests are used`);
+      ready();
       const subscriptions = await repos.push.ofUser(userId);
-      const gone = await out.send(subscriptions, {
+      if (!subscriptions.length)
+        return { sent: 0, testsLeft: testsLeft(await repos.push.testsUsed(userId)) };
+      const used = await repos.push.useTest(userId, PUSH_TESTS);
+      if (used === null)
+        throw new DomainError('PUSH_TESTS_USED', `You've used all ${PUSH_TESTS} tests`);
+      const gone = await ready().send(subscriptions, {
         title: 'Reminders are on',
         body: 'Centient will tell you 3 days before a bill is due, and on the day.',
         tag: 'test',
         url: '/',
       });
       await repos.push.forget(gone);
-      return {
-        sent: subscriptions.length - gone.length,
-        testsLeft: PUSH_TESTS - (await repos.push.testsUsed(userId)),
-      };
+      return { sent: subscriptions.length - gone.length, testsLeft: testsLeft(used) };
     },
   };
 }

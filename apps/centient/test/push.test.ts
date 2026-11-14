@@ -224,6 +224,7 @@ describe('push service', () => {
   it('allows 5 tests per person, then refuses without sending', async () => {
     const service = pushService();
     const t = await person(createSender(await vapidKeys(), service.fetch));
+    expect(await t.push().test()).toEqual({ sent: 0, testsLeft: 5 }); // no browser yet: costs no test
     await t.push().subscribe((await phone()).subscription);
     const left = [];
     for (let i = 0; i < 5; i++) left.push((await t.push().test()).testsLeft);

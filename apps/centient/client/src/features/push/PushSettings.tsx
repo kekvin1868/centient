@@ -1,6 +1,6 @@
 // Settings' "Reminders" group: a switch for bill reminders on this device (a notification 3 days before a bill
-// is due and on the day), and "Send a test" once it is on, with the tests left on its right (5 per person, then
-// the row is gone). When they can't be turned on here, the row says why.
+// is due and on the day), and "Send a test" once it is on, with the tests left on its right (the server gives
+// each person a few, then the row is gone). When they can't be turned on here, the row says why.
 import { useQuery } from '@tanstack/react-query';
 import { attempt } from '../../lib/run';
 import { pushApi, pushBlocker, pushQueries } from '../../models/push';
