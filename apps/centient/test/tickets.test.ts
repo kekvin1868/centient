@@ -2,6 +2,7 @@
 // phone gave the entry), an edit made against an old version is refused, and old tickets are forgotten.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { app } from '../src/app';
+import { paidTicket } from '../src/domain/tickets';
 import { ticketsRepo } from '../src/repos/tickets';
 import { migrationsSql, testD1 } from './d1shim';
 
@@ -49,6 +50,30 @@ beforeEach(async () => {
 });
 
 describe('tickets', () => {
+  it('lets a bill be marked paid again once the entry that paid it is deleted', async () => {
+    const bill = (
+      await call('POST', '/api/recurring', {
+        name: 'Netflix',
+        accountId: bca,
+        categoryId: food,
+        amount: 120_000,
+        everyMonths: 1,
+        nextDue: '2026-11-20',
+      })
+    ).body.id;
+    const key = paidTicket(bill, '2026-11-20');
+    const paid = () => call('POST', `/api/recurring/${bill}/paid`, {}, key);
+    const first = await paid();
+    // A double tap pays once.
+    expect(await paid()).toMatchObject({ replay: 'true', body: first.body });
+    await call('DELETE', `/api/entries/${first.body.entryId}`);
+    const again = await paid();
+    expect(again.replay).toBeNull();
+    expect(again.body.entryId).not.toBe(first.body.entryId);
+    const { items } = (await call('GET', '/api/recurring')).body;
+    expect(items[0].payments).toMatchObject([{ due: '2026-11-20', entryId: again.body.entryId }]);
+  });
+
   it('answers a repeat with the first answer and saves once', async () => {
     const first = await call('POST', '/api/transactions', kopi(), 't-1');
     expect(first).toMatchObject({ status: 201, replay: null });

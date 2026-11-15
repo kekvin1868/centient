@@ -2,6 +2,7 @@
 // expense that pays a bill), the recurring service (Mark paid) and the Inbox (undo an import) all use this, so they
 // write the same thing.
 import { dueAfter, pays, type Schedule } from '../../domain/recurring';
+import { paidTicket } from '../../domain/tickets';
 import type { Command } from '../../lib/schemas';
 import type { Repos } from '../../middleware/init';
 import type { Recurring } from '../../repos/recurring';
@@ -35,7 +36,7 @@ export function advance(
 /**
  * The writes that put bills back to unpaid when these entries go: a bill moves back to the due date an entry paid,
  * but only when that was its latest payment (its next due date is still the one after it). Several entries of one
- * bill walk it back together.
+ * bill walk it back together. The Mark paid tickets of those due dates are forgotten, so they can be paid again.
  * ponytail: a bill closed by its last payment stays closed, and one whose dates were changed by hand stays put.
  */
 export async function unpay(
@@ -45,7 +46,12 @@ export async function unpay(
 ): Promise<D1PreparedStatement[]> {
   const paid = await repos.recurring.paidBy(ws, entryIds);
   if (!paid.length) return [];
-  const stmts: D1PreparedStatement[] = [];
+  const stmts: D1PreparedStatement[] = [
+    repos.tickets.forgetStatement(
+      ws,
+      paid.map(p => paidTicket(p.recurring_id, p.due)),
+    ),
+  ];
   for (const r of await repos.recurring.list(ws)) {
     const dues = paid
       .filter(p => p.recurring_id === r.id)
