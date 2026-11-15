@@ -3,6 +3,7 @@
 // are another thing: see ./bills.
 import { queryOptions } from '@tanstack/react-query';
 import { call, client, type Req, type Res } from './api';
+import { paidTicket } from '../../../src/domain/tickets';
 import { daysBetween } from './dates';
 
 type List = Res<typeof client.api.recurring.$get>;
@@ -44,7 +45,7 @@ export const recurringApi = {
     call(
       one.paid.$post(
         { param: { id }, json },
-        { headers: { 'Idempotency-Key': `paid:${id}:${due}` } },
+        { headers: { 'Idempotency-Key': paidTicket(id, due) } },
       ),
     ),
   /** "Not a subscription": this merchant is no longer offered under "Found in your entries". */
