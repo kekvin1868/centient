@@ -1,7 +1,9 @@
 // Bills: what this month still asks for, a calendar of due dates, every bill grouped by how soon it is due, and
-// monthly payments found in the entries. A bill opens its form; its PAID? key pays it in one tap.
+// monthly payments found in the entries. A bill's PAID? key pays it in one tap; the bill itself opens its own
+// page (BillDetail), whose EDIT opens the form.
 import { useQuery } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { BillDetail } from '../features/recurring/BillDetail';
 import { BillLine, dayWords } from '../features/recurring/BillLine';
 import { DueCalendar } from '../features/recurring/DueCalendar';
 import { FoundList } from '../features/recurring/FoundList';
@@ -9,6 +11,9 @@ import { MonthHero } from '../features/recurring/MonthHero';
 import { RecurringSheet } from '../features/recurring/RecurringSheet';
 import { usePayBill } from '../features/recurring/usePayBill';
 import { Page } from '../layouts/Page';
+import { useSubPage } from '../layouts/useSubPage';
+import { categoryEmoji } from '../lib/labels';
+import { catalog, nameOf } from '../lib/state';
 import { formatMoney } from '../lib/format';
 import { billGroups, monthRun, rowsByDay, type BillRow } from '../models/billRun';
 import { recurringQueries, type Recurring } from '../models/recurring';
@@ -25,6 +30,13 @@ export function Bills() {
   const { data } = useQuery(recurringQueries.list());
   const [editing, setEditing] = useState<Editing | null>(null);
   const pay = usePayBill();
+  /** The bill whose page is open. */
+  const [opened, open, back] = useSubPage<string>();
+  const item = data?.items.find(i => i.id === opened);
+  // Removed from its own page: back to the list.
+  useEffect(() => {
+    if (data && opened && !item) back();
+  }, [data, opened, item]);
   const view = useMemo(
     () =>
       data && {
@@ -42,10 +54,42 @@ export function Bills() {
         key={row.key}
         row={row}
         today={today}
-        onOpen={() => setEditing({ item: row.item })}
+        onOpen={() => open(row.item.id)}
         trail={pay.trail(row)}
       />
     ));
+
+  const sheets = (
+    <>
+      {pay.layers}
+      {editing && (
+        <RecurringSheet
+          key={`bill:${editing.item?.id ?? editing.prefill?.name ?? 'new'}`}
+          item={editing.item}
+          prefill={editing.prefill}
+          today={today}
+          onClose={() => setEditing(null)}
+        />
+      )}
+    </>
+  );
+
+  if (item)
+    return (
+      <Page
+        key={`bill:${item.id}`}
+        title={`${categoryEmoji(nameOf(catalog.value.categories, item.categoryId))} ${item.name}`}
+        back={{ label: 'Bills', onBack: back }}
+        action={
+          <WinButton label={`Edit ${item.name}`} onClick={() => setEditing({ item })}>
+            EDIT
+          </WinButton>
+        }
+      >
+        <BillDetail item={item} today={today} trail={pay.trail} />
+        {sheets}
+      </Page>
+    );
 
   return (
     <Page
@@ -112,16 +156,7 @@ export function Bills() {
         </p>
       )}
       <FoundList today={today} onAdd={prefill => setEditing({ item: null, prefill })} />
-      {pay.layers}
-      {editing && (
-        <RecurringSheet
-          key={`bill:${editing.item?.id ?? editing.prefill?.name ?? 'new'}`}
-          item={editing.item}
-          prefill={editing.prefill}
-          today={today}
-          onClose={() => setEditing(null)}
-        />
-      )}
+      {sheets}
     </Page>
   );
 }

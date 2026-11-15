@@ -130,6 +130,37 @@ test('a bill that varies asks its amount first', async () => {
   await expect(bills.getByRole('region', { name: /^Bills in / })).toContainText('2/2 PAID');
 });
 
+test("a bill's own page: history, edit, pause, and back to the list", async () => {
+  const bills = page.getByRole('main');
+  await bills
+    .getByRole('list', { name: 'Paid' })
+    .getByRole('button', { name: /^Netflix/ })
+    .tap();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Netflix');
+  await expect(bills.getByRole('region', { name: 'This bill' })).toContainText(
+    'Every month · paid from Main Account',
+  );
+  const history = bills.getByRole('list', { name: 'History' });
+  await expect(history.getByRole('listitem')).toHaveCount(1);
+  await expect(history).toContainText('Rp120.000');
+  await expect(history).toContainText('ON TIME');
+
+  await bills.getByRole('button', { name: 'Edit Netflix' }).tap();
+  await expect(sheet('Netflix').getByLabel('Name')).toHaveValue('Netflix');
+  await page.keyboard.press('Escape');
+  await expect(sheet('Netflix')).toHaveCount(0);
+
+  await bills.getByRole('button', { name: 'PAUSE' }).tap();
+  await expect(bills.getByText('Paused: no reminders')).toBeVisible();
+  await bills.getByRole('button', { name: 'RESUME' }).tap();
+  // Next month's is more than a week away: no PAID? key, the last payment's stamp instead.
+  await expect(bills.getByRole('region', { name: 'This bill' })).toContainText(/Due in \d+ days/);
+  await expect(bills.getByRole('button', { name: 'Mark Netflix paid' })).toHaveCount(0);
+
+  await bills.getByRole('button', { name: 'Back to Bills' }).tap();
+  await expect(page.getByRole('heading', { level: 1, name: 'Bills' })).toBeVisible();
+});
+
 test("a card's bill: what was owed at the statement, then I paid it", async () => {
   const card = await send('post', '/accounts', {
     name: 'BCA Card',
