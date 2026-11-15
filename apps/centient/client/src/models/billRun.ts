@@ -75,6 +75,8 @@ export type MonthRun = {
   paid: number;
   count: number;
   late: number;
+  /** Paid after their due date. */
+  latePaid: number;
   /** Open rows with no amount to count (a bill that varies and was never paid). */
   unknown: number;
 };
@@ -95,12 +97,15 @@ export function monthRun(items: Recurring[], today: string): MonthRun[] {
         paid: 0,
         count: 0,
         late: 0,
+        latePaid: 0,
         unknown: 0,
       };
       run.count++;
       run.total += r.amount ?? 0;
-      if (paid) run.paid++;
-      else {
+      if (paid) {
+        run.paid++;
+        if (paidLate(r)) run.latePaid++;
+      } else {
         run.left += r.amount ?? 0;
         if (r.state === 'late') run.late++;
         if (r.amount === null) run.unknown++;

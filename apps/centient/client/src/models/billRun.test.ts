@@ -63,6 +63,7 @@ describe('the month run', () => {
       paid: 1,
       count: 4,
       late: 1,
+      latePaid: 0,
       unknown: 1,
     });
   });
@@ -71,7 +72,12 @@ describe('the month run', () => {
     const open = bill({ dues: ['2026-10-20', '2026-11-20'] });
     expect(monthRun([open], today)[0]).toMatchObject({ count: 2, left: 240_000, late: 1 });
     const caughtUp = bill({ dues: ['2026-11-20'], payments: [pay('2026-10-20', '2026-11-02')] });
-    expect(monthRun([caughtUp], today)[0]).toMatchObject({ count: 2, paid: 1, left: 120_000 });
+    expect(monthRun([caughtUp], today)[0]).toMatchObject({
+      count: 2,
+      paid: 1,
+      latePaid: 1,
+      left: 120_000,
+    });
     const lastMonth = bill({ dues: ['2026-11-20'], payments: [pay('2026-10-20')] });
     expect(monthRun([lastMonth], today)[0]).toMatchObject({ count: 1, paid: 0 });
   });
