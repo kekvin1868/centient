@@ -33,6 +33,14 @@ export function ticketsRepo(db: D1Database) {
         .run();
     },
 
+    /** The statement that forgets these tickets, so the saves they stood for can be made again. */
+    forgetStatement: (ws: string, keys: string[]) =>
+      db
+        .prepare(
+          `DELETE FROM tickets WHERE workspace_id = ? AND key IN (${keys.map(() => '?').join(', ')})`,
+        )
+        .bind(ws, ...keys),
+
     /** Forgets tickets taken before `before` (an ISO time), in every workspace; returns how many. */
     async sweep(before: string) {
       const r = await db
