@@ -43,9 +43,15 @@ const monthOf = (back: number) => {
 const tab = (name: string) => page.getByRole('button', { name, exact: true });
 const totals = () => page.getByRole('region', { name: 'Totals' });
 
-test('T4.29 four tabs: Home, Money, Insights, Settings', async () => {
+test('T4.29 five tabs: Home, Money, Bills, Insights, Settings', async () => {
   const nav = page.getByRole('navigation', { name: 'Main' });
-  await expect(nav.getByRole('button')).toHaveText(['Home', 'Money', 'Insights', 'Settings']);
+  await expect(nav.getByRole('button')).toHaveText([
+    'Home',
+    'Money',
+    'Bills',
+    'Insights',
+    'Settings',
+  ]);
   await tab('Insights').tap();
   await expect(page.getByRole('heading', { name: 'Insights', level: 1 })).toBeVisible();
 });
