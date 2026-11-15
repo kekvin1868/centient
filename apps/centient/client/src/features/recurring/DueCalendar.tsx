@@ -1,23 +1,36 @@
 // A month of due dates: on each day a bill falls due, a pink mark (blinking when late) or an upright "OK" once
-// all of that day's bills are paid; tap a marked day to list its bills under the grid (`tray`). It goes back to
+// all of that day's bills are paid, and a hollow mark for a card bill or an installment; tap a marked day to
+// list what is due under the grid (`tray`). It goes back to
 // the first saved payment and 11 months ahead, as far as the server works the due dates out.
 import { useState, type ReactNode } from 'react';
-import type { BillRow } from '../../models/billRun';
+import type { BillRow, OtherDue } from '../../models/billRun';
 import { monthGrid, plusMonths } from '../../ui/DatePicker';
 import { dayWords } from './BillLine';
 
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTHS_AHEAD = 11;
+/** "2 bills due", "1 bill paid, 1 card bill or installment", "1 card bill or installment due". */
+const label = (bills: number, say: string, more: number) =>
+  [
+    bills && `${bills} bill${bills === 1 ? '' : 's'} ${say}`,
+    more &&
+      `${more} card bill${more === 1 ? '' : 's'} or installment${more === 1 ? '' : 's'}${bills ? '' : ' due'}`,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
 export function DueCalendar({
   byDay,
+  others,
   today,
   tray,
 }: {
   byDay: Map<string, BillRow[]>;
+  /** Card bills and installments by day: marked hollow, never counted as bills. */
+  others: Map<string, OtherDue[]>;
   today: string;
   /** What shows under the grid for the picked day. */
-  tray: (day: string, rows: BillRow[]) => ReactNode;
+  tray: (day: string, rows: BillRow[], others: OtherDue[]) => ReactNode;
 }) {
   const first = `${today.slice(0, 7)}-01`;
   const oldest = [...byDay.keys()].reduce((a, b) => (b < a ? b : a), first);
@@ -68,9 +81,10 @@ export function DueCalendar({
         <div className="grid grid-cols-7 gap-0.5">
           {monthGrid(month).map(d => {
             const due = byDay.get(d) ?? [];
+            const more = others.get(d) ?? [];
             const on = d === picked;
             const frame = `num flex h-[42px] flex-col items-center justify-center gap-0.5 border text-[14px] ${d.startsWith(month.slice(0, 7)) ? '' : 'opacity-30'}`;
-            if (!due.length)
+            if (!due.length && !more.length)
               return (
                 <span
                   key={d}
@@ -87,23 +101,25 @@ export function DueCalendar({
                 key={d}
                 type="button"
                 aria-pressed={on}
-                aria-label={`${dayWords(d, { day: 'numeric', month: 'long' })}, ${due.length} bill${due.length === 1 ? '' : 's'} ${say}`}
+                aria-label={`${dayWords(d, { day: 'numeric', month: 'long' })}, ${label(due.length, say, more.length)}`}
                 onClick={() => setPicked(p => (p === d ? null : d))}
                 className={`${frame} ${on ? 'border-on-miku bg-miku text-on-miku' : d === today ? 'border-current' : 'border-edge'}`}
               >
                 {Number(d.slice(8))}
-                <span aria-hidden="true" className="flex h-[11px] items-center">
-                  {paid ? (
-                    <span
-                      className={`border px-0.5 text-[9px] leading-none ${on ? '' : 'text-primary'}`}
-                    >
-                      OK
-                    </span>
-                  ) : (
-                    <span
-                      className={`h-1.5 w-1.5 ${on ? 'bg-on-miku' : 'bg-pink'} ${late ? 'bill-late' : ''}`}
-                    />
-                  )}
+                <span aria-hidden="true" className="flex h-[11px] items-center gap-[3px]">
+                  {due.length > 0 &&
+                    (paid ? (
+                      <span
+                        className={`border px-0.5 text-[9px] leading-none ${on ? '' : 'text-primary'}`}
+                      >
+                        OK
+                      </span>
+                    ) : (
+                      <span
+                        className={`h-1.5 w-1.5 ${on ? 'bg-on-miku' : 'bg-pink'} ${late ? 'bill-late' : ''}`}
+                      />
+                    ))}
+                  {more.length > 0 && <span className="h-1.5 w-1.5 border border-current" />}
                 </span>
               </button>
             );
@@ -120,9 +136,15 @@ export function DueCalendar({
             </span>
             paid
           </span>
+          {others.size > 0 && (
+            <span className="inline-flex items-center gap-1">
+              <span aria-hidden="true" className="h-1.5 w-1.5 border border-current" />
+              card bill / installment
+            </span>
+          )}
         </p>
       </div>
-      {picked && tray(picked, rows)}
+      {picked && tray(picked, rows, others.get(picked) ?? [])}
     </section>
   );
 }

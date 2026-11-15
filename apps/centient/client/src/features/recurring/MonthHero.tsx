@@ -8,7 +8,16 @@ import { dayWords } from './BillLine';
 
 const chip = 'border border-edge px-1.5 text-[12px]';
 
-export function MonthHero({ run, today }: { run: MonthRun; today: string }) {
+export function MonthHero({
+  run,
+  today,
+  outside,
+}: {
+  run: MonthRun;
+  today: string;
+  /** Card bills and installments due this month: shown on the page, not counted here. */
+  outside: number;
+}) {
   const month = dayWords(today, { month: 'long', year: 'numeric' });
   return (
     <section
@@ -35,6 +44,7 @@ export function MonthHero({ run, today }: { run: MonthRun; today: string }) {
         )}
         <span className={`${chip} num`}>{formatMoney(run.total, run.currency)} total</span>
         {run.unknown > 0 && <span className={`${chip} text-muted`}>+{run.unknown} that vary</span>}
+        {outside > 0 && <span className={`${chip} text-muted`}>+{outside} outside the bar</span>}
       </p>
     </section>
   );

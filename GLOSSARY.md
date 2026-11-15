@@ -30,6 +30,32 @@ _Avoid_: Trip budget, short budget
 The stretch of time from your month start day to the day before the next one. It is the app's only meaning of "month". A cycle is named by the month that holds most of its days: start day 1–15 takes the month it starts in, 16–31 the month it ends in.
 _Avoid_: Month, billing period
 
+### Bills
+
+**Bill**:
+Something that leaves on a date and repeats, such as Netflix, rent or electricity. A _split bill_ is another thing and is always written in full.
+_Avoid_: Subscription, recurring
+
+**Card bill**:
+What a credit card or pay later account asks for after its statement day.
+_Avoid_: Statement
+
+**Installment**:
+One part of a pay later plan.
+_Avoid_: Instalment, cicilan
+
+**Payment link**:
+The saved tie between a bill, one of its due dates and the entry that paid it. Deleting the entry removes it, and the bill is unpaid again.
+_Avoid_: Payment record
+
+**Month run**:
+What the bills of this calendar month still ask for: an HP bar of what is left, a PAID stamp per bill, MONTH CLEAR at zero. It counts bills only; card bills and installments are shown beside it. It is the one place that goes by the calendar month, not the cycle.
+_Avoid_: Streak, bill score
+
+**Menu**:
+The last seat of the bottom bar: the list of pages that have no seat of their own.
+_Avoid_: More, Settings tab
+
 ### People
 
 **Person**:
