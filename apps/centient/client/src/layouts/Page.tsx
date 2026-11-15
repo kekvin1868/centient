@@ -3,6 +3,9 @@
 // `back`: a key above the title, and the frame renders in from the top.
 import type { ReactNode } from 'react';
 
+/** The key back out of a page inside a screen; `label` names where it goes ("Bills"). */
+export type Back = { label: string; onBack: () => void };
+
 export function Page({
   title,
   action,
@@ -11,8 +14,7 @@ export function Page({
 }: {
   title?: string;
   action?: ReactNode;
-  /** `label` names where it goes back to ("Bills"). */
-  back?: { label: string; onBack: () => void };
+  back?: Back;
   children?: ReactNode;
 }) {
   return (

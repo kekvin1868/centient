@@ -26,7 +26,8 @@ export function CardStatement({
       </div>
       {!account.statement_day ? (
         <p className="text-[15px] text-muted">
-          Set this card's statement day (Settings, then the account) to see its bill here.
+          Set this card's statement day (Menu, Accounts & pockets, then the account) to see its bill
+          here.
         </p>
       ) : (
         data &&

@@ -1,4 +1,4 @@
-// End to end: import a spreadsheet from Settings, review it in the Inbox (a duplicate is linked, the rest added
+// End to end: import a spreadsheet from the Menu, review it in the Inbox (a duplicate is linked, the rest added
 // in one go, one dismissed), see Home's notice, and undo the import. Skips the first run through the API and
 // resets at the end, so the next file starts from a fresh workspace. The server's clock is real, so dates are
 // relative to today.
@@ -56,8 +56,8 @@ test('import a bank sheet: columns are guessed, a bad row is skipped, rows land 
   });
 
   await page.goto('/');
-  await tab('Settings').tap();
-  await page.getByRole('button', { name: /Import a spreadsheet/ }).tap();
+  await tab('Menu').tap();
+  await page.getByRole('option', { name: /Import a spreadsheet/ }).tap();
   const form = sheet('Import a spreadsheet');
   await form
     .getByLabel('CSV file')
@@ -97,8 +97,8 @@ test('review: link the duplicate, dismiss one, add the rest at once', async () =
 
 test('the same file again adds nothing; Home shows no notice', async () => {
   await page.goto('/');
-  await tab('Settings').tap();
-  await page.getByRole('button', { name: /Import a spreadsheet/ }).tap();
+  await tab('Menu').tap();
+  await page.getByRole('option', { name: /Import a spreadsheet/ }).tap();
   const form = sheet('Import a spreadsheet');
   await form
     .getByLabel('CSV file')
@@ -112,8 +112,8 @@ test('the same file again adds nothing; Home shows no notice', async () => {
 });
 
 test('undo the import: its entries go, the linked coffee stays', async () => {
-  await tab('Settings').tap();
-  await page.getByRole('button', { name: /^Inbox/ }).tap();
+  await tab('Menu').tap();
+  await page.getByRole('option', { name: /^Inbox/ }).tap();
   const inbox = sheet('Inbox');
   await inbox.getByRole('button', { name: 'Undo this import' }).tap();
   await page.getByRole('button', { name: 'Undo import' }).tap();
