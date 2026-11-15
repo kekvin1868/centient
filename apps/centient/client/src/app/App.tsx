@@ -1,4 +1,4 @@
-// App shell: the lock screen while the app lock is up, else first run, then four screens behind a tab bar,
+// App shell: the lock screen while the app lock is up, else first run, then five screens behind a tab bar,
 // inside Konsta's iOS theme. A tab change redraws
 // the screen with a random retro effect (TV, glitch or render).
 import { useIsRestoring } from '@tanstack/react-query';
@@ -24,9 +24,11 @@ const LockScreen = lazy(() =>
 );
 const FirstRun = lazy(() => import('../screens/FirstRun').then(m => ({ default: m.FirstRun })));
 const loadMoney = () => import('../screens/Money');
+const loadBills = () => import('../screens/Bills');
 const loadInsights = () => import('../screens/Insights');
 const loadSettings = () => import('../screens/Settings');
 const Money = lazy(() => loadMoney().then(m => ({ default: m.Money })));
+const Bills = lazy(() => loadBills().then(m => ({ default: m.Bills })));
 const Insights = lazy(() => loadInsights().then(m => ({ default: m.Insights })));
 const Settings = lazy(() => loadSettings().then(m => ({ default: m.Settings })));
 const whenIdle = (fn: () => void) =>
@@ -50,9 +52,13 @@ export function App() {
     attempt(loadBasics).then(() => setReady(true));
     whenIdle(
       () =>
-        void Promise.all([loadMoney(), loadInsights(), loadSettings(), waitingLib()]).catch(
-          () => {},
-        ),
+        void Promise.all([
+          loadMoney(),
+          loadBills(),
+          loadInsights(),
+          loadSettings(),
+          waitingLib(),
+        ]).catch(() => {}),
     );
   }, [restoring, isLocked]);
   useEffect(() => {
@@ -78,8 +84,11 @@ export function App() {
         <>
           <div key={screen} className={fx ? `fx-in-${fx}` : ''}>
             <Suspense fallback={null}>
-              {screen === 'home' && <Home onGoMoney={() => setScreen('money')} />}
+              {screen === 'home' && (
+                <Home onGoMoney={() => setScreen('money')} onGoBills={() => setScreen('bills')} />
+              )}
               {screen === 'money' && <Money onShowAccount={() => setScreen('home')} />}
+              {screen === 'bills' && <Bills />}
               {screen === 'insights' && <Insights />}
               {screen === 'settings' && <Settings />}
             </Suspense>

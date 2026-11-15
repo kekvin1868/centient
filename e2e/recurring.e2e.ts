@@ -1,4 +1,4 @@
-// End to end: recurring bills. Add a bill from Money's Subscriptions, see it under Coming up on Home, mark it
+// End to end: recurring bills. Add a bill on the Bills tab, see it under Coming up on Home, mark it
 // paid, pay a card's statement, and turn a payment found in the entries into a bill. Skips the first run through
 // the API and resets at the end, so the next file starts from a fresh workspace. The server's clock is real, so
 // dates are relative to today.
@@ -29,7 +29,7 @@ type Named = { id: string; name: string };
 let main: Named;
 let fun: Named;
 
-test('add a bill from Money: totals, the calendar mark and the row', async () => {
+test('add a bill on the Bills tab: totals, the month, the calendar mark and the row', async () => {
   const cat = (await (await page.request.get('/api/catalog')).json()) as {
     accounts: Named[];
     categories: Named[];
@@ -39,9 +39,8 @@ test('add a bill from Money: totals, the calendar mark and the row', async () =>
   await send('post', `/accounts/${main.id}/balance`, { actual: 5_000_000 });
 
   await page.goto('/');
-  await tab('Money').tap();
-  await page.getByRole('button', { name: /Bills that repeat/ }).tap();
-  const subs = sheet('Subscriptions');
+  await tab('Bills').tap();
+  const subs = page.getByRole('main');
   await expect(subs.getByText('Nothing yet.')).toBeVisible();
   await subs.getByRole('button', { name: 'Add a bill' }).tap();
 
@@ -56,7 +55,12 @@ test('add a bill from Money: totals, the calendar mark and the row', async () =>
 
   await expect(subs.getByText('Rp120.000 a month')).toBeVisible();
   await expect(subs.getByText('Rp1.440.000 a year')).toBeVisible();
-  await expect(subs.getByRole('button', { name: /^Netflix/ })).toContainText('Due today');
+  const month = subs.getByRole('region', { name: /^Bills in / });
+  await expect(month).toContainText('0/1 PAID');
+  await expect(month).toContainText('Rp120.000 total');
+  await expect(
+    subs.getByRole('list', { name: 'Next 7 days' }).getByRole('button', { name: /^Netflix/ }),
+  ).toContainText('Due today');
   const mark = subs.getByRole('button', { name: /1 bill due$/ }).first();
   await mark.tap();
   await expect(subs.getByRole('list', { name: /^Due / })).toContainText('Netflix');
@@ -67,14 +71,19 @@ test('Home lists it under Coming up; Mark paid logs it and moves it on', async (
   const coming = page.getByRole('region', { name: 'Bills coming up' });
   await expect(coming.getByRole('button', { name: /Netflix/ })).toContainText('Due today');
   await coming.getByRole('button', { name: /Netflix/ }).tap();
-  await sheet('Subscriptions')
+  const bills = page.getByRole('main');
+  await bills
+    .getByRole('list', { name: 'Next 7 days' })
     .getByRole('button', { name: /^Netflix/ })
     .tap();
   await sheet('Netflix').getByRole('button', { name: 'Mark paid Rp120.000' }).tap();
 
-  await expect(sheet('Subscriptions').getByRole('button', { name: /^Netflix/ })).toContainText(
-    /Due in \d+ days/,
-  );
+  // Paid for this month: under Paid, the month is clear, and its day on the calendar reads OK.
+  await expect(
+    bills.getByRole('list', { name: 'Paid' }).getByRole('button', { name: /^Netflix/ }),
+  ).toContainText(/Paid \d+ \w+/);
+  await expect(bills.getByRole('region', { name: /^Bills in / })).toContainText('1/1 PAID');
+  await expect(bills.getByRole('button', { name: /1 bill paid$/ })).toBeVisible();
   await page.goto('/');
   await expect(page.getByRole('region', { name: 'Your money' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Bills coming up' })).toHaveCount(0);
@@ -136,9 +145,8 @@ test('a payment found in the entries becomes a bill, or is hidden', async () => 
   for (const ago of [61, 30]) await pay('gym', 250_000, ago);
 
   await page.goto('/');
-  await tab('Money').tap();
-  await page.getByRole('button', { name: /bill that repeat/ }).tap();
-  const subs = sheet('Subscriptions');
+  await tab('Bills').tap();
+  const subs = page.getByRole('main');
   await expect(subs.getByText('Found in your entries')).toBeVisible();
   await subs.getByRole('button', { name: 'Hide Gym' }).tap();
   await expect(subs.getByRole('button', { name: 'Hide Gym' })).toHaveCount(0);

@@ -34,7 +34,7 @@ export function PushSettings() {
       foot={
         blocker
           ? undefined
-          : 'A notification 3 days before a bill is due and on the day, around 08:00. Bills are under Money, Subscriptions.'
+          : 'A notification 3 days before a bill is due and on the day, around 08:00. Bills have their own tab.'
       }
     >
       {blocker ? (
