@@ -10,6 +10,7 @@ import type { Command } from '../../lib/schemas';
 import type { InboxItem } from '../../repos/inbox';
 import type { AccountsService } from '../accounts/service';
 import type { LedgerService } from '../ledger/service';
+import { unpay } from '../recurring/advance';
 
 type Row = {
   date: string;
@@ -297,9 +298,11 @@ export function createInboxService({
       if (!imports.some(i => i.id === importId))
         throw new DomainError('NOT_FOUND', 'Import not found');
       const entries = await repos.inbox.addedBy(ws, importId);
+      // Read before any entry goes, so bills paid by several of them walk back together.
+      const back = await unpay(repos, ws, entries);
       for (const batch of chunks(entries, LEDGER_BATCH))
         await repos.batch(batch.flatMap(id => repos.entries.removeStatements(ws, id)));
-      await repos.inbox.removeImportStatement(ws, importId).run();
+      await repos.batch([...back, repos.inbox.removeImportStatement(ws, importId)]);
       return { removedEntries: entries.length };
     },
   };

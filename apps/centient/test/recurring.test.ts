@@ -259,6 +259,83 @@ describe('recurring service', () => {
     expect((await t.item(id))!.nextDue).toBe('2026-12-20');
   });
 
+  it('keeps each payment: its due date, entry, day and amount, read from the entry', async () => {
+    const t = await workspace('2026-11-12');
+    const id = await t.netflix();
+    const paid = await t.svc().recurring.paid(id, {});
+    const [logged] = await t.spend('2026-12-18', 120_000, 'netflix');
+    expect((await t.item(id))!.payments).toEqual([
+      { due: '2026-11-20', entryId: paid, paidOn: '2026-11-12', amount: 120_000 },
+      { due: '2026-12-20', entryId: logged, paidOn: '2026-12-18', amount: 120_000 },
+    ]);
+    // An edit shows in the history; the payment stays.
+    await t.svc().ledger.edit(logged, {
+      type: 'EXPENSE',
+      accountId: t.bca,
+      categoryId: t.bills,
+      amount: 125_000,
+      date: '2026-12-19',
+      merchant: 'netflix',
+    });
+    expect((await t.item(id))!.payments[1]).toMatchObject({
+      paidOn: '2026-12-19',
+      amount: 125_000,
+    });
+  });
+
+  it('puts a bill back to unpaid when the entry that paid it is deleted, then pays it again', async () => {
+    const t = await workspace('2026-11-12');
+    const id = await t.netflix();
+    const first = await t.svc().recurring.paid(id, {});
+    await t.svc().ledger.remove(first);
+    expect(await t.item(id)).toMatchObject({ nextDue: '2026-11-20', payments: [] });
+    const again = await t.svc().recurring.paid(id, {});
+    expect(await t.item(id)).toMatchObject({
+      nextDue: '2026-12-20',
+      payments: [{ due: '2026-11-20', entryId: again }],
+    });
+  });
+
+  it('moves a bill back only for its latest payment', async () => {
+    const t = await workspace('2026-11-12');
+    const id = await t.netflix();
+    const nov = await t.svc().recurring.paid(id, {});
+    const dec = await t.svc().recurring.paid(id, {});
+    await t.svc().ledger.remove(nov);
+    expect(await t.item(id)).toMatchObject({
+      nextDue: '2027-01-20',
+      payments: [{ due: '2026-12-20', entryId: dec }],
+    });
+    await t.svc().ledger.remove(dec);
+    expect((await t.item(id))!.nextDue).toBe('2026-12-20');
+    // Set by hand since: a delete leaves it.
+    const jan = await t.svc().recurring.paid(id, {});
+    await t.svc().recurring.update(id, { nextDue: '2027-03-01' });
+    await t.svc().ledger.remove(jan);
+    expect((await t.item(id))!.nextDue).toBe('2027-03-01');
+  });
+
+  it('puts a bill back when the import that paid it is undone', async () => {
+    const t = await workspace('2026-12-25');
+    const id = await t.netflix();
+    const row = (date: string) => ({
+      date,
+      amount: -120_000,
+      merchant: 'Netflix',
+      accountId: t.bca,
+      categoryId: t.bills,
+    });
+    const { importId } = await t.svc().inbox.importRows([row('2026-11-20')]);
+    await t.svc().inbox.addAll(importId);
+    const second = await t.svc().inbox.importRows([row('2026-12-20')]);
+    await t.svc().inbox.addAll(second.importId);
+    expect((await t.item(id))!.nextDue).toBe('2027-01-20');
+    await t.svc().inbox.undoImport(second.importId);
+    expect((await t.item(id))!.nextDue).toBe('2026-12-20');
+    await t.svc().inbox.undoImport(importId);
+    expect(await t.item(id)).toMatchObject({ nextDue: '2026-11-20', payments: [] });
+  });
+
   it('leaves a paused bill where it is', async () => {
     const t = await workspace('2026-11-12');
     const id = await t.netflix();

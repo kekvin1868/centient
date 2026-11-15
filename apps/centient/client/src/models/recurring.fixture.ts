@@ -15,5 +15,6 @@ export const bill = (o: Partial<Recurring> = {}): Recurring => ({
   service: 'netflix',
   paused: false,
   dues: ['2026-11-20', '2026-12-20'],
+  payments: [],
   ...o,
 });

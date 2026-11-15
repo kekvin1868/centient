@@ -75,12 +75,17 @@ export function createRecurringService({
   return {
     /**
      * Everything the Subscriptions screen and Home's "Coming up" show: each bill with its due dates for the
-     * next 12 months, what the bills cost per currency, and each card's statement.
+     * next 12 months and its payments (oldest due date first), what the bills cost per currency, and each card's
+     * statement.
      */
     async list() {
       const day = today();
       const until = addMonths(day, 12);
-      const [rows, c] = await Promise.all([repos.recurring.list(ws), catalog.load()]);
+      const [rows, c, history] = await Promise.all([
+        repos.recurring.list(ws),
+        catalog.load(),
+        repos.recurring.history(ws),
+      ]);
       const currencyOf = (accountId: string) =>
         c.accounts.find(a => a.id === accountId)?.currency_code;
 
@@ -130,6 +135,9 @@ export function createRecurringService({
           service: r.service,
           paused: r.paused_at !== null,
           dues: r.paused_at ? [] : dueDates(scheduleOf(r), until),
+          payments: history
+            .filter(p => p.recurring_id === r.id)
+            .map(p => ({ due: p.due, entryId: p.entry_id, paidOn: p.day, amount: p.amount })),
         })),
         totals: [...totals].map(([currency, t]) => ({ currency, ...t })),
         cards,
@@ -184,7 +192,10 @@ export function createRecurringService({
         },
       ]);
       const { ids, stmts } = repos.entries.insertStatements(ws, entries);
-      await repos.batch([...stmts, advance(repos, ws, row, new Date(now()).toISOString())]);
+      await repos.batch([
+        ...stmts,
+        ...advance(repos, ws, row, ids[0], new Date(now()).toISOString()),
+      ]);
       return ids[0];
     },
 

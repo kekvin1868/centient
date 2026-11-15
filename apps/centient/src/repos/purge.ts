@@ -18,6 +18,7 @@ const STATEMENTS = [
   under('envelope_categories', 'envelope_id', 'envelopes'),
   inWs('tickets'),
   inWs('inbox_items'),
+  inWs('bill_payments'),
   inWs('statement_imports'),
   inWs('recurring'),
   inWs('recurring_hidden'),
