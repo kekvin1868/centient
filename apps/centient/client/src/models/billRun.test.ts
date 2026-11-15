@@ -26,8 +26,19 @@ describe('bill rows', () => {
       ['2026-11-10', 'late'],
       ['2026-12-10', 'due'],
     ]);
+    // Only the bill's current due date has the PAID? key.
+    expect(rows.map(r => r.payable)).toEqual([false, true, false]);
     expect(paidLate(rows[0])).toBe(true);
     expect(paidLate(rows[1])).toBe(false);
+  });
+
+  it('keeps the PAID? key off a due date past this month and more than a week away', () => {
+    const key = (due: string) => rowsOf(bill({ nextDue: due, dues: [due] }), today)[0].payable;
+    expect(key('2026-11-30')).toBe(true);
+    expect(key('2026-12-15')).toBe(false);
+    expect(
+      rowsOf(bill({ nextDue: '2026-12-02', dues: ['2026-12-02'] }), '2026-11-28')[0].payable,
+    ).toBe(true);
   });
 
   it('guesses a varying bill from its last payment', () => {

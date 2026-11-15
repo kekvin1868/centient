@@ -66,8 +66,7 @@ export function usePayBill(): { trail: (row: BillRow) => ReactNode; layers: Reac
           PAID
         </span>
       );
-    // One key per bill: the due date it is on now.
-    if (item.paused || row.due !== item.nextDue) return null;
+    if (item.paused || !row.payable) return null;
     return (
       <button
         type="button"
