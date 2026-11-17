@@ -32,5 +32,5 @@ export async function exportCsv(query: CsvQuery): Promise<string> {
   return res.text();
 }
 
-/** Everything in the workspace as one document (Settings' backup download). */
+/** Everything in the workspace as one document (Security & Data's backup download). */
 export const backup = () => call(client.api.backup.$get());

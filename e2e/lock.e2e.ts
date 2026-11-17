@@ -32,13 +32,16 @@ test.afterAll(async () => {
 });
 
 const tab = (name: string) => page.getByRole('button', { name, exact: true });
+/** A row of the Menu tab's list. */
+const menuRow = (name: string) => page.getByRole('option', { name, exact: true });
 const lockScreen = () => page.getByText('Centient is locked.');
 const home = () => page.getByRole('region', { name: 'Your money' });
 const me = () => page.request.get('/api/me');
 
-test('turn the lock on from Settings', async () => {
+test('turn the lock on from Menu, Security & Data', async () => {
   await page.goto('/');
-  await tab('Settings').tap();
+  await tab('Menu').tap();
+  await menuRow('Security & Data').tap();
   await page.getByRole('button', { name: 'Turn on app lock' }).tap();
   await expect(page.getByText('App lock is on')).toBeVisible();
   await expect(page.getByLabel('Lock when away for')).toHaveValue('1');
@@ -51,7 +54,7 @@ test('turn the lock on from Settings', async () => {
 test('Lock now: the lock screen covers the app and the server refuses this browser', async () => {
   await page.getByRole('button', { name: 'Lock now' }).tap();
   await expect(lockScreen()).toBeVisible();
-  await expect(tab('Settings')).toHaveCount(0);
+  await expect(tab('Menu')).toHaveCount(0);
   const refused = await me();
   expect(refused.status()).toBe(423);
   expect(await refused.json()).toMatchObject({ code: 'LOCKED' });
@@ -60,7 +63,8 @@ test('Lock now: the lock screen covers the app and the server refuses this brows
 
 test('Unlock with the passkey brings the app back where it was', async () => {
   await page.getByRole('button', { name: 'Unlock' }).tap();
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  // The tab is kept; the page inside it starts over at the Menu.
+  await expect(page.getByRole('heading', { name: 'Menu' })).toBeVisible();
   expect((await me()).status()).toBe(200);
 });
 
@@ -81,7 +85,8 @@ test('a fresh start begins locked, and a lost passkey cannot be reset without a 
 });
 
 test('it locks by itself after time away', async () => {
-  await tab('Settings').tap();
+  await tab('Menu').tap();
+  await menuRow('Security & Data').tap();
   await page.getByLabel('Lock when away for').selectOption({ label: 'Any time' });
   const away = (hidden: boolean) =>
     page.evaluate(h => {
@@ -92,10 +97,11 @@ test('it locks by itself after time away', async () => {
   await away(false);
   await expect(lockScreen()).toBeVisible();
   await page.getByRole('button', { name: 'Unlock' }).tap();
-  await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Menu' })).toBeVisible();
 });
 
 test('Delete everything erases the account and the lock; the app starts over', async () => {
+  await menuRow('Security & Data').tap();
   await page.getByRole('button', { name: /Delete everything/ }).tap();
   const sheet = page.getByRole('dialog', { name: 'Delete everything' });
   const go = sheet.getByRole('button', { name: 'Delete everything for good' });

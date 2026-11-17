@@ -26,11 +26,11 @@ const FirstRun = lazy(() => import('../screens/FirstRun').then(m => ({ default: 
 const loadMoney = () => import('../screens/Money');
 const loadBills = () => import('../screens/Bills');
 const loadInsights = () => import('../screens/Insights');
-const loadSettings = () => import('../screens/Settings');
+const loadMenu = () => import('../screens/Menu');
 const Money = lazy(() => loadMoney().then(m => ({ default: m.Money })));
 const Bills = lazy(() => loadBills().then(m => ({ default: m.Bills })));
 const Insights = lazy(() => loadInsights().then(m => ({ default: m.Insights })));
-const Settings = lazy(() => loadSettings().then(m => ({ default: m.Settings })));
+const Menu = lazy(() => loadMenu().then(m => ({ default: m.Menu })));
 const whenIdle = (fn: () => void) =>
   'requestIdleCallback' in window ? requestIdleCallback(fn) : setTimeout(fn, 1500);
 
@@ -56,7 +56,7 @@ export function App() {
           loadMoney(),
           loadBills(),
           loadInsights(),
-          loadSettings(),
+          loadMenu(),
           waitingLib(),
         ]).catch(() => {}),
     );
@@ -90,7 +90,7 @@ export function App() {
               {screen === 'money' && <Money onShowAccount={() => setScreen('home')} />}
               {screen === 'bills' && <Bills />}
               {screen === 'insights' && <Insights />}
-              {screen === 'settings' && <Settings />}
+              {screen === 'menu' && <Menu />}
             </Suspense>
           </div>
           <BottomNav current={screen} onGo={setScreen} />

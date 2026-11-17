@@ -42,6 +42,8 @@ const balances = async () =>
 const balance = async (name: string) =>
   (await balances()).accounts.find(a => a.name === name)!.balance;
 const tab = (name: string) => page.getByRole('button', { name, exact: true });
+/** A row of the Menu tab's list. */
+const menuRow = (name: string) => page.getByRole('option', { name, exact: true });
 const cards = () => page.getByRole('group', { name: 'Accounts' });
 
 test('first run: the night menu sets starting balances, then Home', async () => {
@@ -148,7 +150,8 @@ test('deleting a category moves its entries to another one', async () => {
       })
     ).ok(),
   ).toBe(true);
-  await tab('Settings').tap();
+  await tab('Menu').tap();
+  await menuRow('Settings').tap();
   await page.getByRole('button', { name: /Fun/ }).first().tap();
   await page
     .getByRole('dialog', { name: 'Fun' })
@@ -659,7 +662,8 @@ test('a short person: I cover the rest from another account, or they pay the res
 });
 
 test('an account can be in any currency: search "yen", and its balance has no decimals', async () => {
-  await tab('Settings').tap();
+  await tab('Menu').tap();
+  await menuRow('Accounts & pockets').tap();
   await page.getByRole('button', { name: 'Add account' }).tap();
   const sheet = page.getByRole('dialog', { name: 'Add account' });
   await sheet.getByRole('textbox', { name: 'Name' }).fill('Yen');
@@ -707,7 +711,8 @@ test('the Budget forecast stays hidden until its start day, which is set on this
   await expect(page.getByText('Forecast starts on day 3 · 1 day to go')).toBeVisible();
 
   // Settings: the row sits directly below "Month starts on day", with its footnote.
-  await tab('Settings').tap();
+  await tab('Menu').tap();
+  await menuRow('Settings').tap();
   await expect(page.getByRole('combobox', { name: 'Month starts on day' })).toBeVisible(); // loads on demand
   const names = await settingsCombos();
   expect(names[names.indexOf('Month starts on day') + 1]).toBe('Forecast starts on day');
@@ -718,7 +723,8 @@ test('the Budget forecast stays hidden until its start day, which is set on this
   ).toBeVisible();
   await page.getByRole('combobox', { name: 'Forecast starts on day' }).selectOption('5');
   await page.reload();
-  await tab('Settings').tap();
+  await tab('Menu').tap();
+  await menuRow('Settings').tap();
   await expect(page.getByRole('combobox', { name: 'Forecast starts on day' })).toHaveValue('5');
   await tab('Money').tap();
   await expect(page.getByText('Forecast starts on day 5 · 3 days to go')).toBeVisible();
