@@ -15,12 +15,13 @@ export type Recurring = {
   due_day: number;
   ends_on: string | null;
   service: string | null;
+  note: string | null;
   paused_at: string | null;
 };
 export type NewRecurring = Omit<Recurring, 'id' | 'paused_at'>;
 
 const COLUMNS =
-  'id, name, account_id, envelope_id, category_id, amount, every_months, next_due, due_day, ends_on, service, paused_at';
+  'id, name, account_id, envelope_id, category_id, amount, every_months, next_due, due_day, ends_on, service, note, paused_at';
 const PATCHABLE = COLUMNS.split(', ').filter(c => c !== 'id');
 
 export function recurringRepo(db: D1Database) {
@@ -38,8 +39,8 @@ export function recurringRepo(db: D1Database) {
       const id = uid();
       await db
         .prepare(
-          `INSERT INTO recurring (id, workspace_id, name, account_id, envelope_id, category_id, amount, every_months, next_due, due_day, ends_on, service)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO recurring (id, workspace_id, name, account_id, envelope_id, category_id, amount, every_months, next_due, due_day, ends_on, service, note)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           id,
@@ -54,6 +55,7 @@ export function recurringRepo(db: D1Database) {
           r.due_day,
           r.ends_on,
           r.service,
+          r.note,
         )
         .run();
       return id;

@@ -48,7 +48,9 @@ describe('the bill form', () => {
       everyMonths: 1,
       nextDue: '2026-11-20',
       endsOn: null,
+      note: null,
     });
+    expect(toRequest({ ...f, note: '  ' }).note).toBeNull();
     expect(toRequest({ ...f, endsOn: '2027-01-20' }).endsOn).toBe('2027-01-20');
   });
 

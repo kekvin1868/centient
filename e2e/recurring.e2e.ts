@@ -102,11 +102,14 @@ test('Home lists it under Coming up; PAID? logs it in one tap, Undo takes it bac
     .getByRole('list', { name: 'Paid' })
     .getByRole('button', { name: /^Netflix/ })
     .tap();
+  await bills.getByRole('button', { name: 'Edit Netflix' }).tap();
   await sheet('Netflix').getByRole('button', { name: 'Mark paid Rp120.000' }).tap();
   const early = sheet(/^Are you sure\? This logs the payment for \d+ \w+ \d{4}\.$/);
   await early.getByRole('button', { name: 'CANCEL' }).tap();
   await expect(early).toHaveCount(0);
   await expect(sheet('Netflix')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await bills.getByRole('button', { name: 'Back to Bills' }).tap();
   await expect(month).toContainText('1/1 PAID');
   await page.goto('/');
   await expect(page.getByRole('region', { name: 'Your money' })).toBeVisible();
@@ -159,8 +162,13 @@ test("a bill's own page: history, edit, pause, and back to the list", async () =
 
   await bills.getByRole('button', { name: 'Edit Netflix' }).tap();
   await expect(sheet('Netflix').getByLabel('Name')).toHaveValue('Netflix');
-  await page.keyboard.press('Escape');
+  // An optional note, shown on the page.
+  await sheet('Netflix').getByLabel('Note').fill('Customer ID 1234');
+  await sheet('Netflix').getByRole('button', { name: 'Save' }).tap();
   await expect(sheet('Netflix')).toHaveCount(0);
+  await expect(bills.getByRole('region', { name: 'This bill' })).toContainText(
+    'Note: Customer ID 1234',
+  );
 
   await bills.getByRole('button', { name: 'PAUSE' }).tap();
   await expect(bills.getByText('Paused: no reminders')).toBeVisible();

@@ -19,6 +19,7 @@ type Input = {
   nextDue: string;
   endsOn?: string | null;
   service?: string | null;
+  note?: string | null;
 };
 
 // "Found in your entries" looks this far back: room for three or four monthly payments.
@@ -69,6 +70,7 @@ export function createRecurringService({
     }
     if (i.endsOn !== undefined) out.ends_on = i.endsOn;
     if (i.service !== undefined) out.service = i.service?.trim().toLowerCase() || null;
+    if (i.note !== undefined) out.note = i.note?.trim() || null;
     return out;
   }
 
@@ -133,6 +135,7 @@ export function createRecurringService({
           nextDue: r.next_due,
           endsOn: r.ends_on,
           service: r.service,
+          note: r.note,
           paused: r.paused_at !== null,
           dues: r.paused_at ? [] : dueDates(scheduleOf(r), until),
           payments: history
@@ -157,6 +160,7 @@ export function createRecurringService({
         due_day: cols.due_day!,
         ends_on: i.endsOn ?? null,
         service: cols.service ?? null,
+        note: cols.note ?? null,
       });
     },
 
