@@ -1,13 +1,14 @@
-// Four screens in a game-menu tab bar: icon over a display-font label, the current screen on a slanted
+// Five screens in a game-menu tab bar: icon over a display-font label, the current screen on a slanted
 // Miku plate (Borderlands menu tabs). Every tab has the same box, so nothing shifts between screens.
-import { ChartBar, GearSix, House, Wallet, type Icon } from '@phosphor-icons/react';
+import { CalendarDots, ChartBar, GearSix, House, Wallet, type Icon } from '@phosphor-icons/react';
 import { buzz } from '../lib/motion';
 
-export type Screen = 'home' | 'money' | 'insights' | 'settings';
+export type Screen = 'home' | 'money' | 'bills' | 'insights' | 'settings';
 
 const TABS: { screen: Screen; label: string; icon: Icon }[] = [
   { screen: 'home', label: 'Home', icon: House },
   { screen: 'money', label: 'Money', icon: Wallet },
+  { screen: 'bills', label: 'Bills', icon: CalendarDots },
   { screen: 'insights', label: 'Insights', icon: ChartBar },
   { screen: 'settings', label: 'Settings', icon: GearSix },
 ];
@@ -18,7 +19,7 @@ export function BottomNav({ current, onGo }: { current: Screen; onGo: (s: Screen
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-30 border-t border-edge bg-ios-light-surface pb-safe dark:bg-ios-dark-surface"
     >
-      <div className="mx-auto flex h-16 max-w-[640px] gap-2 px-3 py-1.5">
+      <div className="mx-auto flex h-16 max-w-[640px] gap-1 px-2 py-1.5">
         {TABS.map(({ screen, label, icon: I }) => {
           const on = screen === current;
           return (

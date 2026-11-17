@@ -13,7 +13,6 @@ import { InboxNotice } from '../features/inbox/InboxNotice';
 import { PhotoButton } from '../features/inbox/PhotoButton';
 import { DueSoon } from '../features/installments/DueSoon';
 import { ComingUp } from '../features/recurring/ComingUp';
-import { SubscriptionsLazy } from '../features/recurring/SubscriptionsLazy';
 import { Page } from '../layouts/Page';
 import { lazySheet } from '../ui/lazySheet';
 import { Logo } from '../ui/Logo';
@@ -27,11 +26,10 @@ const AllActivity = lazySheet(() =>
   import('../features/entries/AllActivity').then(m => m.AllActivity),
 );
 
-export function Home({ onGoMoney }: { onGoMoney: () => void }) {
+export function Home({ onGoMoney, onGoBills }: { onGoMoney: () => void; onGoBills: () => void }) {
   const [open, setOpen] = useState<Entry | null>(null);
   const [all, setAll] = useState(false);
   const [picking, setPicking] = useState(false);
-  const [subscriptions, setSubscriptions] = useState(false);
   const [inbox, setInbox] = useState(false);
   return (
     <Page>
@@ -48,11 +46,10 @@ export function Home({ onGoMoney }: { onGoMoney: () => void }) {
       <NotSent onOpen={setOpen} />
       <PhotoButton onCaptured={() => setInbox(true)} />
       <InboxNotice onOpen={() => setInbox(true)} />
-      <ComingUp onOpen={() => setSubscriptions(true)} />
+      <ComingUp onOpen={onGoBills} />
       <Recent onOpen={setOpen} onSeeAll={() => setAll(true)} />
       <AccountPicker open={picking} onClose={() => setPicking(false)} />
       <Inbox open={inbox} onClose={() => setInbox(false)} />
-      <SubscriptionsLazy open={subscriptions} onClose={() => setSubscriptions(false)} />
       <AllActivity open={all} onClose={() => setAll(false)} onOpen={setOpen} />
       <EntrySheet key={`entry:${open?.id ?? 'none'}`} entry={open} onClose={() => setOpen(null)} />
     </Page>

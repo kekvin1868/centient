@@ -74,7 +74,7 @@ export function createRecurringService({
 
   return {
     /**
-     * Everything the Subscriptions screen and Home's "Coming up" show: each bill with its due dates for the
+     * Everything the Bills page and Home's "Coming up" show: each bill with its due dates for the
      * next 12 months and its payments (oldest due date first), what the bills cost per currency, and each card's
      * statement.
      */

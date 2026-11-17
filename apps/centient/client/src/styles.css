@@ -770,6 +770,10 @@ body::after {
     opacity: 0;
   }
 }
+/* A late bill's mark on the Bills page blinks hard. */
+.bill-late {
+  animation: blink 1.1s steps(1, end) infinite;
+}
 /* NuclearSign: an alarm lamp, lit 4.5 s then dark 0.5 s, hard on/off. */
 .alarm {
   animation: alarm 5s steps(1, end) infinite;
