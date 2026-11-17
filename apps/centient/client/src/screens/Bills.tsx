@@ -186,11 +186,6 @@ export function Bills() {
           </ul>
         </section>
       ))}
-      {data.items.length > 0 && (
-        <p className="mx-4 mt-2 text-[13px] text-muted">
-          PAID? logs the expense today. Logging it yourself moves the bill on too.
-        </p>
-      )}
       <FoundList today={today} onAdd={prefill => setEditing({ item: null, prefill })} />
       {sheets}
     </Page>
