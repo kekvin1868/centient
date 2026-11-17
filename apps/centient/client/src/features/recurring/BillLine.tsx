@@ -5,6 +5,7 @@ import { formatMoney } from '../../lib/format';
 import { categoryEmoji } from '../../lib/labels';
 import { catalog, nameOf } from '../../lib/state';
 import { paidLate, type BillRow } from '../../models/billRun';
+import { daysBetween } from '../../models/dates';
 import { dueWords } from '../../models/recurring';
 
 export const dayWords = (day: string, o: Intl.DateTimeFormatOptions) =>
@@ -12,6 +13,12 @@ export const dayWords = (day: string, o: Intl.DateTimeFormatOptions) =>
 
 const when = (row: BillRow, today: string) => {
   if (row.item.paused) return 'Paused';
+  const days = daysBetween(today, row.due);
+  // Next 7 days: the date and how far it is ("Fri 20 Nov · in 3 days").
+  if (row.state !== 'paid' && days >= 0 && days <= 7) {
+    const date = dayWords(row.due, { weekday: 'short', day: 'numeric', month: 'short' });
+    return `${date} · ${days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`}`;
+  }
   if (row.state !== 'paid') return dueWords(row.due, today);
   const on = dayWords(row.paidOn ?? row.due, { day: 'numeric', month: 'short' });
   return paidLate(row) ? `Paid ${on}, late` : `Paid ${on}`;

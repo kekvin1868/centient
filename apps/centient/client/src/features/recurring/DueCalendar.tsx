@@ -1,7 +1,7 @@
 // A month of due dates: on each day a bill falls due, a pink mark (blinking when late) or an upright "OK" once
-// all of that day's bills are paid; tap a marked day to list its bills under the grid (`tray`). It goes back to
-// the first saved payment and 11 months ahead, as far as the server works the due dates out.
-import { useState, type ReactNode } from 'react';
+// all of that day's bills are paid. Marks only: a day is not a key (the list below says which bill). It goes back
+// to the first saved payment and 11 months ahead, as far as the server works the due dates out.
+import { useState } from 'react';
 import type { BillRow } from '../../models/billRun';
 import { monthGrid, plusMonths } from '../../ui/DatePicker';
 import { dayWords } from './BillLine';
@@ -9,27 +9,13 @@ import { dayWords } from './BillLine';
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTHS_AHEAD = 11;
 
-export function DueCalendar({
-  byDay,
-  today,
-  tray,
-}: {
-  byDay: Map<string, BillRow[]>;
-  today: string;
-  /** What shows under the grid for the picked day. */
-  tray: (day: string, rows: BillRow[]) => ReactNode;
-}) {
+export function DueCalendar({ byDay, today }: { byDay: Map<string, BillRow[]>; today: string }) {
   const first = `${today.slice(0, 7)}-01`;
   const oldest = [...byDay.keys()].reduce((a, b) => (b < a ? b : a), first);
   const start = `${oldest.slice(0, 7)}-01`;
   const [month, setMonth] = useState(first);
-  const [picked, setPicked] = useState<string | null>(null);
-  const go = (n: number) => {
-    setMonth(m => plusMonths(m, n));
-    setPicked(null);
-  };
+  const go = (n: number) => setMonth(m => plusMonths(m, n));
   const nav = 'n-win min-w-8 px-2 py-0.5 disabled:opacity-35';
-  const rows = picked ? (byDay.get(picked) ?? []) : [];
 
   return (
     <section className="mx-4 mt-4" aria-label="Bill calendar">
@@ -68,7 +54,6 @@ export function DueCalendar({
         <div className="grid grid-cols-7 gap-0.5">
           {monthGrid(month).map(d => {
             const due = byDay.get(d) ?? [];
-            const on = d === picked;
             const frame = `num flex h-[42px] flex-col items-center justify-center gap-0.5 border text-[14px] ${d.startsWith(month.slice(0, 7)) ? '' : 'opacity-30'}`;
             if (!due.length)
               return (
@@ -83,29 +68,21 @@ export function DueCalendar({
             const late = due.some(r => r.state === 'late');
             const say = paid ? 'paid' : late ? 'late' : 'due';
             return (
-              <button
+              <span
                 key={d}
-                type="button"
-                aria-pressed={on}
+                role="img"
                 aria-label={`${dayWords(d, { day: 'numeric', month: 'long' })}, ${due.length} bill${due.length === 1 ? '' : 's'} ${say}`}
-                onClick={() => setPicked(p => (p === d ? null : d))}
-                className={`${frame} ${on ? 'border-on-miku bg-miku text-on-miku' : d === today ? 'border-current' : 'border-edge'}`}
+                className={`${frame} ${d === today ? 'border-current' : 'border-edge'}`}
               >
                 {Number(d.slice(8))}
                 <span aria-hidden="true" className="flex h-[11px] items-center">
                   {paid ? (
-                    <span
-                      className={`border px-0.5 text-[9px] leading-none ${on ? '' : 'text-primary'}`}
-                    >
-                      OK
-                    </span>
+                    <span className="border px-0.5 text-[9px] leading-none text-primary">OK</span>
                   ) : (
-                    <span
-                      className={`h-1.5 w-1.5 ${on ? 'bg-on-miku' : 'bg-pink'} ${late ? 'bill-late' : ''}`}
-                    />
+                    <span className={`h-1.5 w-1.5 bg-pink ${late ? 'bill-late' : ''}`} />
                   )}
                 </span>
-              </button>
+              </span>
             );
           })}
         </div>
@@ -122,7 +99,6 @@ export function DueCalendar({
           </span>
         </p>
       </div>
-      {picked && tray(picked, rows)}
     </section>
   );
 }

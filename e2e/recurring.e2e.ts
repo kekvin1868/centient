@@ -60,10 +60,10 @@ test('add a bill on the Bills tab: totals, the month, the calendar mark and the 
   await expect(month).toContainText('Rp120.000 total');
   await expect(
     subs.getByRole('list', { name: 'Next 7 days' }).getByRole('button', { name: /^Netflix/ }),
-  ).toContainText('Due today');
-  const mark = subs.getByRole('button', { name: /1 bill due$/ }).first();
-  await mark.tap();
-  await expect(subs.getByRole('list', { name: /^Due / })).toContainText('Netflix');
+  ).toContainText(/\w{3} \d+ \w{3} · today/);
+  // The calendar only marks the day; it is not a key.
+  await expect(subs.getByRole('img', { name: /1 bill due$/ }).first()).toBeVisible();
+  await expect(subs.getByRole('button', { name: /1 bill due$/ })).toHaveCount(0);
 });
 
 test('Home lists it under Coming up; Mark paid logs it and moves it on', async () => {
@@ -83,7 +83,7 @@ test('Home lists it under Coming up; Mark paid logs it and moves it on', async (
     bills.getByRole('list', { name: 'Paid' }).getByRole('button', { name: /^Netflix/ }),
   ).toContainText(/Paid \d+ \w+/);
   await expect(bills.getByRole('region', { name: /^Bills in / })).toContainText('1/1 PAID');
-  await expect(bills.getByRole('button', { name: /1 bill paid$/ })).toBeVisible();
+  await expect(bills.getByRole('img', { name: /1 bill paid$/ })).toBeVisible();
   await page.goto('/');
   await expect(page.getByRole('region', { name: 'Your money' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Bills coming up' })).toHaveCount(0);
