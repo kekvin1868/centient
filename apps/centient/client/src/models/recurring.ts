@@ -48,6 +48,9 @@ export const recurringApi = {
         { headers: { 'Idempotency-Key': paidTicket(id, due) } },
       ),
     ),
+  /** Undoes a payment: deletes the expense that paid a bill, and the server moves the bill back to that date. */
+  unpay: (entryId: string) =>
+    call(client.api.entries[':id'].$delete({ param: { id: entryId }, query: {} })),
   /** "Not a subscription": this merchant is no longer offered under "Found in your entries". */
   hide: (merchant: string) => call(client.api.recurring.found.hide.$post({ json: { merchant } })),
 };
