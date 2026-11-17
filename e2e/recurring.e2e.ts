@@ -96,6 +96,18 @@ test('Home lists it under Coming up; PAID? logs it in one tap, Undo takes it bac
   ).toContainText(/Paid \d+ \w+/);
   await expect(month).toContainText('1/1 PAID');
   await expect(bills.getByRole('img', { name: /1 bill paid$/ })).toBeVisible();
+
+  // Paid for this month already: the form's Mark paid asks before paying next month's date.
+  await bills
+    .getByRole('list', { name: 'Paid' })
+    .getByRole('button', { name: /^Netflix/ })
+    .tap();
+  await sheet('Netflix').getByRole('button', { name: 'Mark paid Rp120.000' }).tap();
+  const early = sheet(/^Are you sure\? This logs the payment for \d+ \w+ \d{4}\.$/);
+  await early.getByRole('button', { name: 'CANCEL' }).tap();
+  await expect(early).toHaveCount(0);
+  await expect(sheet('Netflix')).toBeVisible();
+  await expect(month).toContainText('1/1 PAID');
   await page.goto('/');
   await expect(page.getByRole('region', { name: 'Your money' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Bills coming up' })).toHaveCount(0);
