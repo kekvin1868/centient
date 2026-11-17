@@ -73,6 +73,7 @@ export function InputRow({
   type = 'text',
   inputMode,
   list,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -82,6 +83,8 @@ export function InputRow({
   inputMode?: 'numeric' | 'text';
   /** Id of a `<datalist>` whose options the phone offers while typing. */
   list?: string;
+  /** The server's limit, so a long text stops at the field instead of failing on save. */
+  maxLength?: number;
 }) {
   // Label on the left, value on the right, like PickerRow (Konsta's ListInput stacks the label above).
   return (
@@ -95,6 +98,7 @@ export function InputRow({
           type={type}
           inputMode={inputMode}
           list={list}
+          maxLength={maxLength}
           value={value}
           placeholder={placeholder}
           aria-label={label}

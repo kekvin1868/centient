@@ -1,4 +1,5 @@
 // Installment plans: the pay later example from the brief (Rp894k x 3, first one paid, shared with a brother).
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { addMonths } from '../src/modules/installments/service';
 import type { FileStore } from '../src/repos/files';
@@ -237,6 +238,19 @@ describe('installment plans', () => {
     await t.s().accounts.remove(t.kredivo);
     expect((await t.s().installments.list()).map(p => p.name)).toEqual(['Laptop']);
     expect(await t.s().installments.list(t.kredivo)).toEqual([]);
+
+    // A plan left behind before that fix (account deleted, plan live): migration 0022 deletes it.
+    await w.db
+      .prepare("UPDATE accounts SET deleted_at = '2026-11-17' WHERE id = ?")
+      .bind(card.id)
+      .run();
+    expect((await t.s().installments.list()).map(p => p.name)).toEqual(['Laptop']);
+    const sql = readFileSync(
+      new URL('../migrations/0022_orphan_plans.sql', import.meta.url),
+      'utf8',
+    );
+    await w.db.prepare(sql.replace(/^--.*$/gm, '')).run();
+    expect(await t.s().installments.list()).toEqual([]);
   });
 
   it('keeps due dates on the same day, clamped to short months', () => {

@@ -138,7 +138,7 @@ export function accountsRepo(db: D1Database) {
       return out;
     },
 
-    /** Soft-deletes the account, every entry that touches it and its recurring bills, and dismisses what waits for it in the Inbox; false when it is not in this workspace. */
+    /** Soft-deletes the account, every entry that touches it, its recurring bills and installment plans, and dismisses what waits for it in the Inbox; false when it is not in this workspace. */
     async remove(ws: string, id: string, now: string) {
       // Whole entries go, so a split bill paid from this account disappears with its IOU half.
       // ponytail: the name gets a suffix because accounts keep UNIQUE (workspace_id, name); a partial
@@ -165,6 +165,11 @@ export function accountsRepo(db: D1Database) {
         db
           .prepare(
             'UPDATE recurring SET archived_at = ? WHERE workspace_id = ? AND account_id = ? AND archived_at IS NULL',
+          )
+          .bind(now, ws, id),
+        db
+          .prepare(
+            'UPDATE installment_plans SET deleted_at = ? WHERE workspace_id = ? AND account_id = ? AND deleted_at IS NULL',
           )
           .bind(now, ws, id),
         db

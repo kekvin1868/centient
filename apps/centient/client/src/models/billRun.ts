@@ -50,7 +50,7 @@ export function rowsOf(item: Recurring, today: string): BillRow[] {
       state: due < today ? 'late' : 'due',
       amount,
       guess: item.amount === null,
-      payable: due === item.nextDue && (due <= monthOf(today).end || due <= addDays(today, 7)),
+      payable: due === item.nextDue && paysNow(due, today),
     }));
   return [...paid, ...open];
 }
@@ -68,6 +68,10 @@ const monthOf = (day: string) => ({
   // Day strings compare as text, so "-31" is past the end of any month.
   end: `${day.slice(0, 7)}-31`,
 });
+
+/** A due date paid without asking: in this month (or earlier) or within a week. Further off, Mark paid asks first. */
+export const paysNow = (due: string, today: string) =>
+  due <= monthOf(today).end || due <= addDays(today, 7);
 
 /** Paid for this month: its due date is in it, or an older one was caught up on in it. */
 const paidThisMonth = (r: BillRow, today: string) => {

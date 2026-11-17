@@ -1,6 +1,7 @@
 // The Bills page's rows, month run and list groups (pure; no network).
 import { describe, expect, it } from 'vitest';
 import {
+  paysNow,
   billGroups,
   monthRun,
   otherDues,
@@ -48,6 +49,9 @@ describe('bill rows', () => {
     expect(
       rowsOf(bill({ nextDue: '2026-12-02', dues: ['2026-12-02'] }), '2026-11-28')[0].payable,
     ).toBe(true);
+    // The form's Mark paid uses the same rule to decide when to ask first.
+    expect(paysNow('2026-12-02', '2026-11-28')).toBe(true);
+    expect(paysNow('2026-12-17', '2026-11-18')).toBe(false);
   });
 
   it('guesses a varying bill from its last payment', () => {
