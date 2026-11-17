@@ -218,6 +218,27 @@ describe('installment plans', () => {
     ).toBe(false);
   });
 
+  it('drops the plans of a deleted account (the Bills page could not pay them)', async () => {
+    const { w } = world();
+    const t = await setup(w);
+    const plan = {
+      name: 'Phone',
+      amountPerInstallment: 500_000,
+      installments: 3,
+      firstDue: '2026-11-01',
+      paidCount: 0,
+      myShare: 500_000,
+      others: [],
+      alreadyInBalance: true,
+    };
+    await t.s().installments.create({ ...plan, accountId: t.kredivo });
+    const card = await t.s().accounts.create({ name: 'BCA Card', kind: 'CREDIT_CARD' });
+    await t.s().installments.create({ ...plan, accountId: card.id, name: 'Laptop' });
+    await t.s().accounts.remove(t.kredivo);
+    expect((await t.s().installments.list()).map(p => p.name)).toEqual(['Laptop']);
+    expect(await t.s().installments.list(t.kredivo)).toEqual([]);
+  });
+
   it('keeps due dates on the same day, clamped to short months', () => {
     expect([1, 2, 3].map(k => addMonths('2026-01-31', k))).toEqual([
       '2026-02-28',

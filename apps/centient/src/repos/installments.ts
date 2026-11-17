@@ -68,9 +68,14 @@ export function installmentsRepo(db: D1Database) {
       ];
     },
 
-    /** Live plans (optionally of one account) with their parties and paid shares. A share whose logged entry was deleted counts as unpaid. */
+    /**
+     * Live plans (optionally of one account) with their parties and paid shares. A share whose logged entry was
+     * deleted counts as unpaid. A plan on a deleted account is gone with it.
+     */
     async listPlans(ws: string, accountId?: string) {
-      const live = 'workspace_id = ? AND deleted_at IS NULL AND (? IS NULL OR account_id = ?)';
+      // ponytail: deleting an account leaves its plans' rows; this read hides them (old rows included, no migration).
+      const live =
+        'workspace_id = ? AND deleted_at IS NULL AND (? IS NULL OR account_id = ?) AND account_id IN (SELECT id FROM accounts WHERE deleted_at IS NULL)';
       const ids = `SELECT id FROM installment_plans WHERE ${live}`;
       const a = [ws, accountId ?? null, accountId ?? null];
       const [plans, parties, payments] = await db.batch<Record<string, unknown>>([
