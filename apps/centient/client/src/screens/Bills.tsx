@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePlans } from '../features/installments/plans';
 import { PlanSheet } from '../features/installments/PlanSheet';
 import { BillDetail } from '../features/recurring/BillDetail';
-import { BillLine, dayWords } from '../features/recurring/BillLine';
+import { BillLine } from '../features/recurring/BillLine';
 import { DueCalendar } from '../features/recurring/DueCalendar';
 import { FoundList } from '../features/recurring/FoundList';
 import { MonthHero } from '../features/recurring/MonthHero';
@@ -171,19 +171,7 @@ export function Bills() {
         </p>
       )}
       {(data.items.length > 0 || view.others.length > 0) && (
-        <DueCalendar
-          byDay={view.byDay}
-          others={view.othersByDay}
-          today={today}
-          tray={(day, rows, others) => (
-            <ul
-              className={`${list} !mx-0 mt-2`}
-              aria-label={`Due ${dayWords(day, { day: 'numeric', month: 'long' })}`}
-            >
-              {lines([...rows, ...others])}
-            </ul>
-          )}
-        />
+        <DueCalendar byDay={view.byDay} others={view.othersByDay} today={today} />
       )}
       {view.groups.map(g => (
         <section key={`group:${g.label}`}>

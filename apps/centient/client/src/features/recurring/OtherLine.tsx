@@ -3,7 +3,7 @@
 import { formatMoney } from '../../lib/format';
 import { catalog, nameOf } from '../../lib/state';
 import type { OtherDue } from '../../models/billRun';
-import { dueWords } from '../../models/recurring';
+import { openWords } from './BillLine';
 
 export const otherName = (o: OtherDue) =>
   o.plan
@@ -32,7 +32,7 @@ export function OtherLine({
           <span className="border border-edge px-1 text-[10px] text-muted">{due.kind}</span>
         </span>
         <span className={`truncate text-[12px] ${due.late ? 'text-negative' : 'text-muted'}`}>
-          {dueWords(due.due, today)} · not in the bar
+          {openWords(due.due, today)} · not in the bar
         </span>
       </span>
       <span className="num shrink-0 text-[14px] font-extrabold">

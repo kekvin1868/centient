@@ -22,6 +22,7 @@ import { DateRow, InputRow, PickerRow, ToggleRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
+import { dayWords } from './BillLine';
 import { serviceNamed, SERVICES } from './services';
 
 export function RecurringSheet({
@@ -40,7 +41,8 @@ export function RecurringSheet({
   const set = (patch: Partial<RecurringForm>) => setForm(f => ({ ...f, ...patch }));
   // What Mark paid logs: the bill's amount, or what was typed for one that varies.
   const [paying, setPaying] = useState<number | null>(item?.amount ?? null);
-  const [confirm, setConfirm] = useState(false);
+  // Which question is up: removing the bill, or paying a due date in a later month than today.
+  const [confirm, setConfirm] = useState<'remove' | 'early' | null>(null);
   const services = useId();
 
   const cat = catalog.value;
@@ -65,6 +67,14 @@ export function RecurringSheet({
     onClose();
     showToast(said);
   };
+  // Logs the expense and moves the bill on. A due date in a later month asks first (the button's onClick).
+  const pay = () =>
+    item &&
+    done(
+      () => recurringApi.paid(item.id, { amount: paying ?? undefined }, item.nextDue),
+      `${item.name} logged`,
+      true,
+    );
   const save = () =>
     done(
       () =>
@@ -74,7 +84,7 @@ export function RecurringSheet({
 
   return (
     <>
-      <Sheet open={!confirm} onClose={onClose} title={item ? item.name : 'Add a bill'}>
+      <Sheet open={confirm === null} onClose={onClose} title={item ? item.name : 'Add a bill'}>
         <Group>
           <InputRow
             label="Name"
@@ -134,6 +144,12 @@ export function RecurringSheet({
             onChange={v => set({ endsOn: v })}
             optional
           />
+          <InputRow
+            label="Note"
+            value={form.note}
+            placeholder="Optional"
+            onInput={note => set({ note })}
+          />
         </Group>
         <datalist id={services}>
           {SERVICES.map(s => (
@@ -164,11 +180,7 @@ export function RecurringSheet({
                 rounded
                 disabled={!paying}
                 onClick={() =>
-                  done(
-                    () => recurringApi.paid(item.id, { amount: paying ?? undefined }, item.nextDue),
-                    `${item.name} logged`,
-                    true,
-                  )
+                  item.nextDue.slice(0, 7) > today.slice(0, 7) ? setConfirm('early') : pay()
                 }
               >
                 {paying ? `Mark paid ${formatMoney(paying, item.currency)}` : 'Enter what you paid'}
@@ -191,7 +203,7 @@ export function RecurringSheet({
                 rounded
                 tonal
                 className="k-color-brand-red"
-                onClick={() => setConfirm(true)}
+                onClick={() => setConfirm('remove')}
               >
                 Remove bill
               </Button>
@@ -199,13 +211,25 @@ export function RecurringSheet({
           </>
         )}
       </Sheet>
+      {item && (
+        <ConfirmSheet
+          open={confirm === 'early'}
+          message={`Are you sure? This logs the payment for ${dayWords(item.nextDue, { day: 'numeric', month: 'long', year: 'numeric' })}.`}
+          confirmLabel="Mark paid"
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            setConfirm(null);
+            void pay();
+          }}
+        />
+      )}
       <ConfirmSheet
-        open={confirm}
+        open={confirm === 'remove'}
         message={`Remove ${item?.name ?? 'this bill'}? Your entries stay.`}
         confirmLabel="Remove"
-        onCancel={() => setConfirm(false)}
+        onCancel={() => setConfirm(null)}
         onConfirm={() => {
-          setConfirm(false);
+          setConfirm(null);
           if (item) void done(() => recurringApi.remove(item.id), 'Bill removed');
         }}
       />

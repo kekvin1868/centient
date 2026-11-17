@@ -5,14 +5,23 @@ import { formatMoney } from '../../lib/format';
 import { categoryEmoji } from '../../lib/labels';
 import { catalog, nameOf } from '../../lib/state';
 import { paidLate, type BillRow } from '../../models/billRun';
+import { daysBetween } from '../../models/dates';
 import { dueWords } from '../../models/recurring';
 
 export const dayWords = (day: string, o: Intl.DateTimeFormatOptions) =>
   new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', { ...o, timeZone: 'UTC' });
 
+/** When an open due date falls: within a week, the date and how far ("Fri 20 Nov · in 3 days"); else dueWords. */
+export const openWords = (due: string, today: string) => {
+  const days = daysBetween(today, due);
+  if (days < 0 || days > 7) return dueWords(due, today);
+  const date = dayWords(due, { weekday: 'short', day: 'numeric', month: 'short' });
+  return `${date} · ${days === 0 ? 'today' : days === 1 ? 'tomorrow' : `in ${days} days`}`;
+};
+
 const when = (row: BillRow, today: string) => {
   if (row.item.paused) return 'Paused';
-  if (row.state !== 'paid') return dueWords(row.due, today);
+  if (row.state !== 'paid') return openWords(row.due, today);
   const on = dayWords(row.paidOn ?? row.due, { day: 'numeric', month: 'short' });
   return paidLate(row) ? `Paid ${on}, late` : `Paid ${on}`;
 };

@@ -1800,9 +1800,9 @@
   border-radius: 0;
   font-weight: 400;
 }
-/* While the first run or a dialog is up, toasts sit at the top so they never cover it. */
-body:has(.night) .k-toast,
-body:has(.n-modal) .k-toast {
+/* While the first run is up, toasts sit at the top so they never cover it. Over the app (dialogs too) they stay at
+   the bottom, one place for every toast. */
+body:has(.night) .k-toast {
   top: calc(env(safe-area-inset-top) + 12px);
   bottom: auto;
 }
