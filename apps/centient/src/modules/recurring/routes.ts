@@ -15,6 +15,7 @@ const bill = z.object({
   nextDue: day,
   endsOn: day.nullish(),
   service: text(40).nullish(),
+  note: text(500).nullish(),
 });
 
 export const recurringRoutes = new Hono<AppEnv>()

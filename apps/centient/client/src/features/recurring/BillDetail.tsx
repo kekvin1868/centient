@@ -1,5 +1,5 @@
 // One bill's own page (inside Bills): what it costs and how often, when it is next due with its PAID? key, since
-// when it has been paid and how much so far, every saved payment, and Pause.
+// when it has been paid and how much so far, every saved payment, and Pause. Its note, when it has one.
 import type { ReactNode } from 'react';
 import { formatMoney } from '../../lib/format';
 import { catalog, nameOf } from '../../lib/state';
@@ -55,6 +55,9 @@ export function BillDetail({
           {repeatWords(item.everyMonths)} · paid from{' '}
           {nameOf(catalog.value.accounts, item.accountId)}
         </p>
+        {item.note && (
+          <p className="whitespace-pre-wrap break-words text-[13px]">Note: {item.note}</p>
+        )}
         <div className="flex min-h-11 items-center justify-between gap-3 text-[14px]">
           <span className={next?.state === 'late' ? 'text-negative' : ''}>
             {item.paused

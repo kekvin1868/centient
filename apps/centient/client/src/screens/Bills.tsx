@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { BillDetail } from '../features/recurring/BillDetail';
-import { BillLine, dayWords } from '../features/recurring/BillLine';
+import { BillLine } from '../features/recurring/BillLine';
 import { DueCalendar } from '../features/recurring/DueCalendar';
 import { FoundList } from '../features/recurring/FoundList';
 import { MonthHero } from '../features/recurring/MonthHero';
@@ -123,20 +123,7 @@ export function Bills() {
             .join(' / ')}
         </p>
       )}
-      {data.items.length > 0 && (
-        <DueCalendar
-          byDay={view.byDay}
-          today={today}
-          tray={(day, rows) => (
-            <ul
-              className={`${list} !mx-0 mt-2`}
-              aria-label={`Due ${dayWords(day, { day: 'numeric', month: 'long' })}`}
-            >
-              {lines(rows)}
-            </ul>
-          )}
-        />
-      )}
+      {data.items.length > 0 && <DueCalendar byDay={view.byDay} today={today} />}
       {view.groups.map(g => (
         <section key={`group:${g.label}`}>
           <h2 className={heading}>
