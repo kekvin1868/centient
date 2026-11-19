@@ -9,6 +9,7 @@ import { DomainError } from '../../domain/ledger';
 import type { PartyRow, PaymentRow, PlanRow } from '../../repos/installments';
 import type { LedgerService } from '../ledger/service';
 import { findOrCreateTab } from '../ledger/tabs';
+import { money } from '../../domain/reminders';
 
 const MAX_PROOF_BYTES = 10 * 1024 * 1024;
 const PROOF_TYPES = /^(image\/(png|jpeg|webp|heic|heif|gif)|application\/pdf)$/;
@@ -103,6 +104,8 @@ export function createInstallmentsService({
       const today = jakartaToday(now());
       const left = i.installments - i.paidCount;
       const note = `${i.name.trim()} · ${left} of ${i.installments} installments`;
+      // Your part, told whole: "Rp703.332 over 3 installments · Rp234.444 a month in budgets".
+      const mine = `${money(i.myShare * left, account.currency_code)} over ${left} installment${left === 1 ? '' : 's'} · ${money(i.myShare, account.currency_code)} a month in budgets`;
       const cmds: Command[] = [];
       if (!i.alreadyInBalance) {
         if (i.myShare) {
@@ -115,7 +118,8 @@ export function createInstallmentsService({
             amount: i.myShare * left,
             date: today,
             merchant: i.name.trim(),
-            note,
+            note: `${i.name.trim()} · ${mine}`,
+            spreadCycles: left,
           });
         }
         for (const o of ious)

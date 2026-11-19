@@ -41,8 +41,12 @@ What a credit card or pay later account asks for after its statement day.
 _Avoid_: Statement
 
 **Installment**:
-One part of a pay later plan.
+One part of a pay later plan. A plan's purchase counts in budgets one installment per cycle, not the whole price on the day.
 _Avoid_: Instalment, cicilan
+
+**Your money**:
+The total of every account except credit cards and pay later: their balances are limits left, shown on their own lines.
+_Avoid_: Total balance, net worth
 
 **Payment link**:
 The saved tie between a bill, one of its due dates and the entry that paid it. Deleting the entry removes it, and the bill is unpaid again.

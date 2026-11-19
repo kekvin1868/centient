@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { addMonths } from '../src/modules/installments/service';
+import { spreadShare } from '../src/repos/entries';
 import type { FileStore } from '../src/repos/files';
 import { world as base, type World } from './world';
 
@@ -279,6 +280,43 @@ describe('installment plans', () => {
     await t.s().installments.markPaid(created.id, 2, 0, { fromAccountId: t.bca });
     const again = await t.s().installments.moveDues(created.id, '2026-04-12');
     expect(again.schedule.slice(2).map(s => s.due)).toEqual(['2026-04-12', '2026-05-12']);
+  });
+
+  it('counts a new plan purchase in budgets a month at a time, and says the whole amount', async () => {
+    const { w } = world();
+    const t = await setup(w);
+    const shopping = (await w.repos.categories.list(t.ws)).find(c => c.name === 'Shopping')!.id;
+    await t.s().budgets.set({ categoryId: shopping, limit: 1_000_000 });
+    await t.s().installments.create({
+      accountId: t.kredivo,
+      name: 'hu,an',
+      amountPerInstallment: 234_444,
+      installments: 3,
+      firstDue: '2026-11-20',
+      paidCount: 0,
+      myShare: 234_444,
+      others: [],
+      alreadyInBalance: false,
+      categoryId: shopping,
+    });
+    const spent = async (day: string) =>
+      (await t.s().budgets.status(day)).budgets.find(b => b.categoryId === shopping)!.spent;
+    // Bought 17 Oct: this cycle and the next two count Rp234.444 each, then nothing.
+    expect(await spent('2026-10-17')).toBe(234_444);
+    expect(await spent('2026-11-17')).toBe(234_444);
+    expect(await spent('2026-12-17')).toBe(234_444);
+    expect(await spent('2027-01-17')).toBe(0);
+    const { items } = await t.s().ledger.listEntries({ limit: 5 });
+    expect(JSON.stringify(items)).toContain(
+      'hu,an · Rp703.332 over 3 installments · Rp234.444 a month in budgets',
+    );
+  });
+
+  it('gives the first cycle of a spread purchase what does not divide evenly', () => {
+    const r = { day: '2026-11-18', n: 3, amount: 100 };
+    expect(spreadShare(r, '2026-11-01', '2026-12-01')).toBe(34);
+    expect(spreadShare(r, '2027-01-01', '2027-02-01')).toBe(33);
+    expect(spreadShare(r, '2027-02-01', '2027-03-01')).toBe(0);
   });
 
   it('keeps due dates on the same day, clamped to short months', () => {

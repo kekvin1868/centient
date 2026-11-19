@@ -1,4 +1,5 @@
 // The ledger: entries (what the user logged) -> transactions -> account lines (entries) + pocket lines (allocations).
+import { addMonths } from '../domain/cycle';
 import type { NewTransaction } from '../domain/ledger';
 import { currencyRow } from './currencies';
 import { all, uid } from './sql';
@@ -451,18 +452,36 @@ export function entriesRepo(db: D1Database) {
         to: string;
       },
     ) {
-      // ponytail: spread_cycles (0% instalments) not applied yet; the full amount counts in the purchase cycle.
-      const r = await db
-        .prepare(
-          `SELECT COALESCE(SUM(-a.amount), 0) AS spent
+      // A spread purchase (installments) counts 1/N in each of N cycles from its own; the first takes the rest.
+      // ponytail: earlier cycles are [from, to) moved back whole months, exact for monthly budgets; a
+      // temporary budget (days long) only sees the spread share when the purchase is inside it.
+      const sql = (spread: string, since: string) =>
+        db
+          .prepare(
+            `SELECT substr(t.occurred_at, 1, 10) AS day, t.spread_cycles AS n, -a.amount AS amount
         FROM transactions t JOIN allocations a ON a.transaction_id = t.id JOIN envelopes e ON e.id = a.envelope_id AND e.currency_code = ?
-        WHERE t.workspace_id = ? AND t.deleted_at IS NULL AND t.type = 'EXPENSE'
+        WHERE t.workspace_id = ? AND t.deleted_at IS NULL AND t.type = 'EXPENSE' AND ${spread}
           AND substr(t.occurred_at, 1, 10) >= ? AND substr(t.occurred_at, 1, 10) < ?
           AND (? IS NULL OR t.category_id = ?) AND (? IS NULL OR a.envelope_id = ?)`,
-        )
-        .bind(q.currency, ws, q.from, q.to, q.categoryId, q.categoryId, q.envelopeId, q.envelopeId)
-        .first<{ spent: number }>();
-      return r?.spent ?? 0;
+          )
+          .bind(
+            q.currency,
+            ws,
+            since,
+            q.to,
+            q.categoryId,
+            q.categoryId,
+            q.envelopeId,
+            q.envelopeId,
+          );
+      const [plain, spread] = await db.batch<{ day: string; n: number; amount: number }>([
+        sql('t.spread_cycles = 1', q.from),
+        sql('t.spread_cycles > 1', addMonths(q.from, -35)),
+      ]);
+      return (
+        plain.results.reduce((s, r) => s + r.amount, 0) +
+        spread.results.reduce((s, r) => s + spreadShare(r, q.from, q.to), 0)
+      );
     },
 
     async merchantHistory(ws: string) {
@@ -565,4 +584,18 @@ function txWhere(ws: string, f: TxFilter) {
     args.push(f.currency);
   }
   return { where, args };
+}
+
+/** A spread purchase's share in the cycle [from, to): 1/n in each of the n cycles from its own, the first takes the rest. */
+export function spreadShare(
+  r: { day: string; n: number; amount: number },
+  from: string,
+  to: string,
+) {
+  const k = Array.from({ length: r.n }, (_, i) => i).find(
+    i => addMonths(from, -i) <= r.day && r.day < addMonths(to, -i),
+  );
+  if (k === undefined) return 0;
+  const each = Math.floor(r.amount / r.n);
+  return k === 0 ? r.amount - each * (r.n - 1) : each;
 }
