@@ -253,6 +253,34 @@ describe('installment plans', () => {
     expect(await t.s().installments.list()).toEqual([]);
   });
 
+  it('moves the next unpaid installment and every later one; paid ones stay paid', async () => {
+    const { w } = world();
+    const t = await setup(w);
+    const created = await t.s().installments.create({
+      accountId: t.kredivo,
+      name: 'Phone',
+      amountPerInstallment: 500_000,
+      installments: 4,
+      firstDue: '2026-01-05',
+      paidCount: 1,
+      myShare: 500_000,
+      others: [],
+      alreadyInBalance: true,
+    });
+    const moved = await t.s().installments.moveDues(created.id, '2026-03-31');
+    expect(moved.schedule.map(s => [s.due, s.left])).toEqual([
+      ['2026-02-28', 0],
+      ['2026-03-31', 500_000],
+      ['2026-04-30', 500_000],
+      ['2026-05-31', 500_000],
+    ]);
+    expect(moved.next?.due).toBe('2026-03-31');
+    // Moving again after paying the next one starts from the new next.
+    await t.s().installments.markPaid(created.id, 2, 0, { fromAccountId: t.bca });
+    const again = await t.s().installments.moveDues(created.id, '2026-04-12');
+    expect(again.schedule.slice(2).map(s => s.due)).toEqual(['2026-04-12', '2026-05-12']);
+  });
+
   it('keeps due dates on the same day, clamped to short months', () => {
     expect([1, 2, 3].map(k => addMonths('2026-01-31', k))).toEqual([
       '2026-02-28',

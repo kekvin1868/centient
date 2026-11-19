@@ -297,6 +297,14 @@ export function createInstallmentsService({
       return { ...f, filename: a.filename };
     },
 
+    /** Moves the next unpaid installment to `due`; every later one follows a month apart. */
+    async moveDues(planId: string, due: string) {
+      const plan = await planOf(planId);
+      if (!plan.next) throw new DomainError('ALL_PAID', 'Every installment is paid');
+      await repos.installments.moveDues(ws, planId, plan.next.no, due);
+      return planOf(planId);
+    },
+
     /** Deletes a plan; the entries it logged stay (they are real money movements). */
     async remove(id: string) {
       if (!(await repos.installments.deletePlan(ws, id)))
@@ -328,7 +336,7 @@ function view(p: PlanRow, parties: PartyRow[], payments: PaymentRow[], today: st
       };
     });
     const left = shares.reduce((s, x) => s + (x.paid ? 0 : x.amount), 0);
-    return { no, due: addMonths(p.first_due, i), shares, left };
+    return { no, due: addMonths(p.first_due, no - p.anchor_no), shares, left };
   });
   const next = schedule.find(s => s.left > 0) ?? null;
   return {
