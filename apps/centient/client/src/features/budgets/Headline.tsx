@@ -1,14 +1,15 @@
 // The HUD on Home: the money you hold. All accounts: the total of every account (as on Money); one account: its
 // balance. Teal when fine, pink below zero. Under it, the budget card (HomeBudgets).
 import { useQuery } from '@tanstack/react-query';
-import { ACCOUNT_KINDS, formatMoney } from '../../lib/format';
+import { ACCOUNT_KINDS } from '../../lib/format';
 import { selectedAccount } from '../../lib/state';
 import type { Balances } from '../../models/account';
 import { budgetsWithWaiting, useBalances, useOverlaySince } from '../../models/useWaiting';
 import { budgetQueries } from '../../models/budget';
 import { usePrices, type Prices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
-import { limitsOf, totalOf } from '../accounts/TotalBalance';
+import { CardLimits } from '../accounts/CardLimits';
+import { isLimit, totalOf } from '../accounts/TotalBalance';
 import { HomeBudgets } from './HomeBudgets';
 
 type Head = {
@@ -33,16 +34,12 @@ function headOf(sel: string | null, bal: Balances, prices: Prices): Head {
       cta: 'Update balance',
     };
   const { total, priced } = totalOf(bal.accounts, prices);
-  const limits = limitsOf(bal.accounts, prices);
-  const n = bal.accounts.length - limits.reduce((s, l) => s + l.count, 0);
+  const n = bal.accounts.filter(a => !isLimit(a)).length;
   return {
     label: `Your money${priced.size ? ' ≈' : ''}`,
     minor: total,
     currency: 'IDR',
-    note: [
-      `Across ${n} account${n === 1 ? '' : 's'}`,
-      ...limits.map(l => `${l.label} ${formatMoney(l.left)}`),
-    ].join(' · '),
+    note: `Across ${n} account${n === 1 ? '' : 's'}`,
     hurt: total < 0,
     cta: 'Money',
   };
@@ -85,6 +82,7 @@ export function Headline({ onGoMoney }: { onGoMoney: () => void }) {
           </button>
         </div>
       </section>
+      {!sel && bal && <CardLimits accounts={bal.accounts} onGo={onGoMoney} />}
       {budgets && (
         <HomeBudgets
           budgets={budgetsWithWaiting(budgets.budgets, budgets.cycle, overlay)}

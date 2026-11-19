@@ -45,7 +45,7 @@ One part of a pay later plan. A plan's purchase counts in budgets one installmen
 _Avoid_: Instalment, cicilan
 
 **Your money**:
-The total of every account except credit cards and pay later: their balances are limits left, shown on their own lines.
+The total of every account except credit cards and pay later. Those are debt against a limit: their balance is what you owe, and the Cards & pay later card shows what is left of the limit.
 _Avoid_: Total balance, net worth
 
 **Payment link**:

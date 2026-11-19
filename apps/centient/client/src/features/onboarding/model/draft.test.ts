@@ -27,6 +27,7 @@ const acc = (id: string, name: string, kind: string): Account => ({
   default_envelope_id: `${id}:main`,
   due_day: null,
   statement_day: null,
+  credit_limit: null,
   reconciled_at: null,
   archived_at: null,
   kept_until: null,

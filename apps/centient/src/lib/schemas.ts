@@ -118,6 +118,7 @@ export const patch = z.object({
   default_envelope_id: id.nullable().optional(),
   due_day: z.number().int().min(1).max(31).nullable().optional(),
   statement_day: z.number().int().min(1).max(31).nullable().optional(),
+  credit_limit: money.nullable().optional(),
   target_amount: money.nullable().optional(),
   target_date: day.nullable().optional(),
   archived: z.boolean().optional(),

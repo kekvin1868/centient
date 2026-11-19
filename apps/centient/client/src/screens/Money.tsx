@@ -5,6 +5,7 @@ import { BlockTitle } from 'konsta/react';
 import { useEffect, useState } from 'react';
 import { AccountHand } from '../features/accounts/AccountHand';
 import { PickedAccount } from '../features/accounts/PickedAccount';
+import { CardLimits } from '../features/accounts/CardLimits';
 import { TotalBalance } from '../features/accounts/TotalBalance';
 import { Budgets } from '../features/budgets/Budgets';
 import { PaidBackSheet } from '../features/entries/PaidBackSheet';
@@ -90,6 +91,9 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
         )}
       </PickedAccount>
       {pay && <PaidBackSheet {...pay} onClose={() => setPay(null)} />}
+      <div className="mt-6">
+        <CardLimits accounts={bal.accounts} />
+      </div>
       <Budgets />
     </Page>
   );

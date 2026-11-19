@@ -12,6 +12,8 @@ export type Account = {
   due_day: number | null;
   /** Credit card / pay later: the day of the month its statement closes. */
   statement_day: number | null;
+  /** Credit card / pay later: the limit; left to spend = credit_limit + balance (the balance is the debt). */
+  credit_limit: number | null;
   reconciled_at: string | null;
   archived_at: string | null;
   /** A tab below 0 you keep for now: the day you plan to return it. */
@@ -19,7 +21,13 @@ export type Account = {
 };
 export type NewAccount = Omit<
   Account,
-  'id' | 'reconciled_at' | 'archived_at' | 'default_envelope_id' | 'kept_until' | 'statement_day'
+  | 'id'
+  | 'reconciled_at'
+  | 'archived_at'
+  | 'default_envelope_id'
+  | 'kept_until'
+  | 'statement_day'
+  | 'credit_limit'
 >;
 
 // "Debit card" is stored as kind BANK + subtype DEBIT_CARD (migration 0007: the accounts table's kind CHECK
@@ -38,6 +46,7 @@ const PATCHABLE = [
   'default_envelope_id',
   'due_day',
   'statement_day',
+  'credit_limit',
   'reconciled_at',
   'archived_at',
   'kept_until',
@@ -73,7 +82,7 @@ export function accountsRepo(db: D1Database) {
     list(ws: string) {
       return all<Account>(
         db,
-        `SELECT id, name, ${KIND_SQL} AS kind, provider, currency_code, default_envelope_id, due_day, statement_day, reconciled_at, archived_at, kept_until
+        `SELECT id, name, ${KIND_SQL} AS kind, provider, currency_code, default_envelope_id, due_day, statement_day, credit_limit, reconciled_at, archived_at, kept_until
         FROM accounts WHERE workspace_id = ? AND deleted_at IS NULL ORDER BY name`,
         ws,
       );
@@ -88,6 +97,7 @@ export function accountsRepo(db: D1Database) {
         id,
         default_envelope_id: `${id}:main`,
         statement_day: null,
+        credit_limit: null,
         reconciled_at: null,
         archived_at: null,
         kept_until: null,
