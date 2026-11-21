@@ -1,5 +1,5 @@
 // Bills: what this month still asks for, a calendar of due dates, every bill grouped by how soon it is due, and
-// monthly payments found in the entries. A bill opens its form.
+// monthly payments found in the entries. A bill opens its form; its PAID? key pays it in one tap.
 import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { BillLine } from '../features/recurring/BillLine';
@@ -7,6 +7,7 @@ import { DueCalendar } from '../features/recurring/DueCalendar';
 import { FoundList } from '../features/recurring/FoundList';
 import { MonthHero } from '../features/recurring/MonthHero';
 import { RecurringSheet } from '../features/recurring/RecurringSheet';
+import { usePayBill } from '../features/recurring/usePayBill';
 import { Page } from '../layouts/Page';
 import { formatMoney } from '../lib/format';
 import { billGroups, monthRun, rowsByDay, type BillRow } from '../models/billRun';
@@ -23,6 +24,7 @@ const list = 'panel mx-4 bg-white dark:bg-raised';
 export function Bills() {
   const { data } = useQuery(recurringQueries.list());
   const [editing, setEditing] = useState<Editing | null>(null);
+  const pay = usePayBill();
   const view = useMemo(
     () =>
       data && {
@@ -41,6 +43,7 @@ export function Bills() {
         row={row}
         today={today}
         onOpen={() => setEditing({ item: row.item })}
+        trail={pay.trail(row)}
       />
     ));
 
@@ -92,10 +95,11 @@ export function Bills() {
       ))}
       {data.items.length > 0 && (
         <p className="mx-4 mt-2 text-[13px] text-muted">
-          Log a payment as usual and its bill moves to the next due date by itself.
+          PAID? logs the expense today. Logging it yourself moves the bill on too.
         </p>
       )}
       <FoundList today={today} onAdd={prefill => setEditing({ item: null, prefill })} />
+      {pay.layers}
       {editing && (
         <RecurringSheet
           key={`bill:${editing.item?.id ?? editing.prefill?.name ?? 'new'}`}

@@ -1,9 +1,9 @@
 // The Bills page's hero: what this month still asks for (in one currency), how many of its bills are paid, and
-// a bar that empties as they are.
-import { Progressbar } from 'konsta/react';
+// an HP bar that drains as they are.
 import { formatMoney } from '../../lib/format';
 import type { MonthRun } from '../../models/billRun';
 import { BigMoney } from '../../ui/BigMoney';
+import { HpBar } from '../../ui/HpBar';
 import { dayWords } from './BillLine';
 
 const chip = 'border border-edge px-1.5 text-[12px]';
@@ -28,10 +28,7 @@ export function MonthHero({ run, today }: { run: MonthRun; today: string }) {
       </p>
       <BigMoney minor={run.left} currency={run.currency} max={34} inset={58} />
       <p className="text-[13px] text-muted">left to pay this month</p>
-      <Progressbar
-        className={run.late ? 'k-color-brand-red' : ''}
-        progress={run.total ? run.left / run.total : 0}
-      />
+      <HpBar size="big" value={run.left} max={run.total} />
       <p className="flex flex-wrap gap-1.5">
         {run.late > 0 && (
           <span className={`${chip} bill-late border-pink text-negative`}>{run.late} LATE</span>

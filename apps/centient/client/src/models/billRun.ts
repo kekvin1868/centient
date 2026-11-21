@@ -13,6 +13,11 @@ export type BillRow = {
   /** Paid: what the entry holds. Open: the bill's amount, else its last payment (`guess`), else null. */
   amount: number | null;
   guess: boolean;
+  /**
+   * Has the PAID? key: the bill's current due date, when it falls in this month (or earlier) or within a week.
+   * One further off is paid from the bill's form, so a stray tap never pays next month.
+   */
+  payable: boolean;
   /** Paid rows only. */
   paidOn?: string;
   entryId?: string;
@@ -29,6 +34,7 @@ export function rowsOf(item: Recurring, today: string): BillRow[] {
     state: 'paid',
     amount: p.amount,
     guess: false,
+    payable: false,
     paidOn: p.paidOn,
     entryId: p.entryId,
   }));
@@ -43,6 +49,7 @@ export function rowsOf(item: Recurring, today: string): BillRow[] {
       state: due < today ? 'late' : 'due',
       amount,
       guess: item.amount === null,
+      payable: due === item.nextDue && (due <= monthOf(today).end || due <= addDays(today, 7)),
     }));
   return [...paid, ...open];
 }
@@ -75,6 +82,8 @@ export type MonthRun = {
   paid: number;
   count: number;
   late: number;
+  /** Paid after their due date. */
+  latePaid: number;
   /** Open rows with no amount to count (a bill that varies and was never paid). */
   unknown: number;
 };
@@ -95,12 +104,15 @@ export function monthRun(items: Recurring[], today: string): MonthRun[] {
         paid: 0,
         count: 0,
         late: 0,
+        latePaid: 0,
         unknown: 0,
       };
       run.count++;
       run.total += r.amount ?? 0;
-      if (paid) run.paid++;
-      else {
+      if (paid) {
+        run.paid++;
+        if (paidLate(r)) run.latePaid++;
+      } else {
         run.left += r.amount ?? 0;
         if (r.state === 'late') run.late++;
         if (r.amount === null) run.unknown++;
@@ -141,6 +153,7 @@ export function billGroups(items: Recurring[], today: string): BillGroup[] {
         state: 'due',
         amount: item.amount,
         guess: false,
+        payable: false,
       });
     else if (next && next.due <= soon)
       groups[next.state === 'late' ? 'Late' : 'Next 7 days'].push(next);

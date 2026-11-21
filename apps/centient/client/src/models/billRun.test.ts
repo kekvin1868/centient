@@ -26,8 +26,19 @@ describe('bill rows', () => {
       ['2026-11-10', 'late'],
       ['2026-12-10', 'due'],
     ]);
+    // Only the bill's current due date has the PAID? key.
+    expect(rows.map(r => r.payable)).toEqual([false, true, false]);
     expect(paidLate(rows[0])).toBe(true);
     expect(paidLate(rows[1])).toBe(false);
+  });
+
+  it('keeps the PAID? key off a due date past this month and more than a week away', () => {
+    const key = (due: string) => rowsOf(bill({ nextDue: due, dues: [due] }), today)[0].payable;
+    expect(key('2026-11-30')).toBe(true);
+    expect(key('2026-12-15')).toBe(false);
+    expect(
+      rowsOf(bill({ nextDue: '2026-12-02', dues: ['2026-12-02'] }), '2026-11-28')[0].payable,
+    ).toBe(true);
   });
 
   it('guesses a varying bill from its last payment', () => {
@@ -63,6 +74,7 @@ describe('the month run', () => {
       paid: 1,
       count: 4,
       late: 1,
+      latePaid: 0,
       unknown: 1,
     });
   });
@@ -71,7 +83,12 @@ describe('the month run', () => {
     const open = bill({ dues: ['2026-10-20', '2026-11-20'] });
     expect(monthRun([open], today)[0]).toMatchObject({ count: 2, left: 240_000, late: 1 });
     const caughtUp = bill({ dues: ['2026-11-20'], payments: [pay('2026-10-20', '2026-11-02')] });
-    expect(monthRun([caughtUp], today)[0]).toMatchObject({ count: 2, paid: 1, left: 120_000 });
+    expect(monthRun([caughtUp], today)[0]).toMatchObject({
+      count: 2,
+      paid: 1,
+      latePaid: 1,
+      left: 120_000,
+    });
     const lastMonth = bill({ dues: ['2026-11-20'], payments: [pay('2026-10-20')] });
     expect(monthRun([lastMonth], today)[0]).toMatchObject({ count: 1, paid: 0 });
   });

@@ -1,5 +1,4 @@
-// End to end: recurring bills. Add a bill on the Bills tab, see it under Coming up on Home, mark it
-// paid, pay a card's statement, and turn a payment found in the entries into a bill. Skips the first run through
+// End to end: recurring bills. Add a bill on the Bills tab, see it under Coming up on Home, pay it in one tap and undo it, pay a card's statement, and turn a payment found in the entries into a bill. Skips the first run through
 // the API and resets at the end, so the next file starts from a fresh workspace. The server's clock is real, so
 // dates are relative to today.
 import { expect, test, type Page } from '@playwright/test';
@@ -66,31 +65,81 @@ test('add a bill on the Bills tab: totals, the month, the calendar mark and the 
   await expect(subs.getByRole('button', { name: /1 bill due$/ })).toHaveCount(0);
 });
 
-test('Home lists it under Coming up; Mark paid logs it and moves it on', async () => {
+test('Home lists it under Coming up; PAID? logs it in one tap, Undo takes it back', async () => {
   await page.goto('/');
   const coming = page.getByRole('region', { name: 'Bills coming up' });
   await expect(coming.getByRole('button', { name: /Netflix/ })).toContainText('Due today');
   await coming.getByRole('button', { name: /Netflix/ }).tap();
   const bills = page.getByRole('main');
-  await bills
+  const month = bills.getByRole('region', { name: /^Bills in / });
+  const payKey = bills
     .getByRole('list', { name: 'Next 7 days' })
-    .getByRole('button', { name: /^Netflix/ })
-    .tap();
-  await sheet('Netflix').getByRole('button', { name: 'Mark paid Rp120.000' }).tap();
+    .getByRole('button', { name: 'Mark Netflix paid' });
+  await payKey.tap();
 
-  // Paid for this month: under Paid, the month is clear, and its day on the calendar reads OK.
+  // The only bill of the month: MONTH CLEAR. Undo puts it back to unpaid.
+  const clear = sheet('Month clear');
+  await expect(clear).toContainText('1/1 paid · Rp120.000');
+  await expect(clear).toContainText('All on time');
+  await page.getByRole('button', { name: 'Undo' }).tap();
+  await expect(clear).toHaveCount(0);
+  await expect(month).toContainText('0/1 PAID');
+
+  // The same due date can be paid again.
+  await payKey.tap();
+  await sheet('Month clear').getByRole('button', { name: 'OK' }).tap();
+
+  // Paid for this month: stamped under Paid, the month is clear, and its day on the calendar reads OK.
+  await expect(bills.getByRole('list', { name: 'Paid' })).toContainText('PAID');
   await expect(
     bills.getByRole('list', { name: 'Paid' }).getByRole('button', { name: /^Netflix/ }),
   ).toContainText(/Paid \d+ \w+/);
-  await expect(bills.getByRole('region', { name: /^Bills in / })).toContainText('1/1 PAID');
+  await expect(month).toContainText('1/1 PAID');
   await expect(bills.getByRole('img', { name: /1 bill paid$/ })).toBeVisible();
+
+  // Paid for this month already: the form's Mark paid asks before paying next month's date.
+  await bills
+    .getByRole('list', { name: 'Paid' })
+    .getByRole('button', { name: /^Netflix/ })
+    .tap();
+  await sheet('Netflix').getByRole('button', { name: 'Mark paid Rp120.000' }).tap();
+  const early = sheet(/^Are you sure\? This logs the payment for \d+ \w+ \d{4}\.$/);
+  await early.getByRole('button', { name: 'CANCEL' }).tap();
+  await expect(early).toHaveCount(0);
+  await expect(sheet('Netflix')).toBeVisible();
+  await expect(month).toContainText('1/1 PAID');
   await page.goto('/');
   await expect(page.getByRole('region', { name: 'Your money' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Bills coming up' })).toHaveCount(0);
   const entries = (await (await page.request.get('/api/entries?limit=5')).json()) as {
     items: { command: { merchant?: string; amount?: number } | null }[];
   };
-  expect(entries.items.some(e => e.command?.merchant === 'Netflix')).toBe(true);
+  expect(entries.items.filter(e => e.command?.merchant === 'Netflix')).toHaveLength(1);
+});
+
+test('a bill that varies asks its amount first', async () => {
+  await send('post', '/recurring', {
+    name: 'PLN listrik',
+    accountId: main.id,
+    categoryId: fun.id,
+    amount: null,
+    everyMonths: 1,
+    nextDue: today,
+  });
+  await page.goto('/');
+  await tab('Bills').tap();
+  const bills = page.getByRole('main');
+  await expect(bills.getByRole('button', { name: /^PLN listrik/ })).toContainText('Varies');
+  await bills.getByRole('button', { name: 'Mark PLN listrik paid' }).tap();
+  const ask = sheet('PLN listrik this time');
+  await expect(ask.getByRole('button', { name: 'Enter what you paid' })).toBeDisabled();
+  await ask.getByLabel('Amount paid').fill('412300');
+  await ask.getByRole('button', { name: 'Pay Rp412.300' }).tap();
+  await sheet('Month clear').getByRole('button', { name: 'OK' }).tap();
+  await expect(
+    bills.getByRole('list', { name: 'Paid' }).getByRole('button', { name: /^PLN listrik/ }),
+  ).toContainText('Rp412.300');
+  await expect(bills.getByRole('region', { name: /^Bills in / })).toContainText('2/2 PAID');
 });
 
 test("a card's bill: what was owed at the statement, then I paid it", async () => {
