@@ -118,7 +118,7 @@ test('only the ten broad spending categories are offered', async () => {
   expect(options.slice(1)).toEqual([
     'Education',
     'Family & Giving',
-    'Fees',
+    'Fees & Interests',
     'Food & Drink',
     'Fun',
     'Health',

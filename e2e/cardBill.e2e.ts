@@ -165,7 +165,7 @@ test('the daily job posts a slice its interest once, as its own line on the bill
   expect(bill.lines.interest).toMatchObject([{ no: 1, amount: 25_000 }]);
   expect(bill.lines.slices).toMatchObject([{ name: 'TV', no: 1, amount: 500_000 }]);
 
-  // It is an ordinary expense on the card, in Fees.
+  // It is an ordinary expense on the card, in Fees & Interests & Interests.
   const { items } = await get(`/entries?account=${card.id}&type=EXPENSE`);
   expect(items).toHaveLength(2); // the TV and its interest
   await openMoney('TV Card');

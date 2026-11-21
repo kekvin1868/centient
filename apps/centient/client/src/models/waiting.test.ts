@@ -33,7 +33,7 @@ const cat = {
   categories: [
     { id: 'food', name: 'Food & Drink', kind: 'EXPENSE', archived_at: null },
     { id: 'salary', name: 'Salary', kind: 'INCOME', archived_at: null },
-    { id: 'fees', name: 'Fees', kind: 'EXPENSE', archived_at: null },
+    { id: 'fees', name: 'Fees & Interests', kind: 'EXPENSE', archived_at: null },
   ],
 } as unknown as Catalog;
 

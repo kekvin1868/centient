@@ -178,9 +178,12 @@ export function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] 
       }
       // The admin fee is its own expense, so it shows up in spending.
       if (cmd.fee) {
-        const fees = c.categoryByName('Fees');
+        const fees = c.categoryByName('Fees & Interests');
         if (!fees)
-          throw new DomainError('NO_FEES_CATEGORY', 'Create a "Fees" expense category first');
+          throw new DomainError(
+            'NO_FEES_CATEGORY',
+            'Create a "Fees & Interests" expense category first',
+          );
         txs.push(
           expense({
             occurredAt,

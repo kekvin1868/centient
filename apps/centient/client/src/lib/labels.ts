@@ -12,7 +12,7 @@ const CATEGORY_EMOJI: Record<string, string> = {
   Fun: '🎬',
   Education: '📚',
   'Family & Giving': '💌',
-  Fees: '🧾',
+  'Fees & Interests': '🧾',
   Other: '📦',
   Salary: '💼',
   'Angpao & THR': '🧧',

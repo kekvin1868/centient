@@ -398,7 +398,7 @@ export function createInstallmentsService({
     },
 
     /**
-     * The daily job: posts each slice's interest as an expense on the card in Fees ("Interest · iPhone 3/12"),
+     * The daily job: posts each slice's interest as an expense on the card in Fees & Interests ("Interest · iPhone 3/12"),
      * dated on its bill's closing day, once its bill has closed. Catches up on days it missed. Returns how many.
      */
     async postInterest() {
@@ -408,9 +408,12 @@ export function createInstallmentsService({
         repos.installments.interest(ws),
         catalog.load(),
       ]);
-      const fees = c.categoryByName('Fees');
+      const fees = c.categoryByName('Fees & Interests');
       if (!fees)
-        throw new DomainError('NO_FEES_CATEGORY', 'Create a "Fees" expense category first');
+        throw new DomainError(
+          'NO_FEES_CATEGORY',
+          'Create a "Fees & Interests" expense category first',
+        );
       let n = 0;
       for (const row of plans) {
         const days = cardDays(c.accounts.find(a => a.id === row.account_id));

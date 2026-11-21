@@ -144,7 +144,7 @@ test('T4.30, T4.37 totals, savings rate, the comparison and category bars', asyn
     ['Shopping', '57%'],
     ['Food & Drink', '39%'],
     ['Transport', '4%'],
-    ['Fees', '<1%'],
+    ['Fees & Interests', '<1%'],
   ];
   for (const [i, [name, share]] of expected.entries()) {
     await expect(rows.nth(i)).toContainText(name);
