@@ -131,7 +131,7 @@ export function NightMenu({
     const unset = cardsUnset(draft)[0];
     if (!unset) return setOpen({ kind: 'confirm' });
     pick(draft.indexOf(unset));
-    showToast(`SET ${unset.name}'S LIMIT + BILL DAYS FIRST`);
+    showToast(`${unset.name} NEEDS ITS LIMIT + BILL DAYS`);
     setOpen({ kind: 'card' });
   };
 
