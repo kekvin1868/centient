@@ -237,15 +237,13 @@ describe('installment plans', () => {
       alreadyInBalance: true,
     };
     await t.s().installments.create({ ...plan, accountId: t.kredivo });
-    const card = await t
-      .s()
-      .accounts.create({
-        name: 'BCA Card',
-        kind: 'CREDIT_CARD',
-        creditLimit: 20_000_000,
-        statementDay: 20,
-        dueDay: 5,
-      });
+    const card = await t.s().accounts.create({
+      name: 'BCA Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
     await t.s().installments.create({ ...plan, accountId: card.id, name: 'Laptop' });
     await t.s().accounts.remove(t.kredivo);
     expect((await t.s().installments.list()).map(p => p.name)).toEqual(['Laptop']);
