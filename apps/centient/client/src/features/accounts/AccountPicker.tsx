@@ -4,10 +4,11 @@ import { everyday, selectedAccount } from '../../lib/state';
 import { useBalances } from '../../models/useWaiting';
 import { Sheet } from '../../ui/Sheet';
 import { AccountHand } from './AccountHand';
+import { shownBalance } from './TotalBalance';
 
 export function AccountPicker({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data } = useBalances(open);
-  const bal = Object.fromEntries((data?.accounts ?? []).map(a => [a.id, a.balance]));
+  const bal = Object.fromEntries((data?.accounts ?? []).map(a => [a.id, shownBalance(a)]));
   const pick = (id: string | null) => {
     selectedAccount.value = id;
     setTimeout(onClose, 380); // let the card finish lifting before the sheet goes

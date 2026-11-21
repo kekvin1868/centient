@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { limitRows } from './CardLimits';
+import { shownBalance } from './TotalBalance';
 
 const acc = (kind: string, balance: number, credit_limit: number | null) => ({
   kind,
@@ -33,5 +34,13 @@ describe('limitRows', () => {
       left: 1_500_000,
       unset: 1,
     });
+  });
+});
+
+describe('shownBalance', () => {
+  it('shows a capped card as what is left of its limit; anything else as its balance', () => {
+    expect(shownBalance(acc('CREDIT_CARD', -1_600_000, 12_000_000))).toBe(10_400_000);
+    expect(shownBalance(acc('CREDIT_CARD', -1_600_000, null))).toBe(-1_600_000);
+    expect(shownBalance(acc('BANK', 4_400_000, null))).toBe(4_400_000);
   });
 });

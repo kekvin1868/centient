@@ -13,6 +13,10 @@ export type Held = Pick<Account, 'currency_code' | 'kind'> & { balance: number }
 export const isLimit = (a: Pick<Account, 'kind'>) =>
   a.kind === 'CREDIT_CARD' || a.kind === 'PAYLATER';
 
+/** What an account shows as its amount: a card / pay later with a limit shows what is left of it (limit − owed). */
+export const shownBalance = (a: Pick<Account, 'kind' | 'credit_limit'> & { balance: number }) =>
+  isLimit(a) && a.credit_limit ? a.credit_limit + a.balance : a.balance;
+
 /** Your money in rupiah (crypto at its last price), limits left out; `unpriced` = currencies with no rupiah price, kept apart. */
 export function totalOf(accounts: Held[], p: Prices) {
   let total = 0,

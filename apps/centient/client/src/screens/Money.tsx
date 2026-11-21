@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { AccountHand } from '../features/accounts/AccountHand';
 import { PickedAccount } from '../features/accounts/PickedAccount';
 import { CardLimits } from '../features/accounts/CardLimits';
-import { TotalBalance } from '../features/accounts/TotalBalance';
+import { shownBalance, TotalBalance } from '../features/accounts/TotalBalance';
 import { Budgets } from '../features/budgets/Budgets';
 import { PaidBackSheet } from '../features/entries/PaidBackSheet';
 import { InstallmentsSection } from '../features/installments/InstallmentsSection';
@@ -61,7 +61,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
             id: x.id,
             name: x.name,
             kind: x.kind,
-            balance: x.balance,
+            balance: shownBalance(x),
             currency: x.currency_code,
             note: v !== null ? `≈ ${formatMoney(v)}` : undefined,
             stickers: stickersOf(catalog.value.accounts.find(c => c.id === x.id)),

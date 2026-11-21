@@ -9,6 +9,7 @@ import { formatMoney } from '../../lib/format';
 import { idrValue, priceAge } from '../../lib/prices';
 import { usePrices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
+import { isLimit, shownBalance } from './TotalBalance';
 import { UpdateBalanceSheet } from './UpdateBalanceSheet';
 import { isStandIn, me } from '../../lib/state';
 import { accountApi } from '../../models/account';
@@ -39,7 +40,9 @@ export function PickedAccount({
   const [updating, setUpdating] = useState<Bal | null>(null);
   const main = pockets.find(p => p.id === a?.default_envelope_id);
   const split = Boolean(main && pockets.some(p => p !== main && p.balance));
-  const free = split ? main!.balance : (a?.balance ?? 0);
+  // A card / pay later with a limit: the hero is what is left of it; what is owed goes under it.
+  const capped = a && isLimit(a) && a.credit_limit ? a.credit_limit : null;
+  const free = capped ? shownBalance(a!) : split ? main!.balance : (a?.balance ?? 0);
   const iou = a?.kind === 'IOU';
   const iouBelow = iou && free < 0;
   const [keeping, setKeeping] = useState(false);
@@ -73,9 +76,18 @@ export function PickedAccount({
               max={40}
               className={`mt-2 ${free < 0 && !iouBelow ? 'text-negative' : ''}`}
             />
-            {split && (
+            {split && !capped && (
               <div className="num mt-2 text-[14px] font-semibold text-muted">
                 {formatMoney(a.balance, a.currency_code)} in total
+              </div>
+            )}
+            {capped && (
+              <div className="mt-2 text-[14px] font-semibold text-muted">
+                Left to spend · owed{' '}
+                <span className="num text-ink">
+                  {formatMoney(Math.max(0, -a.balance), a.currency_code)}
+                </span>{' '}
+                of <span className="num">{formatMoney(capped, a.currency_code)}</span>
               </div>
             )}
             {a.currency_code !== 'IDR' && <CryptoValue account={a} />}

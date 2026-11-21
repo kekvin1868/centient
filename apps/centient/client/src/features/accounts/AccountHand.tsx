@@ -47,7 +47,7 @@ type HandCard = {
   stickers?: string[];
 };
 
-const ICON: Record<string, Icon> = {
+export const ICON: Record<string, Icon> = {
   BANK: Bank,
   DEBIT_CARD: Cardholder,
   EWALLET: DeviceMobile,

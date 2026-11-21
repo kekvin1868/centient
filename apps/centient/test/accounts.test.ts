@@ -36,6 +36,19 @@ describe('accounts in any currency', () => {
     ).toBe('JPY');
   });
 
+  it('saves a new pay later account with its limit, so nothing reads as owed', async () => {
+    const ws = await ensure('limit@test');
+    const pl = await svc(ws).accounts.create({
+      name: 'SPayLater',
+      kind: 'PAYLATER',
+      creditLimit: 21_000_000,
+    });
+    expect(pl.credit_limit).toBe(21_000_000);
+    expect((await w.repos.accounts.list(ws)).find(a => a.id === pl.id)!.credit_limit).toBe(
+      21_000_000,
+    );
+  });
+
   it('does not duplicate the row or fail for a second account in the same code', async () => {
     const ws = await ensure('jpy2@test');
     await svc(ws).accounts.create({ name: 'Suica', kind: 'EWALLET', currency: 'JPY' });

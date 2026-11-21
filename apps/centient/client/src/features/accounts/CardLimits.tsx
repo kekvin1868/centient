@@ -5,6 +5,7 @@ import { formatMoney } from '../../lib/format';
 import { idrValue } from '../../lib/prices';
 import { usePrices } from '../../models/price';
 import { HpBar } from '../../ui/HpBar';
+import { ICON } from './AccountHand';
 import type { Held } from './TotalBalance';
 
 type Card = Held & { credit_limit: number | null };
@@ -42,67 +43,68 @@ export function CardLimits({ accounts, onGo }: { accounts: Card[]; onGo?: () => 
   if (!rows.length) return null;
   return (
     <section
-      className="panel relative mx-4 mb-5 rounded-[20px] bg-raised px-4 pt-3 pb-4"
+      className="panel relative mx-4 mb-5 rounded-[20px] bg-raised px-4 py-4"
       aria-label="Cards and pay later"
     >
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="text-[15px] font-bold">Cards &amp; pay later</h3>
-        <span className="shrink-0 rotate-2 rounded-md bg-ink px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-raised">
-          Not your money
-        </span>
-      </div>
-      <ul className="mt-3 flex flex-col gap-4">
-        {rows.map(r => (
-          <li key={r.kind}>
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[13px] font-bold uppercase tracking-wider text-muted">
+      <ul className="flex flex-col gap-5">
+        {rows.map(r => {
+          const I = ICON[r.kind]!;
+          return (
+            <li key={r.kind} className={`rarity-${r.kind}`}>
+              <span className="inline-flex items-center gap-1.5 rounded-md border border-edge bg-[var(--rarity)] px-2 py-0.5 text-[12px] font-bold uppercase tracking-wider text-[#0b0f0f]">
+                <I size={14} weight="fill" aria-hidden="true" />
                 {r.label}
                 {r.count > 1 ? ` · ${r.count}` : ''}
               </span>
-            </div>
-            {r.limit > 0 ? (
-              <>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span
-                    className={`num text-[24px] font-bold ${r.left <= 0 ? 'text-negative' : ''}`}
-                  >
-                    {formatMoney(Math.max(0, r.left))}
-                  </span>
-                  <span className="text-[14px] text-muted">left to spend</span>
-                </div>
-                <div className="mt-2">
-                  <HpBar value={Math.max(0, r.left)} max={r.limit} size="big" />
-                </div>
-                <p className="mt-1.5 text-[14px] text-muted">
-                  Used <span className="num font-bold text-ink">{formatMoney(r.owed)}</span> of{' '}
-                  <span className="num">{formatMoney(r.limit)}</span>
-                  {r.unset > 0 && ` · ${r.unset} without a limit`}
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="num text-[24px] font-bold">{formatMoney(r.owed)}</span>
-                  <span className="text-[14px] text-muted">owed</span>
-                </div>
-                {(() => {
-                  const hint = `Set the limit in the ${r.count > 1 ? r.many : 'account'}'s settings to see what is left`;
-                  return onGo ? (
-                    <button
-                      type="button"
-                      onClick={onGo}
-                      className="mt-1 text-left text-[14px] font-semibold text-muted active:opacity-70"
+              {r.limit > 0 ? (
+                <>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span
+                      className={`num text-[24px] font-bold ${r.left <= 0 ? 'text-negative' : ''}`}
                     >
-                      {hint} ▸
-                    </button>
-                  ) : (
-                    <p className="mt-1 text-[14px] text-muted">{hint}.</p>
-                  );
-                })()}
-              </>
-            )}
-          </li>
-        ))}
+                      {formatMoney(Math.max(0, r.left))}
+                    </span>
+                    <span className="text-[14px] text-muted">left to spend</span>
+                  </div>
+                  <div className="mt-2">
+                    <HpBar
+                      value={Math.max(0, r.left)}
+                      max={r.limit}
+                      size="big"
+                      fill="bg-[var(--rarity)]"
+                    />
+                  </div>
+                  <p className="mt-1.5 text-[14px] text-muted">
+                    Used <span className="num font-bold text-ink">{formatMoney(r.owed)}</span> of{' '}
+                    <span className="num">{formatMoney(r.limit)}</span>
+                    {r.unset > 0 && ` · ${r.unset} without a limit`}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <span className="num text-[24px] font-bold">{formatMoney(r.owed)}</span>
+                    <span className="text-[14px] text-muted">owed</span>
+                  </div>
+                  {(() => {
+                    const hint = `Set the limit in the ${r.count > 1 ? r.many : 'account'}'s settings to see what is left`;
+                    return onGo ? (
+                      <button
+                        type="button"
+                        onClick={onGo}
+                        className="mt-1 text-left text-[14px] font-semibold text-muted active:opacity-70"
+                      >
+                        {hint} ▸
+                      </button>
+                    ) : (
+                      <p className="mt-1 text-[14px] text-muted">{hint}.</p>
+                    );
+                  })()}
+                </>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

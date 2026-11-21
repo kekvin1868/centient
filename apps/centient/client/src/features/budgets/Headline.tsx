@@ -1,7 +1,7 @@
 // The HUD on Home: the money you hold. All accounts: the total of every account (as on Money); one account: its
 // balance. Teal when fine, pink below zero. Under it, the budget card (HomeBudgets).
 import { useQuery } from '@tanstack/react-query';
-import { ACCOUNT_KINDS } from '../../lib/format';
+import { ACCOUNT_KINDS, formatMoney } from '../../lib/format';
 import { selectedAccount } from '../../lib/state';
 import type { Balances } from '../../models/account';
 import { budgetsWithWaiting, useBalances, useOverlaySince } from '../../models/useWaiting';
@@ -9,7 +9,7 @@ import { budgetQueries } from '../../models/budget';
 import { usePrices, type Prices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 import { CardLimits } from '../accounts/CardLimits';
-import { isLimit, totalOf } from '../accounts/TotalBalance';
+import { isLimit, shownBalance, totalOf } from '../accounts/TotalBalance';
 import { HomeBudgets } from './HomeBudgets';
 
 type Head = {
@@ -27,9 +27,12 @@ function headOf(sel: string | null, bal: Balances, prices: Prices): Head {
   if (a)
     return {
       label: `In ${a.name}`,
-      minor: a.balance,
+      minor: shownBalance(a),
       currency: a.currency_code,
-      note: ACCOUNT_KINDS[a.kind] ?? '',
+      note:
+        isLimit(a) && a.credit_limit
+          ? `Left to spend · owed ${formatMoney(Math.max(0, -a.balance), a.currency_code)}`
+          : (ACCOUNT_KINDS[a.kind] ?? ''),
       hurt: false,
       cta: 'Update balance',
     };
