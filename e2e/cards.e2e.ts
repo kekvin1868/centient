@@ -239,3 +239,70 @@ test('Home on All accounts keeps the limits box with both kinds', async () => {
   await limits().scrollIntoViewIfNeeded();
   await shot('8-home-all-accounts');
 });
+
+// Slice 2: one bill like the bank. A card closing today with a 6× TV bought today: the bill asks the slice, not the
+// price; the daily job (run here by Miniflare's scheduled trigger) adds the slice's interest; "Move to next bill"
+// takes both off this bill.
+test("the card's bill asks one slice; the daily job adds its interest; Move to next bill moves it", async () => {
+  const today = new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
+  const card = await (
+    await page.request.post('/api/accounts', {
+      data: {
+        name: 'TV Card',
+        kind: 'CREDIT_CARD',
+        creditLimit: 10_000_000,
+        statementDay: Number(today.slice(8)),
+        dueDay: 28,
+      },
+    })
+  ).json();
+  const { categories } = await (await page.request.get('/api/catalog')).json();
+  const shopping = (categories as { id: string; name: string }[]).find(c => c.name === 'Shopping')!;
+  const r = await page.request.post('/api/installments', {
+    data: {
+      accountId: card.id,
+      name: 'TV',
+      amountPerInstallment: 525_000,
+      installments: 6,
+      price: 3_000_000,
+      paidCount: 0,
+      myShare: 525_000,
+      others: [],
+      alreadyInBalance: false,
+      categoryId: shopping.id,
+    },
+  });
+  expect(r.status()).toBe(201);
+  expect(await balance('TV Card')).toBe(-3_000_000);
+
+  await page.reload();
+  await tab('Money').tap();
+  await pick('TV Card');
+  const bill = page.getByRole('region', { name: 'Card bill' });
+  await expect(bill).toContainText('Rp500.000');
+  await expect(bill).not.toContainText('Rp3.000.000');
+
+  const run = await page.request.get('/cdn-cgi/local/scheduled');
+  expect(run.ok()).toBe(true);
+  const left = async () =>
+    (
+      (await (await page.request.get('/api/recurring')).json()).cards as {
+        accountId: string;
+        left: number;
+      }[]
+    ).find(c => c.accountId === card.id)!.left;
+  await expect.poll(left).toBe(525_000);
+  await page.reload();
+  await tab('Money').tap();
+  await pick('TV Card');
+  await expect(bill).toContainText('Rp525.000');
+  await shot('9-card-bill-slice-interest', bill);
+
+  await page.getByRole('button', { name: 'TV, 0 of 6 paid' }).tap();
+  const plan = page.getByRole('dialog', { name: 'TV' });
+  await plan.getByRole('button', { name: 'Move to next bill' }).tap();
+  await expect(page.getByText('Moved to the next bill')).toBeVisible();
+  expect(await left()).toBe(0);
+  await page.keyboard.press('Escape');
+  await expect(bill).toContainText('Nothing left to pay');
+});

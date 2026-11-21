@@ -391,7 +391,6 @@ test('a plan only you pay has no proof of payment', async () => {
       name: 'Shoes',
       amountPerInstallment: 200_000,
       installments: 2,
-      firstDue: '2026-12-01',
       paidCount: 0,
       myShare: 200_000,
       others: [],

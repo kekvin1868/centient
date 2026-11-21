@@ -1,11 +1,23 @@
 // Installment plans on pay later and credit card accounts: N equal monthly installments, each shared by
-// one or more people. Every person's share of every installment is paid on its own, and paying it logs an
-// ordinary transfer into the plan's account (yours from the account you pick, another person's from their
-// IOU account), so balances stay right and the entry shows in activity. Deleting that entry un-pays the share.
+// one or more people. The price goes on the card at once (it blocks the limit) and each installment's slice
+// rides one of the card's bills (src/domain/cardBill.ts); its interest is posted at that bill's closing by the
+// daily job. Every person's share of every installment is paid on its own, and paying it logs an ordinary
+// transfer into the plan's account (yours from the account you pick, another person's from their IOU account),
+// so balances stay right and the entry shows in activity. Deleting that entry un-pays the share.
 import type { ServiceDeps } from '../../context';
 import type { Command } from '../../lib/schemas';
+import {
+  closingOf,
+  firstBillFor,
+  interestDue,
+  priceLeft,
+  sliceBill,
+  type BillPlan,
+} from '../../domain/cardBill';
 import { jakartaToday, toOccurredAt } from '../../domain/cycle';
 import { DomainError } from '../../domain/ledger';
+import { isCard, statementOf } from '../../domain/recurring';
+import type { Account } from '../../repos/accounts';
 import type { PartyRow, PaymentRow, PlanRow } from '../../repos/installments';
 import type { LedgerService } from '../ledger/service';
 import { findOrCreateTab } from '../ledger/tabs';
@@ -19,7 +31,8 @@ export type NewPlan = {
   name: string;
   amountPerInstallment: number;
   installments: number;
-  firstDue: string;
+  /** What the limit blocks, without interest; left out = no interest (amount × installments). */
+  price?: number;
   /** Installments already paid in full before the plan was added (the first ones). */
   paidCount: number;
   /** Your share of each installment; may be 0 when the plan is only other people's. */
@@ -33,6 +46,21 @@ export type NewPlan = {
 
 export type PlanView = ReturnType<typeof view>;
 
+/** A plan as the bill math sees it. */
+export const billPlan = (p: PlanRow): BillPlan => ({
+  id: p.id,
+  name: p.name,
+  count: p.installments,
+  each: p.amount_per_installment,
+  price: p.price,
+  boughtOn: p.bought_on,
+  firstBill: p.first_bill,
+  paidBefore: p.paid_before,
+});
+
+const cardDays = (a: Pick<Account, 'statement_day' | 'due_day'> | undefined) =>
+  a?.statement_day ? { closes: a.statement_day, payBy: a.due_day } : null;
+
 export function createInstallmentsService({
   ws,
   now,
@@ -41,9 +69,14 @@ export function createInstallmentsService({
   ledger,
 }: ServiceDeps & { ledger: LedgerService }) {
   async function list(accountId?: string) {
-    const { plans, parties, payments } = await repos.installments.listPlans(ws, accountId);
+    const [{ plans, parties, payments }, c] = await Promise.all([
+      repos.installments.listPlans(ws, accountId),
+      catalog.load(),
+    ]);
     const today = jakartaToday(now());
-    return plans.map(p => view(p, parties, payments, today));
+    return plans.map(p =>
+      view(p, parties, payments, today, cardDays(c.accounts.find(a => a.id === p.account_id))),
+    );
   }
 
   async function planOf(planId: string) {
@@ -66,11 +99,17 @@ export function createInstallmentsService({
     async create(i: NewPlan): Promise<PlanView> {
       const c = await catalog.load();
       const account = c.account(i.accountId).row;
-      if (!['PAYLATER', 'CREDIT_CARD'].includes(account.kind))
+      if (!isCard(account.kind))
         throw new DomainError(
           'NOT_INSTALLMENT_ACCOUNT',
           'Installments go on a pay later or credit card account',
         );
+      const days = cardDays(account);
+      if (!days)
+        throw new DomainError('CARD_SETUP', `Set ${account.name}'s limit and bill days first`);
+      const price = i.price ?? i.amountPerInstallment * i.installments;
+      if (price <= 0 || price > i.amountPerInstallment * i.installments)
+        throw new DomainError('PLAN_PRICE', 'The price is more than the installments add up to');
       if (i.paidCount < 0 || i.paidCount >= i.installments)
         throw new DomainError('PAID_COUNT', 'At least one installment must still be unpaid');
       if (i.myShare < 0 || i.others.some(o => o.share <= 0))
@@ -104,33 +143,42 @@ export function createInstallmentsService({
       const today = jakartaToday(now());
       const left = i.installments - i.paidCount;
       const note = `${i.name.trim()} · ${left} of ${i.installments} installments`;
+      // The price still owed, shared out like the installment: each person's part of it, the last takes the
+      // rounding. Without interest that is each share × the installments left.
+      const owed = priceLeft({ price, count: i.installments, paidBefore: i.paidCount });
+      const shares = [...(i.myShare ? [i.myShare] : []), ...ious.map(o => o.share)];
+      const parts = shares.map(x => Math.round((x * owed) / i.amountPerInstallment));
+      parts[parts.length - 1] += owed - parts.reduce((a, b) => a + b, 0);
+      const myPart = i.myShare ? parts[0] : 0;
+      const theirs = parts.slice(i.myShare ? 1 : 0);
       // Your part, told whole: "Rp703.332 over 3 installments · Rp234.444 a month in budgets".
-      const mine = `${money(i.myShare * left, account.currency_code)} over ${left} installment${left === 1 ? '' : 's'} · ${money(i.myShare, account.currency_code)} a month in budgets`;
+      const mine = `${money(myPart, account.currency_code)} over ${left} installment${left === 1 ? '' : 's'} · ${money(Math.round(myPart / left), account.currency_code)} a month in budgets`;
       const cmds: Command[] = [];
       if (!i.alreadyInBalance) {
-        if (i.myShare) {
+        if (myPart) {
           if (!i.categoryId)
             throw new DomainError('CATEGORY_REQUIRED', 'Pick a category for your share');
           cmds.push({
             type: 'EXPENSE',
             accountId: account.id,
             categoryId: i.categoryId,
-            amount: i.myShare * left,
+            amount: myPart,
             date: today,
             merchant: i.name.trim(),
             note: `${i.name.trim()} · ${mine}`,
             spreadCycles: left,
           });
         }
-        for (const o of ious)
+        ious.forEach((o, k) =>
           cmds.push({
             type: 'TRANSFER',
             fromAccountId: account.id,
             toAccountId: o.id,
-            amount: o.share * left,
+            amount: theirs[k],
             date: today,
             note: `${o.name}'s share · ${note}`,
-          });
+          }),
+        );
       } else if (ious.length) {
         const adj = c.categories.find(x => x.name === 'Balance adjustment' && x.kind === 'INCOME');
         if (!adj)
@@ -143,7 +191,7 @@ export function createInstallmentsService({
             type: 'INCOME',
             accountId: o.id,
             categoryId: adj.id,
-            amount: o.share * left,
+            amount: theirs[ious.indexOf(o)],
             date: today,
             merchant: i.name.trim(),
             note: `${o.name}'s share · ${note}`,
@@ -174,8 +222,12 @@ export function createInstallmentsService({
           entry_id: null,
         })),
       ).flat();
+      const written = repos.entries.insertStatements(ws, entries);
+      // Slice paidCount + 1 rides the next bill; its due date also fills the old first_due column.
+      const firstBill = firstBillFor(today, days.closes, i.paidCount);
+      const firstDue = dueOf(firstBill, i.paidCount + 1, days) ?? today;
       await repos.batch([
-        ...repos.entries.insertStatements(ws, entries).stmts,
+        ...written.stmts,
         ...repos.installments.planInserts(
           ws,
           {
@@ -184,7 +236,13 @@ export function createInstallmentsService({
             name: i.name.trim(),
             amount_per_installment: i.amountPerInstallment,
             installments: i.installments,
-            first_due: i.firstDue,
+            first_due: firstDue,
+            anchor_no: i.paidCount + 1,
+            price,
+            bought_on: today,
+            first_bill: firstBill,
+            paid_before: i.paidCount,
+            purchase_entry_id: i.alreadyInBalance ? null : (written.ids[0] ?? null),
           },
           parties,
           prepaid,
@@ -301,12 +359,84 @@ export function createInstallmentsService({
       return { ...f, filename: a.filename };
     },
 
-    /** Moves the next unpaid installment to `due`; every later one follows a month apart. */
-    async moveDues(planId: string, due: string) {
-      const plan = await planOf(planId);
-      if (!plan.next) throw new DomainError('ALL_PAID', 'Every installment is paid');
-      await repos.installments.moveDues(ws, planId, plan.next.no, due);
+    /**
+     * "Move to next bill": the bank started the plan a bill later, so every slice moves one bill on. Only while its
+     * first slice is on the last closed bill or a later one; interest posted for a slice whose bill has not closed
+     * any more is taken back (the daily job posts it again when it does).
+     */
+    async nextBill(planId: string) {
+      const [{ plans }, posted, c] = await Promise.all([
+        repos.installments.listPlans(ws),
+        repos.installments.interest(ws),
+        catalog.load(),
+      ]);
+      const row = plans.find(p => p.id === planId);
+      if (!row) throw new DomainError('NOT_FOUND', 'Installment plan not found');
+      const days = cardDays(c.accounts.find(a => a.id === row.account_id));
+      if (!days) throw new DomainError('CARD_SETUP', "Set the card's limit and bill days first");
+      const today = jakartaToday(now());
+      const plan = billPlan(row);
+      const lastClosed = statementOf(days.closes, days.payBy, today).cutOff.slice(0, 7);
+      if (sliceBill(plan, plan.paidBefore + 1) < lastClosed)
+        throw new DomainError(
+          'PLAN_STARTED',
+          'Its slices are already on bills before the last one',
+        );
+      const moved = { ...plan, firstBill: sliceBill(plan, 2) };
+      const undo = posted.filter(
+        r => r.plan_id === planId && closingOf(sliceBill(moved, r.slice_no), days.closes) > today,
+      );
+      if (undo.length)
+        await repos.batch(
+          undo.flatMap(r => [
+            ...repos.entries.removeStatements(ws, r.entry_id),
+            repos.installments.interestDelete(ws, planId, r.slice_no),
+          ]),
+        );
+      await repos.installments.setFirstBill(ws, planId, moved.firstBill);
       return planOf(planId);
+    },
+
+    /**
+     * The daily job: posts each slice's interest as an expense on the card in Fees ("Interest · iPhone 3/12"),
+     * dated on its bill's closing day, once its bill has closed. Catches up on days it missed. Returns how many.
+     */
+    async postInterest() {
+      const today = jakartaToday(now());
+      const [{ plans }, posted, c] = await Promise.all([
+        repos.installments.listPlans(ws),
+        repos.installments.interest(ws),
+        catalog.load(),
+      ]);
+      const fees = c.categoryByName('Fees');
+      if (!fees)
+        throw new DomainError('NO_FEES_CATEGORY', 'Create a "Fees" expense category first');
+      let n = 0;
+      for (const row of plans) {
+        const days = cardDays(c.accounts.find(a => a.id === row.account_id));
+        if (!days) continue;
+        const done = new Set(posted.filter(r => r.plan_id === row.id).map(r => r.slice_no));
+        for (const line of interestDue(billPlan(row), days.closes, today, done)) {
+          const entries = await ledger.prepare([
+            {
+              type: 'EXPENSE',
+              accountId: row.account_id,
+              categoryId: fees.id,
+              amount: line.amount,
+              date: line.day,
+              note: `Interest · ${row.name} ${line.no}/${row.installments}`,
+            },
+          ]);
+          const { ids, stmts } = repos.entries.insertStatements(ws, entries);
+          // One batch: if another run posted this slice first, the row clashes and nothing is written.
+          await repos.batch([
+            ...stmts,
+            repos.installments.interestInsert(ws, row.id, line.no, ids[0]),
+          ]);
+          n++;
+        }
+      }
+      return n;
     },
 
     /** Deletes a plan; the entries it logged stay (they are real money movements). */
@@ -326,7 +456,19 @@ export function addMonths(date: string, k: number): string {
   return first.toISOString().slice(0, 10);
 }
 
-function view(p: PlanRow, parties: PartyRow[], payments: PaymentRow[], today: string) {
+/** The day slice `no` is due: its bill's pay-by day (null when the card has no pay-by day). */
+function dueOf(firstBill: string, no: number, days: { closes: number; payBy: number | null }) {
+  const closing = closingOf(sliceBill({ firstBill }, no), days.closes);
+  return statementOf(days.closes, days.payBy, closing).dueOn;
+}
+
+function view(
+  p: PlanRow,
+  parties: PartyRow[],
+  payments: PaymentRow[],
+  today: string,
+  days: { closes: number; payBy: number | null } | null,
+) {
   const own = parties.filter(x => x.plan_id === p.id);
   const paid = payments.filter(x => x.plan_id === p.id);
   const schedule = Array.from({ length: p.installments }, (_, i) => {
@@ -340,7 +482,9 @@ function view(p: PlanRow, parties: PartyRow[], payments: PaymentRow[], today: st
       };
     });
     const left = shares.reduce((s, x) => s + (x.paid ? 0 : x.amount), 0);
-    return { no, due: addMonths(p.first_due, no - p.anchor_no), shares, left };
+    // A card without bill days (made before they were required) keeps the plan's own dates.
+    const due = (days && dueOf(p.first_bill, no, days)) ?? addMonths(p.first_due, no - p.anchor_no);
+    return { no, due, shares, left };
   });
   const next = schedule.find(s => s.left > 0) ?? null;
   return {
@@ -349,7 +493,8 @@ function view(p: PlanRow, parties: PartyRow[], payments: PaymentRow[], today: st
     name: p.name,
     amountPerInstallment: p.amount_per_installment,
     installments: p.installments,
-    firstDue: p.first_due,
+    price: p.price,
+    firstBill: p.first_bill,
     parties: own.map(x => ({
       seq: x.seq,
       name: x.name,

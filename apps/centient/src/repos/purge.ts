@@ -19,6 +19,7 @@ const STATEMENTS = [
   inWs('tickets'),
   inWs('inbox_items'),
   inWs('bill_payments'),
+  inWs('plan_interest'),
   inWs('statement_imports'),
   inWs('recurring'),
   inWs('recurring_hidden'),

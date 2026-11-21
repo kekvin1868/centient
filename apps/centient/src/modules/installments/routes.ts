@@ -21,7 +21,7 @@ export const installmentsRoutes = new Hono<AppEnv>()
         name: text(80).min(1),
         amountPerInstallment: money,
         installments: z.number().int().min(1).max(60),
-        firstDue: day,
+        price: money.optional(),
         paidCount: z.number().int().min(0).max(59),
         myShare: z.number().int().min(0),
         others: z
@@ -34,10 +34,8 @@ export const installmentsRoutes = new Hono<AppEnv>()
     async c => c.json(await c.var.services.installments.create(c.req.valid('json')), 201),
   )
 
-  .patch('/installments/:id', json(z.object({ nextDue: day })), async c =>
-    c.json(
-      await c.var.services.installments.moveDues(c.req.param('id'), c.req.valid('json').nextDue),
-    ),
+  .post('/installments/:id/next-bill', async c =>
+    c.json(await c.var.services.installments.nextBill(c.req.param('id'))),
   )
 
   .delete('/installments/:id', async c => {

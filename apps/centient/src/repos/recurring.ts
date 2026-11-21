@@ -1,5 +1,5 @@
 // Recurring bills and subscriptions, the merchants hidden from "Found in your entries", and the two reads over
-// the ledger they need (a card's statement sums, recent payments per merchant).
+// the ledger they need (a card's money per day for its bills, recent payments per merchant).
 import { all, uid, updateStatement } from './sql';
 
 export type Recurring = {
@@ -139,23 +139,18 @@ export function recurringRepo(db: D1Database) {
         .run();
     },
 
-    /**
-     * A card's sums around a statement cut-off: its balance at the end of that day, then what came in
-     * (payments) and what went out (new spending) after it.
-     */
-    async statement(ws: string, accountId: string, cutOff: string) {
-      const r = await db
-        .prepare(
-          `SELECT
-            COALESCE(SUM(CASE WHEN substr(t.occurred_at, 1, 10) <= ?1 THEN e.amount END), 0) AS balance,
-            COALESCE(SUM(CASE WHEN substr(t.occurred_at, 1, 10) > ?1 AND e.amount > 0 THEN e.amount END), 0) AS paid,
-            COALESCE(SUM(CASE WHEN substr(t.occurred_at, 1, 10) > ?1 AND e.amount < 0 THEN -e.amount END), 0) AS spent
-          FROM entries e JOIN transactions t ON t.id = e.transaction_id
-          WHERE t.workspace_id = ?2 AND t.deleted_at IS NULL AND e.account_id = ?3`,
-        )
-        .bind(cutOff, ws, accountId)
-        .first<{ balance: number; paid: number; spent: number }>();
-      return r ?? { balance: 0, paid: 0, spent: 0 };
+    /** Each credit card's and pay later's money per day: what went out (spent) and came in (paid, credited). */
+    cardDays(ws: string) {
+      return all<{ account_id: string; day: string; out: number; in: number }>(
+        db,
+        `SELECT e.account_id, substr(t.occurred_at, 1, 10) AS day,
+          SUM(CASE WHEN e.amount < 0 THEN -e.amount ELSE 0 END) AS out,
+          SUM(CASE WHEN e.amount > 0 THEN e.amount ELSE 0 END) AS "in"
+        FROM entries e JOIN transactions t ON t.id = e.transaction_id JOIN accounts a ON a.id = e.account_id
+        WHERE t.workspace_id = ? AND t.deleted_at IS NULL AND a.kind IN ('CREDIT_CARD', 'PAYLATER')
+        GROUP BY e.account_id, day`,
+        ws,
+      );
     },
 
     /** Expenses with a merchant since `since`, oldest first: what "Found in your entries" looks through. */

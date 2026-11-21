@@ -26,9 +26,8 @@ export const installmentQueries = {
 /** Plan saves; each refreshes everything (a payment is an entry). */
 export const installmentApi = {
   create: (json: NewPlan) => call(client.api.installments.$post({ json })),
-  /** Moves the next unpaid installment to `nextDue`; later ones follow a month apart. */
-  moveDues: (id: string, nextDue: string) =>
-    call(plan.$patch({ param: { id }, json: { nextDue } })),
+  /** "Move to next bill": every installment moves one card bill on. */
+  nextBill: (id: string) => call(plan['next-bill'].$post({ param: { id } })),
   remove: (id: string) => call(plan.$delete({ param: { id } })),
   /** Marks a share paid; your own share (seq 0) is paid from `fromAccountId`. */
   pay: (p: Payment, fromAccountId?: string) =>
