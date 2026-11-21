@@ -20,6 +20,7 @@ describe('due dates on screen', () => {
       bill: 1_000_000,
       left: 600_000,
       spentSince: 0,
+      lines: { carry: 0, spent: 0, slices: [], interest: [] },
     };
     const list = {
       today: '2026-11-12',

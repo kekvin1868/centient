@@ -8,7 +8,7 @@ import { dayLabel, formatMoney } from '../../lib/format';
 import { everyday, me } from '../../lib/state';
 import { load, save } from '../../lib/storage';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
-import { DateRow, PickerRow } from '../../ui/Fields';
+import { PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
@@ -53,8 +53,8 @@ export function PlanSheet({
   };
   const unattach = (no: number, seq: number) =>
     persist(() => installmentApi.removeProof(slot(no, seq)));
-  const move = async (due: string) => {
-    if (await persist(() => installmentApi.moveDues(plan.id, due))) showToast('Due dates moved');
+  const move = async () => {
+    if (await persist(() => installmentApi.nextBill(plan.id))) showToast('Moved to the next bill');
   };
   const remove = async () => {
     setConfirm(false);
@@ -81,9 +81,14 @@ export function PlanSheet({
           </div>
         </div>
         {plan.next && (
-          <Group foot="Moves this installment and every later one, a month apart.">
-            <DateRow label="Next due" value={plan.next.due} onChange={move} />
-          </Group>
+          <Block className="!my-3">
+            <Button large rounded tonal onClick={move}>
+              Move to next bill
+            </Button>
+            <p className="mt-2 text-[13px] text-muted">
+              If {account.name}'s bill didn't have it yet, every installment moves one bill on.
+            </p>
+          </Block>
         )}
         {plan.parties.some(x => x.seq === 0) && (
           <Group foot="Your share is logged as a transfer from this account. Others' shares come off what they owe you.">

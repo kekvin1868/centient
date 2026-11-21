@@ -146,6 +146,7 @@ describe('the list', () => {
       bill: 1_240_000,
       left: 1_240_000,
       spentSince: 0,
+      lines: { carry: 0, spent: 0, slices: [], interest: [] },
     };
     const part = (no: number, due: string, left: number) => ({ no, due, left, shares: [] });
     const plan = {

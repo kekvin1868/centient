@@ -381,6 +381,7 @@ describe('card statement', () => {
       bill: 1_000_000,
       left: 1_000_000,
       spentSince: 150_000,
+      lines: { carry: 0, spent: 1_000_000, slices: [], interest: [] },
     });
     await t.svc().ledger.record([
       {
