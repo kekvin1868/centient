@@ -1,6 +1,8 @@
 // Installment plans: the pay later example from the brief (Rp894k x 3, first one paid, shared with a brother).
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { addMonths } from '../src/modules/installments/service';
+import { spreadShare } from '../src/repos/entries';
 import type { FileStore } from '../src/repos/files';
 import { world as base, type World } from './world';
 
@@ -216,6 +218,105 @@ describe('installment plans', () => {
         e.transactions.some(x => x.merchant === 'tv'),
       ),
     ).toBe(false);
+  });
+
+  it('drops the plans of a deleted account (the Bills page could not pay them)', async () => {
+    const { w } = world();
+    const t = await setup(w);
+    const plan = {
+      name: 'Phone',
+      amountPerInstallment: 500_000,
+      installments: 3,
+      firstDue: '2026-11-01',
+      paidCount: 0,
+      myShare: 500_000,
+      others: [],
+      alreadyInBalance: true,
+    };
+    await t.s().installments.create({ ...plan, accountId: t.kredivo });
+    const card = await t.s().accounts.create({ name: 'BCA Card', kind: 'CREDIT_CARD' });
+    await t.s().installments.create({ ...plan, accountId: card.id, name: 'Laptop' });
+    await t.s().accounts.remove(t.kredivo);
+    expect((await t.s().installments.list()).map(p => p.name)).toEqual(['Laptop']);
+    expect(await t.s().installments.list(t.kredivo)).toEqual([]);
+
+    // A plan left behind before that fix (account deleted, plan live): migration 0022 deletes it.
+    await w.db
+      .prepare("UPDATE accounts SET deleted_at = '2026-11-17' WHERE id = ?")
+      .bind(card.id)
+      .run();
+    expect((await t.s().installments.list()).map(p => p.name)).toEqual(['Laptop']);
+    const sql = readFileSync(
+      new URL('../migrations/0022_orphan_plans.sql', import.meta.url),
+      'utf8',
+    );
+    await w.db.prepare(sql.replace(/^--.*$/gm, '')).run();
+    expect(await t.s().installments.list()).toEqual([]);
+  });
+
+  it('moves the next unpaid installment and every later one; paid ones stay paid', async () => {
+    const { w } = world();
+    const t = await setup(w);
+    const created = await t.s().installments.create({
+      accountId: t.kredivo,
+      name: 'Phone',
+      amountPerInstallment: 500_000,
+      installments: 4,
+      firstDue: '2026-01-05',
+      paidCount: 1,
+      myShare: 500_000,
+      others: [],
+      alreadyInBalance: true,
+    });
+    const moved = await t.s().installments.moveDues(created.id, '2026-03-31');
+    expect(moved.schedule.map(s => [s.due, s.left])).toEqual([
+      ['2026-02-28', 0],
+      ['2026-03-31', 500_000],
+      ['2026-04-30', 500_000],
+      ['2026-05-31', 500_000],
+    ]);
+    expect(moved.next?.due).toBe('2026-03-31');
+    // Moving again after paying the next one starts from the new next.
+    await t.s().installments.markPaid(created.id, 2, 0, { fromAccountId: t.bca });
+    const again = await t.s().installments.moveDues(created.id, '2026-04-12');
+    expect(again.schedule.slice(2).map(s => s.due)).toEqual(['2026-04-12', '2026-05-12']);
+  });
+
+  it('counts a new plan purchase in budgets a month at a time, and says the whole amount', async () => {
+    const { w } = world();
+    const t = await setup(w);
+    const shopping = (await w.repos.categories.list(t.ws)).find(c => c.name === 'Shopping')!.id;
+    await t.s().budgets.set({ categoryId: shopping, limit: 1_000_000 });
+    await t.s().installments.create({
+      accountId: t.kredivo,
+      name: 'hu,an',
+      amountPerInstallment: 234_444,
+      installments: 3,
+      firstDue: '2026-11-20',
+      paidCount: 0,
+      myShare: 234_444,
+      others: [],
+      alreadyInBalance: false,
+      categoryId: shopping,
+    });
+    const spent = async (day: string) =>
+      (await t.s().budgets.status(day)).budgets.find(b => b.categoryId === shopping)!.spent;
+    // Bought 17 Oct: this cycle and the next two count Rp234.444 each, then nothing.
+    expect(await spent('2026-10-17')).toBe(234_444);
+    expect(await spent('2026-11-17')).toBe(234_444);
+    expect(await spent('2026-12-17')).toBe(234_444);
+    expect(await spent('2027-01-17')).toBe(0);
+    const { items } = await t.s().ledger.listEntries({ limit: 5 });
+    expect(JSON.stringify(items)).toContain(
+      'hu,an · Rp703.332 over 3 installments · Rp234.444 a month in budgets',
+    );
+  });
+
+  it('gives the first cycle of a spread purchase what does not divide evenly', () => {
+    const r = { day: '2026-11-18', n: 3, amount: 100 };
+    expect(spreadShare(r, '2026-11-01', '2026-12-01')).toBe(34);
+    expect(spreadShare(r, '2027-01-01', '2027-02-01')).toBe(33);
+    expect(spreadShare(r, '2027-02-01', '2027-03-01')).toBe(0);
   });
 
   it('keeps due dates on the same day, clamped to short months', () => {

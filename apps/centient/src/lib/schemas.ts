@@ -34,6 +34,8 @@ export const command = z.discriminatedUnion('type', [
     date: day,
     merchant: text(120).optional(),
     note: text(500).optional(),
+    /** Budgets count it over this many cycles from its date (an installment purchase); 1 when left out. */
+    spreadCycles: z.number().int().min(1).max(36).optional(),
     split: z
       .object({
         people: z.number().int().min(2).max(50),
@@ -116,6 +118,7 @@ export const patch = z.object({
   default_envelope_id: id.nullable().optional(),
   due_day: z.number().int().min(1).max(31).nullable().optional(),
   statement_day: z.number().int().min(1).max(31).nullable().optional(),
+  credit_limit: money.nullable().optional(),
   target_amount: money.nullable().optional(),
   target_date: day.nullable().optional(),
   archived: z.boolean().optional(),

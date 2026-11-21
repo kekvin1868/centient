@@ -181,7 +181,7 @@ test("a bill's own page: history, edit, pause, and back to the list", async () =
   await expect(page.getByRole('heading', { level: 1, name: 'Bills' })).toBeVisible();
 });
 
-test("a card's bill: what was owed at the statement, then I paid it", async () => {
+test("a card's bill and an installment sit on the Bills page, tagged; the card is paid from there", async () => {
   const card = await send('post', '/accounts', {
     name: 'BCA Card',
     kind: 'CREDIT_CARD',
@@ -199,8 +199,45 @@ test("a card's bill: what was owed at the statement, then I paid it", async () =
     });
   await spend(daysAgo(5), 700_000);
   await spend(today, 150_000);
+  await send('post', '/installments', {
+    accountId: card.id,
+    name: 'Phone',
+    amountPerInstallment: 500_000,
+    installments: 3,
+    firstDue: today,
+    paidCount: 0,
+    myShare: 500_000,
+    others: [],
+    alreadyInBalance: true,
+  });
 
+  // Bills: both are listed with a tag and their own key, and marked hollow on the calendar; the month's
+  // count stays bills only.
   await page.goto('/');
+  await tab('Bills').tap();
+  const bills = page.getByRole('main');
+  await expect(bills.getByRole('region', { name: /^Bills in / })).toContainText('2/2 PAID');
+  const cardRow = bills.getByRole('listitem').filter({ hasText: 'BCA Card bill' });
+  await expect(cardRow).toContainText('CARD');
+  await expect(cardRow).toContainText('Rp700.000');
+  await expect(cardRow).toContainText('not in the bar');
+  const planRow = bills.getByRole('listitem').filter({ hasText: 'Phone · 1 of 3' });
+  await expect(planRow).toContainText('PLAN');
+  await expect(planRow).toContainText(/\w{3} \d+ \w{3} · today · not in the bar/);
+  await expect(bills.getByText('card bill / installment')).toBeVisible();
+  await planRow.getByRole('button', { name: 'Pay Phone · 1 of 3' }).tap();
+  await expect(sheet('Phone')).toContainText('0 of 3 paid');
+  await page.keyboard.press('Escape');
+  await expect(sheet('Phone')).toHaveCount(0);
+
+  await cardRow.getByRole('button', { name: 'Pay BCA Card bill' }).tap();
+  const pay = sheet('Pay BCA Card');
+  await pay.getByLabel('Paid from').selectOption({ label: 'Main Account' });
+  await expect(pay.getByLabel('Amount')).toHaveValue('700.000');
+  await pay.getByRole('button', { name: 'Log the payment' }).tap();
+  await expect(cardRow).toHaveCount(0);
+
+  // Money still shows the card's bill under its card.
   await tab('Money').tap();
   const hand = page
     .getByRole('group', { name: 'Accounts' })
@@ -208,15 +245,8 @@ test("a card's bill: what was owed at the statement, then I paid it", async () =
   await hand.focus();
   await hand.press('Enter');
   const bill = page.getByRole('region', { name: 'Card bill' });
-  await expect(bill).toContainText('Rp700.000');
-  await expect(bill).toContainText('Rp150.000 spent since then goes on the next bill.');
-  await bill.getByRole('button', { name: 'I paid it' }).tap();
-
-  const pay = sheet('Pay BCA Card');
-  await pay.getByLabel('Paid from').selectOption({ label: 'Main Account' });
-  await expect(pay.getByLabel('Amount')).toHaveValue('700.000');
-  await pay.getByRole('button', { name: 'Log the payment' }).tap();
   await expect(bill).toContainText('Nothing left to pay of the Rp700.000');
+  await expect(bill).toContainText('Rp150.000 spent since then goes on the next bill.');
 });
 
 test('a payment found in the entries becomes a bill, or is hidden', async () => {

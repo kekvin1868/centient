@@ -8,7 +8,7 @@ import { dayLabel, formatMoney } from '../../lib/format';
 import { everyday, me } from '../../lib/state';
 import { load, save } from '../../lib/storage';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
-import { PickerRow } from '../../ui/Fields';
+import { DateRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
@@ -53,6 +53,9 @@ export function PlanSheet({
   };
   const unattach = (no: number, seq: number) =>
     persist(() => installmentApi.removeProof(slot(no, seq)));
+  const move = async (due: string) => {
+    if (await persist(() => installmentApi.moveDues(plan.id, due))) showToast('Due dates moved');
+  };
   const remove = async () => {
     setConfirm(false);
     if (!(await persist(() => installmentApi.remove(plan.id)))) return;
@@ -77,6 +80,11 @@ export function PlanSheet({
             installment
           </div>
         </div>
+        {plan.next && (
+          <Group foot="Moves this installment and every later one, a month apart.">
+            <DateRow label="Next due" value={plan.next.due} onChange={move} />
+          </Group>
+        )}
         {plan.parties.some(x => x.seq === 0) && (
           <Group foot="Your share is logged as a transfer from this account. Others' shares come off what they owe you.">
             <PickerRow

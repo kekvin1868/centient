@@ -14,7 +14,11 @@ import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
 import { MonthClear } from './MonthClear';
 
-export function usePayBill(): { trail: (row: BillRow) => ReactNode; layers: ReactNode } {
+/** `stillOpen`: names of card bills and installments still to pay, listed on MONTH CLEAR. */
+export function usePayBill(stillOpen: string[] = []): {
+  trail: (row: BillRow) => ReactNode;
+  layers: ReactNode;
+} {
   const [asking, setAsking] = useState<BillRow | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -114,7 +118,7 @@ export function usePayBill(): { trail: (row: BillRow) => ReactNode; layers: Reac
           </Block>
         </Sheet>
       )}
-      <MonthClear runs={clear} onClose={() => setClear(null)} />
+      <MonthClear runs={clear} stillOpen={stillOpen} onClose={() => setClear(null)} />
     </>
   );
   return { trail, layers };

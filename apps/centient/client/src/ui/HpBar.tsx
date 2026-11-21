@@ -8,11 +8,13 @@ type Props = {
   /** Read aloud for the slider (e.g. "Kulkas"). */
   label?: string;
   size?: 'mini' | 'big';
+  /** Lit-block colour class instead of the default (e.g. a kind's rarity colour). */
+  fill?: string;
 };
 
 const BLOCKS = 10;
 
-export function HpBar({ value, max, onChange, label, size = 'mini' }: Props) {
+export function HpBar({ value, max, onChange, label, size = 'mini', fill }: Props) {
   const ratio = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
   // A sliver of a payment still lights a block, so "paid a bit" never reads as "paid nothing".
   const lit = ratio === 0 ? 0 : Math.max(1, Math.floor(ratio * BLOCKS));
@@ -27,7 +29,7 @@ export function HpBar({ value, max, onChange, label, size = 'mini' }: Props) {
         <span
           key={i}
           className={`h-full flex-1 ${big ? 'rounded-[3px]' : 'rounded-[1px]'} ${
-            i < lit ? (full ? 'bg-ok' : 'bg-miku') : 'bg-transparent'
+            i < lit ? (fill ?? (full ? 'bg-ok' : 'bg-miku')) : 'bg-transparent'
           } transition-colors duration-150`}
         />
       ))}

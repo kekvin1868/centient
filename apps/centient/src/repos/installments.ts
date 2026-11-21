@@ -7,6 +7,8 @@ export type PlanRow = {
   amount_per_installment: number;
   installments: number;
   first_due: string;
+  /** The installment `first_due` belongs to (1 until the due dates are moved). */
+  anchor_no: number;
   created_at: string;
 };
 export type PartyRow = {
@@ -33,7 +35,7 @@ export function installmentsRepo(db: D1Database) {
     /** The statements that write a plan, its parties and the installments already paid; the caller batches them. */
     planInserts(
       ws: string,
-      p: Omit<PlanRow, 'created_at'>,
+      p: Omit<PlanRow, 'created_at' | 'anchor_no'>,
       parties: PartyRow[],
       prepaid: Omit<PaymentRow, 'proof'>[],
     ): D1PreparedStatement[] {
@@ -76,7 +78,7 @@ export function installmentsRepo(db: D1Database) {
       const [plans, parties, payments] = await db.batch<Record<string, unknown>>([
         db
           .prepare(
-            `SELECT id, account_id, name, amount_per_installment, installments, first_due, created_at FROM installment_plans WHERE ${live} ORDER BY first_due, created_at`,
+            `SELECT id, account_id, name, amount_per_installment, installments, first_due, anchor_no, created_at FROM installment_plans WHERE ${live} ORDER BY first_due, created_at`,
           )
           .bind(...a),
         db
@@ -159,6 +161,16 @@ export function installmentsRepo(db: D1Database) {
         .bind(attachmentId, planId, ws, no, seq)
         .run();
       return r.meta.changes > 0;
+    },
+
+    /** Installment `no` falls due on `due`; later ones follow a month apart. */
+    async moveDues(ws: string, id: string, no: number, due: string) {
+      await db
+        .prepare(
+          'UPDATE installment_plans SET first_due = ?, anchor_no = ? WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL',
+        )
+        .bind(due, no, id, ws)
+        .run();
     },
 
     async deletePlan(ws: string, id: string) {
