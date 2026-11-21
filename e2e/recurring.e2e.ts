@@ -102,11 +102,14 @@ test('Home lists it under Coming up; PAID? logs it in one tap, Undo takes it bac
     .getByRole('list', { name: 'Paid' })
     .getByRole('button', { name: /^Netflix/ })
     .tap();
+  await bills.getByRole('button', { name: 'Edit Netflix' }).tap();
   await sheet('Netflix').getByRole('button', { name: 'Mark paid Rp120.000' }).tap();
   const early = sheet(/^Are you sure\? This logs the payment for \d+ \w+ \d{4}\.$/);
   await early.getByRole('button', { name: 'CANCEL' }).tap();
   await expect(early).toHaveCount(0);
   await expect(sheet('Netflix')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await bills.getByRole('button', { name: 'Back to Bills' }).tap();
   await expect(month).toContainText('1/1 PAID');
   await page.goto('/');
   await expect(page.getByRole('region', { name: 'Your money' })).toBeVisible();
@@ -140,6 +143,42 @@ test('a bill that varies asks its amount first', async () => {
     bills.getByRole('list', { name: 'Paid' }).getByRole('button', { name: /^PLN listrik/ }),
   ).toContainText('Rp412.300');
   await expect(bills.getByRole('region', { name: /^Bills in / })).toContainText('2/2 PAID');
+});
+
+test("a bill's own page: history, edit, pause, and back to the list", async () => {
+  const bills = page.getByRole('main');
+  await bills
+    .getByRole('list', { name: 'Paid' })
+    .getByRole('button', { name: /^Netflix/ })
+    .tap();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Netflix');
+  await expect(bills.getByRole('region', { name: 'This bill' })).toContainText(
+    'Every month · paid from Main Account',
+  );
+  const history = bills.getByRole('list', { name: 'History' });
+  await expect(history.getByRole('listitem')).toHaveCount(1);
+  await expect(history).toContainText('Rp120.000');
+  await expect(history).toContainText('ON TIME');
+
+  await bills.getByRole('button', { name: 'Edit Netflix' }).tap();
+  await expect(sheet('Netflix').getByLabel('Name')).toHaveValue('Netflix');
+  // An optional note, shown on the page.
+  await sheet('Netflix').getByLabel('Note').fill('Customer ID 1234');
+  await sheet('Netflix').getByRole('button', { name: 'Save' }).tap();
+  await expect(sheet('Netflix')).toHaveCount(0);
+  await expect(bills.getByRole('region', { name: 'This bill' })).toContainText(
+    'Note: Customer ID 1234',
+  );
+
+  await bills.getByRole('button', { name: 'PAUSE' }).tap();
+  await expect(bills.getByText('Paused: no reminders')).toBeVisible();
+  await bills.getByRole('button', { name: 'RESUME' }).tap();
+  // Next month's is more than a week away: no PAID? key, the last payment's stamp instead.
+  await expect(bills.getByRole('region', { name: 'This bill' })).toContainText(/Due in \d+ days/);
+  await expect(bills.getByRole('button', { name: 'Mark Netflix paid' })).toHaveCount(0);
+
+  await bills.getByRole('button', { name: 'Back to Bills' }).tap();
+  await expect(page.getByRole('heading', { level: 1, name: 'Bills' })).toBeVisible();
 });
 
 test("a card's bill: what was owed at the statement, then I paid it", async () => {

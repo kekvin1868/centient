@@ -144,6 +144,12 @@ export function RecurringSheet({
             onChange={v => set({ endsOn: v })}
             optional
           />
+          <InputRow
+            label="Note"
+            value={form.note}
+            placeholder="Optional"
+            onInput={note => set({ note })}
+          />
         </Group>
         <datalist id={services}>
           {SERVICES.map(s => (

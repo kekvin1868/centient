@@ -28,6 +28,8 @@ export type RecurringForm = {
   nextDue: string;
   /** '' = no end. */
   endsOn: string;
+  /** Optional: a customer ID, how it is paid. '' = none. */
+  note: string;
 };
 /** What a new form may start with (a payment found in the entries already knows these). */
 export type Prefill = Partial<
@@ -49,6 +51,7 @@ export const formFrom = (
   everyMonths: toEvery(r?.everyMonths ?? 1),
   nextDue: r?.nextDue ?? today,
   endsOn: r?.endsOn ?? '',
+  note: r?.note ?? '',
   ...prefill,
 });
 
@@ -73,4 +76,5 @@ export const toRequest = (f: RecurringForm): RecurringBody => ({
   everyMonths: f.everyMonths,
   nextDue: f.nextDue,
   endsOn: f.endsOn || null,
+  note: f.note.trim() || null,
 });

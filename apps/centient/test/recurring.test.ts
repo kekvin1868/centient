@@ -200,6 +200,13 @@ describe('recurring service', () => {
     expect(await t.item(id)).toMatchObject({ amount: 186_000, nextDue: '2026-11-30' });
     expect((await t.item(id))!.dues[3]).toBe('2027-02-28');
 
+    // A note is trimmed; an empty one clears it.
+    expect((await t.item(id))!.note).toBeNull();
+    await t.svc().recurring.update(id, { note: '  Customer ID 1234 ' });
+    expect((await t.item(id))!.note).toBe('Customer ID 1234');
+    await t.svc().recurring.update(id, { note: ' ' });
+    expect((await t.item(id))!.note).toBeNull();
+
     await t.svc().recurring.update(id, { paused: true });
     const paused = await t.svc().recurring.list();
     expect(paused.items[0]).toMatchObject({ paused: true, dues: [] });
