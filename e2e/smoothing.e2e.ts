@@ -102,7 +102,7 @@ test('first run: the night menu sets starting balances, then Home', async () => 
   await expect(page.getByRole('img', { name: 'Centient' })).toBeVisible();
   expect(await balance('Main Account')).toBe(5_000_000);
   // All accounts: the hero is the total of every account; no budget yet, so the card under it says so.
-  await expect(page.getByRole('heading', { name: 'Total balance' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your money' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No budget yet' })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'ACCOUNTS' })).toHaveCount(0); // onboarded once
@@ -311,7 +311,7 @@ test('pockets live inside an account: add one, move money in, the account balanc
   ).toBeVisible();
   await showAll();
   // All accounts: the total of every account, money set aside in pockets included.
-  await expect(page.getByRole('region', { name: 'Your money' })).toContainText('Total balance');
+  await expect(page.getByRole('region', { name: 'Your money' })).toContainText('Your money');
 });
 
 test('a crypto account has no pockets yet and keeps its balance', async () => {
@@ -976,7 +976,7 @@ test('a sum closed with = turns into its result, and dividing never splits (v2 #
 test('Home: total balance on All accounts, budget cards under it (v2 round 2, B1)', async () => {
   await tab('Home').tap();
   await showAll();
-  await expect(page.getByRole('heading', { name: 'Total balance' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your money' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Budget left' })).toBeVisible();
   await expect(page.getByText(/^Resets in \d+ days?$/)).toBeVisible();
   // One account: its own card only when a budget sits on one of its pockets.

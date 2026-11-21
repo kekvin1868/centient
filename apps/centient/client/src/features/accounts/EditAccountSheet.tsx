@@ -1,4 +1,4 @@
-// Edit an account: name, type, statement and bill days (credit card / pay later), where new money goes, currency (only
+// Edit an account: name, type, limit, statement and bill days (credit card / pay later), where new money goes, currency (only
 // before it has entries); hide it, or delete it with its entries.
 import { Block, BlockFooter, Button } from 'konsta/react';
 import { useState } from 'react';
@@ -7,6 +7,7 @@ import { ACCOUNT_KINDS, dayLabel } from '../../lib/format';
 import { attempt } from '../../lib/run';
 import { active, catalog } from '../../lib/state';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
+import { AmountField } from '../../ui/AmountField';
 import { InputRow, PickerRow } from '../../ui/Fields';
 import { Group, Row } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
@@ -34,6 +35,7 @@ export function EditAccountSheet({
   const [statementDay, setStatementDay] = useState<string | null>(
     a?.statement_day ? String(a.statement_day) : null,
   );
+  const [limit, setLimit] = useState<number | null>(a?.credit_limit ?? null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   if (!a) return null;
   // Old names are saved for every account; only people tabs list them for now.
@@ -52,6 +54,7 @@ export function EditAccountSheet({
         default_envelope_id: defaultPocket,
         due_day: billed && dueDay ? Number(dueDay) : null,
         statement_day: billed && statementDay ? Number(statementDay) : null,
+        credit_limit: billed && limit ? limit : null,
         ...(currency !== a.currency_code ? { currency_code: currency } : {}),
         ...(kind !== a.kind ? { kind } : {}),
       },
@@ -96,6 +99,14 @@ export function EditAccountSheet({
               options={Object.entries(ACCOUNT_KINDS)
                 .filter(([k]) => k !== 'IOU')
                 .map(([value, label]) => ({ value, label }))}
+            />
+          )}
+          {billed && (
+            <AmountField
+              label="Limit"
+              value={limit}
+              currency={currency}
+              onChange={v => setLimit(v)}
             />
           )}
           {billed && (

@@ -62,12 +62,14 @@ export function Toast() {
       position="center"
       role="status"
       aria-live="polite"
-      className="mb-20"
+      // The toast spans the screen's width: only its key takes taps, so a dialog's button under it still works.
+      className="pointer-events-none mb-20"
       button={
         shown?.action && (
           <Button
             clear
             inline
+            className={t ? 'pointer-events-auto' : ''}
             onClick={() => {
               const a = shown.action!;
               toast.value = null;

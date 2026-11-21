@@ -1,13 +1,18 @@
 // Bills: what this month still asks for, a calendar of due dates, every bill grouped by how soon it is due, and
 // monthly payments found in the entries. A bill's PAID? key pays it in one tap; the bill itself opens its own
-// page (BillDetail), whose EDIT opens the form.
+// page (BillDetail), whose EDIT opens the form. Card bills and installments sit among them, tagged, with a key
+// that opens the card's pay dialog or the plan.
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
+import { usePlans } from '../features/installments/plans';
+import { PlanSheet } from '../features/installments/PlanSheet';
 import { BillDetail } from '../features/recurring/BillDetail';
 import { BillLine } from '../features/recurring/BillLine';
 import { DueCalendar } from '../features/recurring/DueCalendar';
 import { FoundList } from '../features/recurring/FoundList';
 import { MonthHero } from '../features/recurring/MonthHero';
+import { OtherLine, otherName } from '../features/recurring/OtherLine';
+import { PayCardSheet } from '../features/recurring/PayCardSheet';
 import { RecurringSheet } from '../features/recurring/RecurringSheet';
 import { usePayBill } from '../features/recurring/usePayBill';
 import { Page } from '../layouts/Page';
@@ -15,7 +20,16 @@ import { useSubPage } from '../layouts/useSubPage';
 import { categoryEmoji } from '../lib/labels';
 import { catalog, nameOf } from '../lib/state';
 import { formatMoney } from '../lib/format';
-import { billGroups, monthRun, rowsByDay, type BillRow } from '../models/billRun';
+import {
+  billGroups,
+  monthRun,
+  otherDues,
+  othersByDay,
+  outsideRun,
+  rowsByDay,
+  type BillGroup,
+  type OtherDue,
+} from '../models/billRun';
 import { recurringQueries, type Recurring } from '../models/recurring';
 import type { Prefill } from '../models/recurringForm';
 import { WinButton } from '../ui/WinButton';
@@ -29,7 +43,9 @@ const list = 'panel mx-4 bg-white dark:bg-raised';
 export function Bills() {
   const { data } = useQuery(recurringQueries.list());
   const [editing, setEditing] = useState<Editing | null>(null);
-  const pay = usePayBill();
+  const plans = usePlans();
+  /** The card bill or installment whose pay dialog is open. */
+  const [paying, setPaying] = useState<OtherDue | null>(null);
   /** The bill whose page is open. */
   const [opened, open, back] = useSubPage<string>();
   const item = data?.items.find(i => i.id === opened);
@@ -37,31 +53,57 @@ export function Bills() {
   useEffect(() => {
     if (data && opened && !item) back();
   }, [data, opened, item]);
-  const view = useMemo(
-    () =>
-      data && {
-        runs: monthRun(data.items, data.today),
-        byDay: rowsByDay(data.items, data.today),
-        groups: billGroups(data.items, data.today),
-      },
-    [data],
-  );
+  const view = useMemo(() => {
+    if (!data) return null;
+    const others = otherDues(data.cards, plans ?? [], data.today);
+    return {
+      others,
+      runs: monthRun(data.items, data.today),
+      byDay: rowsByDay(data.items, data.today),
+      othersByDay: othersByDay(others),
+      groups: billGroups(data.items, data.today, others),
+    };
+  }, [data, plans]);
+  const pay = usePayBill(view?.others.filter(o => o.next).map(otherName));
   if (!data || !view) return <Page title="Bills" />;
   const { today } = data;
-  const lines = (rows: BillRow[]) =>
-    rows.map(row => (
-      <BillLine
-        key={row.key}
-        row={row}
-        today={today}
-        onOpen={() => open(row.item.id)}
-        trail={pay.trail(row)}
-      />
-    ));
+  const lines = (rows: BillGroup['rows']) =>
+    rows.map(row =>
+      'kind' in row ? (
+        <OtherLine key={row.key} due={row} today={today} onPay={() => setPaying(row)} />
+      ) : (
+        <BillLine
+          key={row.key}
+          row={row}
+          today={today}
+          onOpen={() => open(row.item.id)}
+          trail={pay.trail(row)}
+        />
+      ),
+    );
+  const card =
+    paying?.kind === 'CARD' && catalog.value.accounts.find(a => a.id === paying.accountId);
+  const planAccount = paying?.plan && catalog.value.accounts.find(a => a.id === paying.accountId);
 
   const sheets = (
     <>
       {pay.layers}
+      {paying && card && (
+        <PayCardSheet
+          card={card}
+          left={paying.amount}
+          today={today}
+          onClose={() => setPaying(null)}
+        />
+      )}
+      {paying?.plan && planAccount && (
+        <PlanSheet
+          key={`plan:${paying.plan.id}`}
+          plan={plans?.find(p => p.id === paying.plan?.id) ?? null}
+          account={planAccount}
+          onClose={() => setPaying(null)}
+        />
+      )}
       {editing && (
         <RecurringSheet
           key={`bill:${editing.item?.id ?? editing.prefill?.name ?? 'new'}`}
@@ -106,7 +148,12 @@ export function Bills() {
         </p>
       )}
       {view.runs.map(run => (
-        <MonthHero key={`run:${run.currency}`} run={run} today={today} />
+        <MonthHero
+          key={`run:${run.currency}`}
+          run={run}
+          today={today}
+          outside={outsideRun(view.others, today)}
+        />
       ))}
       {data.items.length > 0 && view.runs.length === 0 && (
         <p className="panel mx-4 mt-3 bg-white p-3 text-[15px] dark:bg-raised">
@@ -123,7 +170,9 @@ export function Bills() {
             .join(' / ')}
         </p>
       )}
-      {data.items.length > 0 && <DueCalendar byDay={view.byDay} today={today} />}
+      {(data.items.length > 0 || view.others.length > 0) && (
+        <DueCalendar byDay={view.byDay} others={view.othersByDay} today={today} />
+      )}
       {view.groups.map(g => (
         <section key={`group:${g.label}`}>
           <h2 className={heading}>
@@ -137,11 +186,6 @@ export function Bills() {
           </ul>
         </section>
       ))}
-      {data.items.length > 0 && (
-        <p className="mx-4 mt-2 text-[13px] text-muted">
-          PAID? logs the expense today. Logging it yourself moves the bill on too.
-        </p>
-      )}
       <FoundList today={today} onAdd={prefill => setEditing({ item: null, prefill })} />
       {sheets}
     </Page>

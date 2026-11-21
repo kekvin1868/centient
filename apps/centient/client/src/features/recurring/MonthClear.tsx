@@ -6,7 +6,16 @@ import type { MonthRun } from '../../models/billRun';
 import { NightSheet } from '../../ui/night/NightSheet';
 import { usePresence } from '../../ui/night/tv';
 
-export function MonthClear({ runs, onClose }: { runs: MonthRun[] | null; onClose: () => void }) {
+export function MonthClear({
+  runs,
+  stillOpen,
+  onClose,
+}: {
+  runs: MonthRun[] | null;
+  /** Card bills and installments not paid yet: they are outside the run, so the month clears without them. */
+  stillOpen: string[];
+  onClose: () => void;
+}) {
   const open = runs !== null;
   const { mounted, gen, unmount } = usePresence(open);
   // Kept while the dialog plays its exit.
@@ -42,6 +51,11 @@ export function MonthClear({ runs, onClose }: { runs: MonthRun[] | null; onClose
               </p>
             ))}
             <p className="mt-1 text-[15px]">{late ? `${late} paid late` : 'All on time'}</p>
+            {stillOpen.length > 0 && (
+              <p className="mt-2 text-[12px] opacity-70">
+                Still open, outside the run: {stillOpen.join(', ')}
+              </p>
+            )}
           </div>
           <div className="k-acts !grid-cols-1">
             <button type="button" className="n-go" onClick={close}>

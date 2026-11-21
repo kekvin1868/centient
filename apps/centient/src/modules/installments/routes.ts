@@ -34,6 +34,12 @@ export const installmentsRoutes = new Hono<AppEnv>()
     async c => c.json(await c.var.services.installments.create(c.req.valid('json')), 201),
   )
 
+  .patch('/installments/:id', json(z.object({ nextDue: day })), async c =>
+    c.json(
+      await c.var.services.installments.moveDues(c.req.param('id'), c.req.valid('json').nextDue),
+    ),
+  )
+
   .delete('/installments/:id', async c => {
     await c.var.services.installments.remove(c.req.param('id'));
     return c.json({ ok: true });

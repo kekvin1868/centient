@@ -5,7 +5,8 @@ import { BlockTitle } from 'konsta/react';
 import { useEffect, useState } from 'react';
 import { AccountHand } from '../features/accounts/AccountHand';
 import { PickedAccount } from '../features/accounts/PickedAccount';
-import { TotalBalance } from '../features/accounts/TotalBalance';
+import { CardLimits } from '../features/accounts/CardLimits';
+import { shownBalance, TotalBalance } from '../features/accounts/TotalBalance';
 import { Budgets } from '../features/budgets/Budgets';
 import { PaidBackSheet } from '../features/entries/PaidBackSheet';
 import { InstallmentsSection } from '../features/installments/InstallmentsSection';
@@ -60,7 +61,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
             id: x.id,
             name: x.name,
             kind: x.kind,
-            balance: x.balance,
+            balance: shownBalance(x),
             currency: x.currency_code,
             note: v !== null ? `≈ ${formatMoney(v)}` : undefined,
             stickers: stickersOf(catalog.value.accounts.find(c => c.id === x.id)),
@@ -90,6 +91,9 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
         )}
       </PickedAccount>
       {pay && <PaidBackSheet {...pay} onClose={() => setPay(null)} />}
+      <div className="mt-6">
+        <CardLimits accounts={bal.accounts} />
+      </div>
       <Budgets />
     </Page>
   );

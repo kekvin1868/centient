@@ -5,6 +5,7 @@ import { Block, Button } from 'konsta/react';
 import { useId, useState } from 'react';
 import { formatMoney } from '../../lib/format';
 import { active, catalog, everyday } from '../../lib/state';
+import { paysNow } from '../../models/billRun';
 import { persist } from '../../models/query';
 import { recurringApi, recurringQueries, type Recurring } from '../../models/recurring';
 import {
@@ -41,7 +42,7 @@ export function RecurringSheet({
   const set = (patch: Partial<RecurringForm>) => setForm(f => ({ ...f, ...patch }));
   // What Mark paid logs: the bill's amount, or what was typed for one that varies.
   const [paying, setPaying] = useState<number | null>(item?.amount ?? null);
-  // Which question is up: removing the bill, or paying a due date in a later month than today.
+  // Which question is up: removing the bill, or paying a due date further off than the PAID? key allows.
   const [confirm, setConfirm] = useState<'remove' | 'early' | null>(null);
   const services = useId();
 
@@ -67,7 +68,7 @@ export function RecurringSheet({
     onClose();
     showToast(said);
   };
-  // Logs the expense and moves the bill on. A due date in a later month asks first (the button's onClick).
+  // Logs the expense and moves the bill on. A due date the PAID? key would not pay asks first (the button's onClick).
   const pay = () =>
     item &&
     done(
@@ -148,6 +149,7 @@ export function RecurringSheet({
             label="Note"
             value={form.note}
             placeholder="Optional"
+            maxLength={500}
             onInput={note => set({ note })}
           />
         </Group>
@@ -179,9 +181,7 @@ export function RecurringSheet({
                 large
                 rounded
                 disabled={!paying}
-                onClick={() =>
-                  item.nextDue.slice(0, 7) > today.slice(0, 7) ? setConfirm('early') : pay()
-                }
+                onClick={() => (paysNow(item.nextDue, today) ? pay() : setConfirm('early'))}
               >
                 {paying ? `Mark paid ${formatMoney(paying, item.currency)}` : 'Enter what you paid'}
               </Button>

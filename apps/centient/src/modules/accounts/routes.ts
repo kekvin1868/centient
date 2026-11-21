@@ -2,7 +2,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { AppEnv } from '../../context';
-import { accountKinds, currency, id, json, patch, text } from '../../lib/schemas';
+import { accountKinds, currency, id, json, money, patch, text } from '../../lib/schemas';
 
 export const accountsRoutes = new Hono<AppEnv>()
   .post(
@@ -14,6 +14,7 @@ export const accountsRoutes = new Hono<AppEnv>()
         provider: text(30).nullish(),
         currency: currency.optional(),
         dueDay: z.number().int().min(1).max(31).nullish(),
+        creditLimit: money.nullish(),
         openingBalance: z.number().int().optional(),
       }),
     ),

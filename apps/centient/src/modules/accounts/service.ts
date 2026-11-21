@@ -24,6 +24,7 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
       provider?: string | null;
       currency?: string;
       dueDay?: number | null;
+      creditLimit?: number | null;
       openingBalance?: number;
     }): Promise<Account> {
       const account = await repos.accounts.create(ws, {
@@ -32,6 +33,7 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
         provider: i.provider?.trim().toUpperCase() || null,
         currency_code: i.currency ?? 'IDR',
         due_day: i.dueDay ?? null,
+        credit_limit: i.creditLimit ?? null,
       });
       catalog.invalidate();
       // Opening balance is an INCOME in "Opening balance"; a card's or paylater's debt is negative.

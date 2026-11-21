@@ -1,20 +1,29 @@
 // The total across accounts: rupiah, with crypto counted at its last known price (marked ≈); currencies
-// without a rupiah price are listed apart.
+// without a rupiah price are listed apart. Credit card and pay later balances are limits, not money: they get
+// their own sub-card (CardLimits) and stay out of the total.
 import type { Account } from '../../../../src/repos/accounts';
 import { formatMoney } from '../../lib/format';
 import { idrValue, priceAge } from '../../lib/prices';
 import { usePrices, type Prices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 
-type Held = Pick<Account, 'currency_code'> & { balance: number };
+export type Held = Pick<Account, 'currency_code' | 'kind'> & { balance: number };
 
-/** Every account in rupiah (crypto at its last price); `unpriced` = currencies with no rupiah price, kept apart. */
+/** Credit card and pay later balances are debt against a limit, not money: CardLimits shows them. */
+export const isLimit = (a: Pick<Account, 'kind'>) =>
+  a.kind === 'CREDIT_CARD' || a.kind === 'PAYLATER';
+
+/** What an account shows as its amount: a card / pay later with a limit shows what is left of it (limit − owed). */
+export const shownBalance = (a: Pick<Account, 'kind' | 'credit_limit'> & { balance: number }) =>
+  isLimit(a) && a.credit_limit ? a.credit_limit + a.balance : a.balance;
+
+/** Your money in rupiah (crypto at its last price), limits left out; `unpriced` = currencies with no rupiah price, kept apart. */
 export function totalOf(accounts: Held[], p: Prices) {
   let total = 0,
     cryptoIdr = 0;
   const unpriced = new Map<string, number>();
   const priced = new Set<string>();
-  for (const a of accounts) {
+  for (const a of accounts.filter(a => !isLimit(a))) {
     const v = idrValue(a.balance, a.currency_code, p);
     if (v === null) unpriced.set(a.currency_code, (unpriced.get(a.currency_code) ?? 0) + a.balance);
     else {
@@ -35,7 +44,7 @@ export function TotalBalance({ accounts }: { accounts: (Account & { balance: num
   return (
     <div className="mx-4 mt-4">
       <div className="text-[15px] font-semibold text-muted">
-        Total balance{priced.size ? ' ≈' : ''}
+        Your money{priced.size ? ' ≈' : ''}
       </div>
       <BigMoney minor={total} max={60} className="mt-3" />
       {priced.size > 0 && (

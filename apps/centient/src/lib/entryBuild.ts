@@ -55,6 +55,7 @@ export function build(c: Snapshot, cmd: Command, now: number): NewTransaction[] 
         note: cmd.note,
         originalAmount: cmd.originalAmount,
         originalCurrency: cmd.originalCurrency,
+        spreadCycles: cmd.spreadCycles,
       };
       if (cmd.pot) {
         if (cmd.split) throw new DomainError('INVALID_SPLIT', 'A pot is not a split bill');
