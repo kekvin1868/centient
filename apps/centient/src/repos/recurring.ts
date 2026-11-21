@@ -78,6 +78,49 @@ export function recurringRepo(db: D1Database) {
       return stmt ? (await stmt.run()).meta.changes > 0 : true;
     },
 
+    /** The write that ties a bill's due date to the entry that paid it (replacing an older tie for that date). */
+    payStatement(ws: string, recurringId: string, due: string, entryId: string) {
+      return db
+        .prepare(
+          'INSERT OR REPLACE INTO bill_payments (workspace_id, recurring_id, due, entry_id) VALUES (?, ?, ?, ?)',
+        )
+        .bind(ws, recurringId, due, entryId);
+    },
+
+    /** The due dates these entries paid. */
+    paidBy(ws: string, entryIds: string[]) {
+      if (!entryIds.length) return Promise.resolve([]);
+      return all<{ recurring_id: string; due: string }>(
+        db,
+        `SELECT recurring_id, due FROM bill_payments
+        WHERE workspace_id = ? AND entry_id IN (${entryIds.map(() => '?').join(', ')})`,
+        ws,
+        ...entryIds,
+      );
+    },
+
+    /** Every payment whose entry is still there, oldest due date first; amount and day come from the entry. */
+    history(ws: string) {
+      return all<{
+        recurring_id: string;
+        due: string;
+        entry_id: string;
+        day: string;
+        amount: number;
+      }>(
+        db,
+        `SELECT p.recurring_id, p.due, p.entry_id, MIN(substr(t.occurred_at, 1, 10)) AS day, SUM(-e.amount) AS amount
+        FROM bill_payments p
+        JOIN entry_groups g ON g.id = p.entry_id AND g.workspace_id = p.workspace_id AND g.deleted_at IS NULL
+        JOIN transactions t ON t.group_id = g.id AND t.deleted_at IS NULL AND t.type = 'EXPENSE'
+        JOIN entries e ON e.transaction_id = t.id AND e.amount < 0
+        WHERE p.workspace_id = ?
+        GROUP BY p.recurring_id, p.due, p.entry_id
+        ORDER BY p.due`,
+        ws,
+      );
+    },
+
     async hidden(ws: string) {
       const rows = await all<{ merchant: string }>(
         db,

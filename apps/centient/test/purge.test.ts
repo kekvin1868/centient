@@ -69,7 +69,7 @@ async function filled(w: ReturnType<typeof world>, email: string) {
     type: 'image/png',
     bytes: new Uint8Array([1, 2, 3]).buffer,
   });
-  await svc().recurring.create({
+  const netflix = await svc().recurring.create({
     name: 'Netflix',
     accountId: bca.id,
     categoryId: await cat('Fun'),
@@ -77,6 +77,7 @@ async function filled(w: ReturnType<typeof world>, email: string) {
     everyMonths: 1,
     nextDue: '2026-11-20',
   });
+  await svc().recurring.paid(netflix, {});
   await svc().recurring.hide('gym');
   await svc().inbox.importRows([{ date: '2026-11-10', amount: -5_000, accountId: bca.id }]);
   await w.repos.lock.addPasskey(userId, { id: `cred-${email}`, public_key: 'AAAA', counter: 0 });

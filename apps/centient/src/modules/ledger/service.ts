@@ -7,7 +7,7 @@ import { assertBalanced, DomainError, type NewTransaction } from '../../domain/l
 import { cutsFor, peopleOf, tabsOnBill, type Link } from '../../domain/bills';
 import { build, checkParties } from '../../lib/entryBuild';
 import { commandOf } from '../../lib/entryCommand';
-import { advance, paidBy } from '../recurring/advance';
+import { advance, paidBy, unpay } from '../recurring/advance';
 import { findOrCreateTab } from './tabs';
 import type { EntryView, NewEntry, TxFilter } from '../../repos/entries';
 
@@ -205,7 +205,10 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
     const paid = cmds.some(c => c.type === 'EXPENSE')
       ? paidBy(await repos.recurring.list(ws), cmds)
       : [];
-    return { ids, stmts: [...stmts, ...paid.map(r => advance(repos, ws, r, at))] };
+    return {
+      ids,
+      stmts: [...stmts, ...paid.flatMap(p => advance(repos, ws, p.bill, ids[p.index], at))],
+    };
   }
 
   /** Entries as the lists show them: the command read back, and a split bill's people. */
@@ -291,11 +294,15 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
       return entry.version + 1;
     },
 
-    /** Deletes an entry; a bill with Paid backs tied to it needs a mode (see `settle`). */
+    /**
+     * Deletes an entry; a bill with Paid backs tied to it needs a mode (see `settle`). A recurring bill it paid goes
+     * back to unpaid (`unpay`).
+     */
     async remove(id: string, mode?: PaybackMode): Promise<void> {
       if (!(await repos.entries.get(ws, id))) throw new DomainError('NOT_FOUND', 'Entry not found');
       const tied = await settle(await catalog.load(), id, new Map(), mode);
-      await repos.batch([...repos.entries.removeStatements(ws, id), ...tied]);
+      const back = await unpay(repos, ws, [id]);
+      await repos.batch([...repos.entries.removeStatements(ws, id), ...tied, ...back]);
     },
 
     /** Entries, newest first; each split bill carries its people (share, paid, Paid backs). */
