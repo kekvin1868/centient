@@ -1,5 +1,5 @@
 // Home's reminder: bills due within a week (or late) and card bills not paid off yet, one line each; tap to
-// open Subscriptions.
+// go to the Bills tab.
 import { useQuery } from '@tanstack/react-query';
 import { formatMoney } from '../../lib/format';
 import { catalog, nameOf } from '../../lib/state';

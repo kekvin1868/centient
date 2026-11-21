@@ -1,6 +1,5 @@
 // Money: the total, accounts as cards (one is always picked: Home's account, else the first everyday one; picking
-// here picks it on Home too), its free balance, actions, pockets, card bill and installments, then budgets and
-// the way into Subscriptions.
+// here picks it on Home too), its free balance, actions, pockets, card bill and installments, then budgets.
 import { useQuery } from '@tanstack/react-query';
 import { BlockTitle } from 'konsta/react';
 import { useEffect, useState } from 'react';
@@ -13,8 +12,6 @@ import { InstallmentsSection } from '../features/installments/InstallmentsSectio
 import { takesInstallments } from '../features/installments/plans';
 import { AccountPockets } from '../features/pockets/AccountPockets';
 import { CardStatement } from '../features/recurring/CardStatement';
-import { SubscriptionsLazy } from '../features/recurring/SubscriptionsLazy';
-import { SubscriptionsLink } from '../features/recurring/SubscriptionsLink';
 import { Page } from '../layouts/Page';
 import { formatMoney } from '../lib/format';
 import { idrValue } from '../lib/prices';
@@ -32,7 +29,6 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
   }, []);
   const prices = usePrices();
   const [pay, setPay] = useState<{ tabId: string; mode: PayMode } | null>(null);
-  const [subscriptions, setSubscriptions] = useState(false);
   if (!bal) return <Page title="Money" />;
   // A person's tab at exactly 0 is settled: no card. Their next bill brings it back.
   const held = bal.accounts.filter(x => x.kind !== 'IOU' || x.balance !== 0);
@@ -95,8 +91,6 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
       </PickedAccount>
       {pay && <PaidBackSheet {...pay} onClose={() => setPay(null)} />}
       <Budgets />
-      <SubscriptionsLink onOpen={() => setSubscriptions(true)} />
-      <SubscriptionsLazy open={subscriptions} onClose={() => setSubscriptions(false)} />
     </Page>
   );
 }
