@@ -57,7 +57,7 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
           kind: s.json.kind === undefined ? undefined : toAccountKind(s.json.kind),
         });
       case 'createAccount': {
-        const a = await accountApi.create({ name: s.name, kind: toAccountKind(s.kind) });
+        const a = await accountApi.create({ name: s.name, kind: toAccountKind(s.kind), ...s.card });
         ids.current.set(s.accountKey, a.id);
         const main = draft.find(x => x.key === s.accountKey)!.pockets.find(p => p.main)!;
         ids.current.set(main.key, a.default_envelope_id!);
@@ -75,7 +75,10 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
         return;
       }
       case 'setBalance':
-        return accountApi.checkBalance(accountId(s.accountKey), { actual: s.actual });
+        return accountApi.checkBalance(accountId(s.accountKey), {
+          actual: s.actual,
+          billed: s.billed,
+        });
       case 'allocate':
         return entryApi.record({
           commands: s.moves.map(m => ({

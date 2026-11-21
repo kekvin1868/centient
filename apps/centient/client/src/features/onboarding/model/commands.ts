@@ -1,11 +1,27 @@
 // What CONFIRM sends, as plain steps. Each step has a stable id, so a save that fails halfway can be retried and
 // skips what already went through. New accounts and pockets are referred to by draft key until they exist.
-import { accountBalance, kept, owes, type Draft } from './draft';
+import { isCard } from '../../../../../src/domain/recurring';
+import { accountBalance, kept, type Draft } from './draft';
+
+type AccountPatch = {
+  name?: string;
+  kind?: string;
+  credit_limit?: number;
+  statement_day?: number;
+  due_day?: number;
+};
 
 export type Step =
   | { id: string; op: 'deleteAccount'; accountId: string }
-  | { id: string; op: 'patchAccount'; accountId: string; json: { name?: string; kind?: string } }
-  | { id: string; op: 'createAccount'; accountKey: string; name: string; kind: string }
+  | { id: string; op: 'patchAccount'; accountId: string; json: AccountPatch }
+  | {
+      id: string;
+      op: 'createAccount';
+      accountKey: string;
+      name: string;
+      kind: string;
+      card?: { creditLimit: number; statementDay: number; dueDay: number };
+    }
   | { id: string; op: 'patchPocket'; pocketId: string; name: string }
   | {
       id: string;
@@ -15,8 +31,8 @@ export type Step =
       name: string;
       kind: string;
     }
-  /** The account's total becomes its opening balance, which lands in Main. */
-  | { id: string; op: 'setBalance'; accountKey: string; actual: number }
+  /** The account's total becomes its opening balance, which lands in Main; a card's `billed` part is on its last bill. */
+  | { id: string; op: 'setBalance'; accountKey: string; actual: number; billed?: number }
   /** Then each other pocket's share moves out of Main, all in one request. */
   | {
       id: string;
@@ -32,9 +48,15 @@ export function toSteps(draft: Draft): Step[] {
     if (a.id && !a.kept) steps.push({ id: `del:${a.key}`, op: 'deleteAccount', accountId: a.id });
   for (const a of kept(draft)) {
     if (!a.id) continue;
-    const json: { name?: string; kind?: string } = {};
+    const json: AccountPatch = {};
     if (a.name !== a.seedName) json.name = a.name;
     json.kind = a.kind; // cheap to resend, and the seed's kind isn't kept in the draft
+    if (isCard(a.kind) && a.card)
+      Object.assign(json, {
+        credit_limit: a.card.limit!,
+        statement_day: a.card.closes!,
+        due_day: a.card.payBy!,
+      });
     steps.push({ id: `acc:${a.key}`, op: 'patchAccount', accountId: a.id, json });
   }
   for (const a of kept(draft))
@@ -45,6 +67,14 @@ export function toSteps(draft: Draft): Step[] {
         accountKey: a.key,
         name: a.name,
         kind: a.kind,
+        ...(isCard(a.kind) &&
+          a.card && {
+            card: {
+              creditLimit: a.card.limit!,
+              statementDay: a.card.closes!,
+              dueDay: a.card.payBy!,
+            },
+          }),
       });
   for (const a of kept(draft)) {
     for (const p of a.pockets) {
@@ -66,8 +96,15 @@ export function toSteps(draft: Draft): Step[] {
     const total = accountBalance(a);
     if (!total) continue;
     // A card's or pay later's amount is what's owed: a negative balance, kept whole in Main.
-    if (owes(a.kind)) {
-      steps.push({ id: `bal:${a.key}`, op: 'setBalance', accountKey: a.key, actual: -total });
+    if (isCard(a.kind)) {
+      const billed = a.card?.billed ?? 0;
+      steps.push({
+        id: `bal:${a.key}`,
+        op: 'setBalance',
+        accountKey: a.key,
+        actual: -total,
+        ...(billed > 0 && { billed }),
+      });
       continue;
     }
     steps.push({ id: `bal:${a.key}`, op: 'setBalance', accountKey: a.key, actual: total });

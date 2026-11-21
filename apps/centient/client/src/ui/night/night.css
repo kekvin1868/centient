@@ -1277,7 +1277,8 @@
   letter-spacing: 0.1em;
   padding: 8px 10px;
 }
-.k-kinds button[aria-pressed='true'] {
+.k-kinds button[aria-pressed='true'],
+.k-kinds button[aria-selected='true'] {
   border-color: var(--n-cyan);
   color: var(--n-cyan);
 }
@@ -1338,6 +1339,56 @@
   background: var(--n-ink);
   color: var(--n-bg);
   text-shadow: none;
+}
+.n-card {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 8px;
+  font-size: 13px;
+  color: var(--n-cyan);
+}
+.n-card.unset {
+  border-color: var(--n-pink);
+  color: var(--n-pink);
+}
+.k-days {
+  display: grid;
+  gap: 6px;
+  margin: 0 18px 10px;
+}
+.k-day {
+  display: grid;
+  grid-template-columns: 1fr 40px 64px 40px;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  color: var(--n-dim);
+}
+.k-day button {
+  border: 1px solid var(--n-line);
+  background: none;
+  color: var(--n-ink);
+  height: 36px;
+  font-size: 16px;
+}
+.k-day button:active,
+.k-day button:focus-visible {
+  background: var(--n-ink);
+  color: var(--n-bg);
+}
+.k-day b {
+  text-align: center;
+  font-weight: normal;
+  font-size: 20px;
+  color: var(--n-cyan);
+}
+.k-day b.unk {
+  color: var(--n-pink);
+}
+.k-days .n-note {
+  margin: 2px 0 0;
+  text-align: center;
 }
 .k-acts {
   display: grid;

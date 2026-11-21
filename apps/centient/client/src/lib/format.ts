@@ -26,6 +26,12 @@ export const ACCOUNT_KINDS: Record<string, string> = {
   IOU: 'Friends owe you',
 };
 
+/** Day of the month for a card's bill days; 31 lands on the month's last day (Feb 28, Apr 30). */
+export const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => ({
+  value: String(i + 1),
+  label: i === 30 ? 'Last day (31)' : String(i + 1),
+}));
+
 export const POCKET_KINDS = { SPENDING: 'Spending', SAVINGS: 'Savings', GOAL: 'Goal' } as const;
 
 /** "Today", "Yesterday", else "Mon 12 Oct" (dates are YYYY-MM-DD in Jakarta time). */

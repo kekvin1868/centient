@@ -9,7 +9,9 @@ import { formatMoney } from '../../lib/format';
 import { idrValue, priceAge } from '../../lib/prices';
 import { usePrices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
-import { isLimit, shownBalance } from './TotalBalance';
+import { HpBar } from '../../ui/HpBar';
+import { isCard } from '../../../../src/domain/recurring';
+import { shownBalance } from './TotalBalance';
 import { UpdateBalanceSheet } from './UpdateBalanceSheet';
 import { isStandIn, me } from '../../lib/state';
 import { accountApi } from '../../models/account';
@@ -41,7 +43,7 @@ export function PickedAccount({
   const main = pockets.find(p => p.id === a?.default_envelope_id);
   const split = Boolean(main && pockets.some(p => p !== main && p.balance));
   // A card / pay later with a limit: the hero is what is left of it; what is owed goes under it.
-  const capped = a && isLimit(a) && a.credit_limit ? a.credit_limit : null;
+  const capped = a && isCard(a.kind) && a.credit_limit ? a.credit_limit : null;
   const free = capped ? shownBalance(a!) : split ? main!.balance : (a?.balance ?? 0);
   const iou = a?.kind === 'IOU';
   const iouBelow = iou && free < 0;
@@ -82,12 +84,24 @@ export function PickedAccount({
               </div>
             )}
             {capped && (
-              <div className="mt-2 text-[14px] font-semibold text-muted">
-                Left to spend · owed{' '}
-                <span className="num text-ink">
-                  {formatMoney(Math.max(0, -a.balance), a.currency_code)}
-                </span>{' '}
-                of <span className="num">{formatMoney(capped, a.currency_code)}</span>
+              // The card's own limit, once: left to spend above, a bar in the card's colour, what is used of it.
+              <div className={`rarity-${a.kind} mt-1`}>
+                <div className="text-[14px] font-semibold text-muted">left to spend</div>
+                <div className="mt-2">
+                  <HpBar
+                    value={Math.max(0, free)}
+                    max={capped}
+                    size="big"
+                    fill="bg-[var(--rarity)]"
+                  />
+                </div>
+                <p className="mt-1.5 text-[14px] text-muted">
+                  Used{' '}
+                  <span className="num font-bold text-ink">
+                    {formatMoney(Math.max(0, -a.balance), a.currency_code)}
+                  </span>{' '}
+                  of <span className="num">{formatMoney(capped, a.currency_code)}</span>
+                </p>
               </div>
             )}
             {a.currency_code !== 'IDR' && <CryptoValue account={a} />}

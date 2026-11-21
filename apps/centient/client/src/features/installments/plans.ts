@@ -1,8 +1,6 @@
-// Installment plans: which accounts take them, loading them, and which are due soon.
+// Installment plans (credit cards and pay later, `isCard`): loading them, and which are due soon.
 import { useQuery } from '@tanstack/react-query';
 import { installmentQueries, type Plan } from '../../models/installment';
-
-export const takesInstallments = (kind: string) => kind === 'PAYLATER' || kind === 'CREDIT_CARD';
 
 /** Plans of every account (for Home's "due soon"), or of one account; null while loading. */
 export function usePlans(accountId?: string) {

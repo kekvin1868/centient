@@ -2,6 +2,7 @@
 import type { ServiceDeps } from '../../context';
 import type { Patch } from '../../lib/schemas';
 import { jakartaToday, toOccurredAt } from '../../domain/cycle';
+import { isCard, statementOf } from '../../domain/recurring';
 import {
   assertBalanced,
   DomainError,
@@ -16,6 +17,41 @@ export type AccountsService = ReturnType<typeof createAccountsService>;
 export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) {
   const stamp = () => new Date(now()).toISOString();
 
+  /**
+   * An opening balance as INCOME in "Opening balance" (negative for what a card owes). For a card, `billed` is the
+   * part still unpaid on its last bill: it is dated on the last closing day so it sits on that bill; the rest
+   * (spent since) is dated today and goes on the next one.
+   */
+  const openingTxs = async (account: Account, amount: number, billed = 0) => {
+    const c = await catalog.load();
+    const cat = c.categoryByName('Opening balance');
+    if (!cat)
+      throw new DomainError(
+        'NO_OPENING_CATEGORY',
+        'Create an "Opening balance" income category first',
+      );
+    if (!Number.isSafeInteger(billed) || billed < 0 || (billed > 0 && -amount < billed))
+      throw new DomainError('BILLED_TOO_MUCH', 'The last bill can be at most what is used');
+    if (billed > 0 && !(isCard(account.kind) && account.statement_day))
+      throw new DomainError('NOT_A_CARD', 'Only a card or pay later has a bill');
+    const today = jakartaToday(now());
+    const parts: [string, number][] = [];
+    if (billed > 0)
+      parts.push([statementOf(account.statement_day!, account.due_day, today).cutOff, -billed]);
+    if (amount + billed !== 0) parts.push([today, amount + billed]);
+    return parts.map(([day, part]) =>
+      income({
+        occurredAt: toOccurredAt(day, now()),
+        account: { id: account.id, currency: account.currency_code },
+        envelope: c.defaultEnvelope(account),
+        categoryId: cat.id,
+        amount: part,
+        signed: true,
+        note: 'Opening balance',
+      }),
+    );
+  };
+
   return {
     /** Creates an account with its Main pocket; an opening balance (negative for card / pay later debt) goes into Main. */
     async create(i: {
@@ -24,37 +60,33 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
       provider?: string | null;
       currency?: string;
       dueDay?: number | null;
+      statementDay?: number | null;
       creditLimit?: number | null;
       openingBalance?: number;
+      /** A card: how much of what is used is still unpaid on its last bill. */
+      billedBalance?: number;
     }): Promise<Account> {
+      const card = isCard(i.kind);
+      // Without these the card has no bill and its limit reads as debt (owner test 2026-11-21).
+      if (card && !(i.creditLimit && i.statementDay && i.dueDay))
+        throw new DomainError(
+          'CARD_SETUP',
+          'A card or pay later needs its limit, closing day and pay-by day',
+        );
       const account = await repos.accounts.create(ws, {
         name: i.name.trim(),
         kind: i.kind,
         provider: i.provider?.trim().toUpperCase() || null,
         currency_code: i.currency ?? 'IDR',
         due_day: i.dueDay ?? null,
-        credit_limit: i.creditLimit ?? null,
+        statement_day: card ? i.statementDay! : null,
+        credit_limit: card ? i.creditLimit! : null,
       });
       catalog.invalidate();
       // Opening balance is an INCOME in "Opening balance"; a card's or paylater's debt is negative.
       if (i.openingBalance) {
-        const c = await catalog.load();
-        const cat = c.categoryByName('Opening balance');
-        if (!cat)
-          throw new DomainError(
-            'NO_OPENING_CATEGORY',
-            'Create an "Opening balance" income category first',
-          );
-        const tx = income({
-          occurredAt: toOccurredAt(jakartaToday(now()), now()),
-          account: { id: account.id, currency: account.currency_code },
-          envelope: c.defaultEnvelope(account),
-          categoryId: cat.id,
-          amount: i.openingBalance,
-          signed: true,
-          note: 'Opening balance',
-        });
-        await repos.entries.insert(ws, [{ kind: 'OPENING', command: null, txs: [tx] }]);
+        const txs = await openingTxs(account, i.openingBalance, i.billedBalance);
+        await repos.entries.insert(ws, [{ kind: 'OPENING', command: null, txs }]);
       }
       return account;
     },
@@ -65,7 +97,10 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
      * spending (or income) in `categoryId` when given, so budgets see it, else an uncategorised
      * "Balance adjustment" that budgets ignore.
      */
-    async reconcile(accountId: string, i: { actual: number; categoryId?: string | null }) {
+    async reconcile(
+      accountId: string,
+      i: { actual: number; categoryId?: string | null; billed?: number },
+    ) {
       if (!Number.isSafeInteger(i.actual)) throw new DomainError('INVALID_AMOUNT');
       const [c, b] = await Promise.all([catalog.load(), repos.entries.balances(ws)]);
       const account = c.account(accountId);
@@ -78,21 +113,9 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
         envelope: c.defaultEnvelope(account.row),
       };
       if (diff !== 0 && opening) {
-        const cat = c.categoryByName('Opening balance');
-        if (!cat)
-          throw new DomainError(
-            'NO_OPENING_CATEGORY',
-            'Create an "Opening balance" income category first',
-          );
-        const tx = income({
-          ...base,
-          categoryId: cat.id,
-          amount: diff,
-          signed: true,
-          note: 'Opening balance',
-        });
-        assertBalanced(tx, x => c.accountOf(x));
-        await repos.entries.insert(ws, [{ kind: 'OPENING', command: null, txs: [tx] }]);
+        const txs = await openingTxs(account.row, diff, i.billed);
+        for (const tx of txs) assertBalanced(tx, x => c.accountOf(x));
+        await repos.entries.insert(ws, [{ kind: 'OPENING', command: null, txs }]);
       } else if (diff !== 0) {
         const correction = { ...base, note: 'Balance correction' };
         let tx: NewTransaction;

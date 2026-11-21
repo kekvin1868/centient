@@ -3,7 +3,7 @@
 import { Block, BlockFooter, Button } from 'konsta/react';
 import { useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
-import { ACCOUNT_KINDS, dayLabel } from '../../lib/format';
+import { ACCOUNT_KINDS, dayLabel, MONTH_DAYS } from '../../lib/format';
 import { attempt } from '../../lib/run';
 import { active, catalog } from '../../lib/state';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
@@ -13,12 +13,11 @@ import { Group, Row } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
 import { CurrencyPicker } from '../../ui/CurrencyPicker';
-import { accountApi, toAccountKind } from '../../models/account';
+import { isCard } from '../../../../src/domain/recurring';
+import { accountApi, cantSave, toAccountKind } from '../../models/account';
 import type { RowPatch } from '../../models/api';
 import { entryQueries } from '../../models/entry';
 import { queryClient, persist } from '../../models/query';
-
-const DAYS = Array.from({ length: 31 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
 
 export function EditAccountSheet({
   account: a,
@@ -41,7 +40,9 @@ export function EditAccountSheet({
   // Old names are saved for every account; only people tabs list them for now.
   const formerly =
     a.kind === 'IOU' ? (catalog.value.accounts.find(x => x.id === a.id)?.formerNames ?? []) : [];
-  const billed = kind === 'CREDIT_CARD' || kind === 'PAYLATER';
+  const billed = isCard(kind);
+  // A card / pay later can't lose its limit or bill days: without them it has no bill.
+  const missing = cantSave({ name, card: billed, limit, days: [statementDay, dueDay] });
   const patch = async (json: RowPatch, done: string) => {
     if (!(await persist(() => accountApi.update(a.id, json)))) return;
     onClose();
@@ -111,20 +112,20 @@ export function EditAccountSheet({
           )}
           {billed && (
             <PickerRow
-              label="Statement closes on day"
+              label="Bill closes on day"
               value={statementDay}
-              placeholder="Not set"
+              placeholder="Pick"
               onChange={setStatementDay}
-              options={DAYS}
+              options={MONTH_DAYS}
             />
           )}
           {billed && (
             <PickerRow
-              label="Bill due on day"
+              label="Pay by day"
               value={dueDay}
-              placeholder="Not set"
+              placeholder="Pick"
               onChange={setDueDay}
-              options={DAYS}
+              options={MONTH_DAYS}
             />
           )}
           {a.kind !== 'IOU' && (
@@ -142,8 +143,8 @@ export function EditAccountSheet({
         </Group>
         <BlockFooter inset>Currency can change only before the account has entries.</BlockFooter>
         <Block className="flex flex-col gap-2.5">
-          <Button large rounded disabled={!name.trim()} onClick={save}>
-            Save
+          <Button large rounded disabled={Boolean(missing)} onClick={save}>
+            {missing ?? 'Save'}
           </Button>
           <Button
             large

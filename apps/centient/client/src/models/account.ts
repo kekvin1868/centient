@@ -15,6 +15,25 @@ export const accountQueries = {
 };
 
 type NewAccount = Req<typeof client.api.accounts.$post>['json'];
+
+/**
+ * Why an account form can't save yet (its button says so), else null. A card / pay later needs its limit and both
+ * bill days (without them it has no bill), and what is used can't be more than the limit.
+ */
+export function cantSave(i: {
+  name: string;
+  card: boolean;
+  limit: number | null;
+  days: unknown[];
+  used?: number;
+}) {
+  if (!i.name.trim()) return 'Enter a name';
+  if (!i.card) return null;
+  if (!i.limit) return 'Enter the limit';
+  if (!i.days.every(Boolean)) return 'Pick the bill days';
+  if ((i.used ?? 0) > i.limit) return 'More used than the limit';
+  return null;
+}
 type BalanceCheck = Req<(typeof client.api.accounts)[':id']['balance']['$post']>['json'];
 
 /** Account saves (each refreshes everything: names, balances and entries all follow an account). */

@@ -20,7 +20,13 @@ async function filled(w: ReturnType<typeof world>, email: string) {
     w.repos.categories.list(ws).then(cs => cs.find(c => c.name === name)!.id);
   const food = await cat('Food & Drink');
   const bca = await svc().accounts.create({ name: 'BCA', kind: 'BANK', openingBalance: 5_000_000 });
-  const card = await svc().accounts.create({ name: 'Card', kind: 'CREDIT_CARD', dueDay: 5 });
+  const card = await svc().accounts.create({
+    name: 'Card',
+    kind: 'CREDIT_CARD',
+    creditLimit: 20_000_000,
+    statementDay: 20,
+    dueDay: 5,
+  });
   await svc().accounts.update(bca.id, { name: 'BCA Utama' });
   const pocket = await svc().pockets.create({ accountId: bca.id, name: 'Jajan', kind: 'SPENDING' });
   await svc().budgets.set({ categoryId: food, envelopeId: pocket.id, limit: 1_000_000 });

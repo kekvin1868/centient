@@ -189,7 +189,14 @@ test('lists have one even hairline on the rounded card', async () => {
 test('accounts are a hand you turn: drag sideways and it settles on (and picks) the next card', async () => {
   await tab('Money').tap();
   for (const a of [
-    { name: 'Kredivo', kind: 'PAYLATER', openingBalance: -1_788_000 },
+    {
+      name: 'Kredivo',
+      kind: 'PAYLATER',
+      creditLimit: 5_000_000,
+      statementDay: 20,
+      dueDay: 5,
+      openingBalance: -1_788_000,
+    },
     { name: 'Jago', kind: 'BANK' },
     { name: 'Mandiri', kind: 'BANK' },
   ]) {

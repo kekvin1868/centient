@@ -9,6 +9,7 @@ import { IdleHint } from '../../../ui/night/IdleHint';
 import { NightList, type NightRow } from '../../../ui/night/NightList';
 import { gestureProps } from '../../../ui/night/useGesture';
 import { typing, useLayerKeys } from '../../../ui/night/useLayers';
+import { isCard } from '../../../../../src/domain/recurring';
 import { FlowBoard } from '../board/FlowBoard';
 import type { Board } from '../board/state';
 import { HINTS } from '../model/copy';
@@ -16,15 +17,18 @@ import {
   accountBalance,
   addAccount,
   addPocket,
+  cardsUnset,
   kept,
   deletePocket,
   MAX_ACCOUNTS,
   removePocket,
   rename,
+  setCard,
   setKind,
   toggle,
   type Draft,
 } from '../model/draft';
+import { CardSheet } from '../sheets/CardSheet';
 import { ConfirmChanges } from '../sheets/ConfirmChanges';
 import { GuideSheet } from '../sheets/GuideSheet';
 import { DeletePocket } from '../sheets/DeletePocket';
@@ -44,6 +48,7 @@ type Props = {
 };
 type Open =
   | { kind: 'type' }
+  | { kind: 'card' }
   | { kind: 'pocket'; key: string }
   | { kind: 'delete'; key: string }
   | { kind: 'confirm' }
@@ -107,18 +112,28 @@ export function NightMenu({
     if (a?.kept) setOpen({ kind: 'type' });
   };
   const newPocket = () => {
-    if (!a?.kept) return;
+    if (!a?.kept || isCard(a.kind)) return;
     const r = addPocket(draft, a.key);
     change(r.draft);
     setOpen({ kind: 'pocket', key: r.key });
   };
   // 0 is the balance (Main, always first); 1-9 the pockets under it.
   const openPocket = (i: number) => {
+    if (a && isCard(a.kind)) return i === 0 ? card() : undefined;
     const p = a?.kept && a.pockets[i];
     if (p) setOpen({ kind: 'pocket', key: p.key });
   };
+  const card = () => {
+    if (a?.kept && isCard(a.kind)) setOpen({ kind: 'card' });
+  };
+  // A card / pay later without its limit and bill days would have no bill: CONFIRM takes you to it instead.
   const confirm = () => {
-    if (kept(draft).length) setOpen({ kind: 'confirm' });
+    if (!kept(draft).length) return;
+    const unset = cardsUnset(draft)[0];
+    if (!unset) return setOpen({ kind: 'confirm' });
+    pick(draft.indexOf(unset));
+    showToast(`${unset.name} NEEDS ITS LIMIT + BILL DAYS`);
+    setOpen({ kind: 'card' });
   };
 
   useLayerKeys(e => {
@@ -158,6 +173,7 @@ export function NightMenu({
       e.preventDefault();
       drop();
     } else if (k === 'p') newPocket();
+    else if (k === 'l') card();
     else if (/^[0-9]$/.test(k)) openPocket(+k);
     else if (k === 'c') setOpen({ kind: 'board' });
     else if (k === '?') setOpen({ kind: 'guide' });
@@ -236,6 +252,7 @@ export function NightMenu({
         onAdd={add}
         onAddPocket={newPocket}
         onPocket={key => setOpen({ kind: 'pocket', key })}
+        onCard={card}
       />
       <div className="n-foot">
         <button
@@ -263,6 +280,14 @@ export function NightMenu({
           onPick={kind => {
             if (kind !== a.kind) change(setKind(draft, a.key, kind));
           }}
+        />
+      )}
+      {open?.kind === 'card' && a && (
+        <CardSheet
+          key={a.key}
+          account={a}
+          onClose={() => setOpen(null)}
+          onSave={c => change(setCard(draft, a.key, c))}
         />
       )}
       {pocket && a && (

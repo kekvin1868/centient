@@ -18,6 +18,7 @@ export const HINTS = {
     'Rough is fine. Punch it in, pick where the money comes from, hit {pink|SET}. Not sure? {cyan|LEAVE ???}.',
   delete: '{cyan|BACK TO BALANCE} keeps the account total. {pink|REMOVE MONEY} drops it.',
   type: 'Pick a type. Tap outside to keep the old one.',
+  card: 'Punch in the limit, step the two days with {cyan|◂ ▸}. Both are on your statement. Then {pink|SET}.',
   confirm: "Look it over. {pink|CONFIRM} if it's right, tap outside to keep editing.",
   board: 'Drag the board to look around, pinch to zoom. {cyan|LINK} draws arrows pocket to pocket.',
 };
@@ -45,7 +46,7 @@ export const GUIDE: [string, string][] = [
   ],
   [
     'TYPES',
-    'Bank, debit, e-wallet, cash, credit, pay later, crypto. Hold a row or tap {cyan|TYPE} to pick one. For cards and pay later, enter what you owe.',
+    'Bank, debit, e-wallet, cash, credit, pay later, crypto. Hold a row or tap {cyan|TYPE} to pick one. A card or pay later needs its {pink|LIMIT + BILL DAYS} (both days are on your statement); its balance is what is already used.',
   ],
   [
     'FLOW MAP',
@@ -73,6 +74,7 @@ export const CONTROLS: [string, [string, string][]][] = [
       ['T', 'Pick a type'],
       ['D · ⌫', 'Drop, keep or delete'],
       ['P', 'New pocket'],
+      ['L', 'Card limit + bill days'],
       ['0 · 1–9', 'Set the balance · pocket 1–9'],
       ['C', 'Flow board'],
       ['⌘/CTRL Z', 'Undo'],
