@@ -1,85 +1,25 @@
-// Settings: accounts, pockets, categories, hidden items, when the month starts, reminders, the app lock, import, the Inbox,
-// backup, reset and delete everything. "Hide"
-// keeps history; deleting an account or resetting flags data as deleted rather than erasing it.
+// Settings (a page of the Menu): categories, hidden items, when the month and the forecast start, reminders.
+// "Hide" keeps history.
 import { useState } from 'react';
-import type { Account } from '../../../src/repos/accounts';
 import type { Category } from '../../../src/repos/categories';
-import type { Envelope } from '../../../src/repos/envelopes';
-import { AccountForm } from '../features/accounts/AccountForm';
 import { ForecastStart } from '../features/budgets/ForecastStart';
-import { EditAccountSheet } from '../features/accounts/EditAccountSheet';
 import { AddCategorySheet } from '../features/categories/AddCategorySheet';
 import { EditCategorySheet } from '../features/categories/EditCategorySheet';
-import { ImportSheet } from '../features/inbox/ImportSheet';
-import { LockSettings } from '../features/lock/LockSettings';
-import { AddPocketSheet } from '../features/pockets/AddPocketSheet';
 import { PushSettings } from '../features/push/PushSettings';
-import { DeleteAccountSheet } from '../features/workspace/DeleteAccountSheet';
-import { EditPocketSheet } from '../features/pockets/EditPocketSheet';
 import { HiddenItems } from '../features/workspace/HiddenItems';
 import { MonthStart } from '../features/workspace/MonthStart';
-import { ResetSheet } from '../features/workspace/ResetSheet';
-import { Page } from '../layouts/Page';
-import { downloadBackup } from '../lib/backup';
-import { ACCOUNT_KINDS, POCKET_KINDS } from '../lib/format';
+import { Page, type Back } from '../layouts/Page';
 import { categoryEmoji } from '../lib/labels';
-import { attempt } from '../lib/run';
-import { active, catalog, nameOf } from '../lib/state';
+import { active, catalog } from '../lib/state';
 import { Group, Row } from '../ui/List';
-import { Sheet } from '../ui/Sheet';
-import { Inbox } from './Inbox';
 
-export function Settings() {
-  const [account, setAccount] = useState<Account | null>(null);
-  const [pocket, setPocket] = useState<Envelope | null>(null);
+export function Settings({ back }: { back: Back }) {
   const [category, setCategory] = useState<Category | null>(null);
-  const [add, setAdd] = useState<'account' | 'pocket' | 'category' | null>(null);
-  const [reset, setReset] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [inbox, setInbox] = useState(false);
+  const [adding, setAdding] = useState(false);
   const cat = catalog.value;
-  const close = () => setAdd(null);
 
   return (
-    <Page title="Settings">
-      <Group label="Accounts">
-        {active(cat.accounts).map(a => (
-          <Row
-            key={a.id}
-            title={a.name}
-            sub={`${ACCOUNT_KINDS[a.kind]}${a.currency_code !== 'IDR' ? ` · ${a.currency_code}` : ''}`}
-            chevron
-            onClick={() => setAccount(a)}
-          />
-        ))}
-        <Row
-          title={<span className="text-primary">Add account</span>}
-          onClick={() => setAdd('account')}
-        />
-      </Group>
-
-      <Group
-        label="Pockets"
-        foot="Pockets live inside an account and set some of its money aside. New money lands in the account's balance; move it into pockets, or to another account, on the Money tab."
-      >
-        {active(cat.envelopes)
-          .filter(e => !cat.accounts.some(a => a.default_envelope_id === e.id))
-          .map(e => (
-            <Row
-              key={e.id}
-              title={e.name}
-              sub={`${nameOf(cat.accounts, e.account_id)} · ${POCKET_KINDS[e.kind]}`}
-              chevron
-              onClick={() => setPocket(e)}
-            />
-          ))}
-        <Row
-          title={<span className="text-primary">Add pocket</span>}
-          onClick={() => setAdd('pocket')}
-        />
-      </Group>
-
+    <Page title="Settings" back={back}>
       <Group label="Categories">
         {active(cat.categories)
           .filter(c => !['Balance adjustment', 'Opening balance'].includes(c.name))
@@ -94,7 +34,7 @@ export function Settings() {
           ))}
         <Row
           title={<span className="text-primary">Add category</span>}
-          onClick={() => setAdd('category')}
+          onClick={() => setAdding(true)}
         />
       </Group>
 
@@ -102,91 +42,17 @@ export function Settings() {
       <MonthStart />
       <ForecastStart />
       <PushSettings />
-      <LockSettings />
-
-      <Group label="Your data">
-        <Row
-          title="Import a spreadsheet (CSV)"
-          sub="History from another app or your bank"
-          chevron
-          onClick={() => setImporting(true)}
-        />
-        <Row
-          title="Inbox"
-          sub="Imported payments waiting for your OK"
-          chevron
-          onClick={() => setInbox(true)}
-        />
-        <Row
-          title="Download all as spreadsheet (CSV)"
-          chevron
-          onClick={() => location.assign('/api/export.csv')}
-        />
-        <Row
-          title="Download a backup"
-          sub="Everything, as one file you can keep"
-          chevron
-          onClick={() => attempt(downloadBackup)}
-        />
-      </Group>
-
-      <Group>
-        <Row
-          title={
-            <span className="k-color-brand-red font-semibold text-primary">Reset Centient</span>
-          }
-          onClick={() => setReset(true)}
-        />
-        <Row
-          title={
-            <span className="k-color-brand-red font-semibold text-primary">Delete everything</span>
-          }
-          sub="For good, from the server too"
-          onClick={() => setDeleting(true)}
-        />
-      </Group>
 
       {/* Sheets are keyed by what they show, so each opening starts from fresh state set at mount. */}
-      <ResetSheet open={reset} onClose={() => setReset(false)} />
-      <DeleteAccountSheet
-        key={`delete:${deleting}`}
-        open={deleting}
-        onClose={() => setDeleting(false)}
-      />
-      <ImportSheet
-        key={`import:${importing}`}
-        open={importing}
-        onClose={() => setImporting(false)}
-        onImported={() => setInbox(true)}
-      />
-      <Inbox open={inbox} onClose={() => setInbox(false)} />
-      <EditAccountSheet
-        key={`account:${account?.id ?? 'none'}`}
-        account={account}
-        onClose={() => setAccount(null)}
-      />
-      <EditPocketSheet
-        key={`pocket:${pocket?.id ?? 'none'}`}
-        pocket={pocket}
-        onClose={() => setPocket(null)}
-      />
       <EditCategorySheet
         key={`category:${category?.id ?? 'none'}`}
         category={category}
         onClose={() => setCategory(null)}
       />
-      <Sheet open={add === 'account'} onClose={close} title="Add account">
-        <AccountForm onDone={close} />
-      </Sheet>
-      <AddPocketSheet
-        key={`add-pocket:${add === 'pocket'}`}
-        open={add === 'pocket'}
-        onClose={close}
-      />
       <AddCategorySheet
-        key={`add-category:${add === 'category'}`}
-        open={add === 'category'}
-        onClose={close}
+        key={`add-category:${adding}`}
+        open={adding}
+        onClose={() => setAdding(false)}
       />
     </Page>
   );
