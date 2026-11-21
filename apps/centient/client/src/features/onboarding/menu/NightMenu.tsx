@@ -112,13 +112,14 @@ export function NightMenu({
     if (a?.kept) setOpen({ kind: 'type' });
   };
   const newPocket = () => {
-    if (!a?.kept) return;
+    if (!a?.kept || owes(a.kind)) return;
     const r = addPocket(draft, a.key);
     change(r.draft);
     setOpen({ kind: 'pocket', key: r.key });
   };
   // 0 is the balance (Main, always first); 1-9 the pockets under it.
   const openPocket = (i: number) => {
+    if (a && owes(a.kind)) return i === 0 ? card() : undefined;
     const p = a?.kept && a.pockets[i];
     if (p) setOpen({ kind: 'pocket', key: p.key });
   };

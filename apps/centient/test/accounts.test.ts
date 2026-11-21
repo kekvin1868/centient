@@ -167,3 +167,48 @@ describe('old names of an account', () => {
     ).toEqual([]);
   });
 });
+
+describe('a card opening: what is used, split between the last bill and since', () => {
+  // Today is 10 Nov: a card closing on the 5th, pay by the 25th, last closed 5 Nov (due 25 Nov).
+  const card = { kind: 'CREDIT_CARD', creditLimit: 12_000_000, statementDay: 5, dueDay: 25 };
+
+  it('puts the unpaid part on the last bill and the rest on the next', async () => {
+    const ws = await ensure('opening-split@test');
+    const a = await svc(ws).accounts.create({
+      name: 'BCA Card',
+      ...card,
+      openingBalance: -1_600_000,
+      billedBalance: 1_000_000,
+    });
+    const bill = (await svc(ws).recurring.list()).cards.find(x => x.accountId === a.id);
+    expect(bill).toMatchObject({
+      cutOff: '2026-11-05',
+      dueOn: '2026-11-25',
+      bill: 1_000_000,
+      left: 1_000_000,
+      spentSince: 600_000,
+    });
+    expect((await svc(ws).ledger.balances()).accounts.find(x => x.id === a.id)?.balance).toBe(
+      -1_600_000,
+    );
+  });
+
+  it('does the same for a first-run opening (reconcile), and refuses a bill above what is used', async () => {
+    const ws = await ensure('opening-reconcile@test');
+    const a = await svc(ws).accounts.create({ name: 'Kredivo', ...card, kind: 'PAYLATER' });
+    await expect(
+      svc(ws).accounts.reconcile(a.id, { actual: -500_000, billed: 600_000 }),
+    ).rejects.toMatchObject({ code: 'BILLED_TOO_MUCH' });
+    await svc(ws).accounts.reconcile(a.id, { actual: -500_000, billed: 500_000 });
+    const bill = (await svc(ws).recurring.list()).cards.find(x => x.accountId === a.id);
+    expect(bill).toMatchObject({ bill: 500_000, left: 500_000, spentSince: 0 });
+  });
+
+  it('has no pockets', async () => {
+    const ws = await ensure('card-pockets@test');
+    const a = await svc(ws).accounts.create({ name: 'BCA Card', ...card });
+    await expect(
+      svc(ws).pockets.create({ accountId: a.id, name: 'Trip', kind: 'SAVINGS' }),
+    ).rejects.toMatchObject({ code: 'CARD_POCKETS' });
+  });
+});

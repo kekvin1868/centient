@@ -32,19 +32,24 @@ export function AccountForm({
   const [name, setName] = useState('');
   const [kind, setKind] = useState<Kind>('BANK');
   const [amount, setAmount] = useState<number | null>(null);
+  const [billed, setBilled] = useState<number | null>(null);
   const [limit, setLimit] = useState<number | null>(null);
   const [closes, setCloses] = useState<string | null>(null);
   const [payBy, setPayBy] = useState<string | null>(null);
   const [currency, setCurrency] = useState('IDR');
   const [otherCurrency, setOtherCurrency] = useState(false);
   const owes = kind === 'CREDIT_CARD' || kind === 'PAYLATER';
+  // A card: used = still unpaid on the last bill (on that bill) + spent since (on the next one).
+  const used = (billed ?? 0) + (amount ?? 0);
   const missing = !name.trim()
     ? 'Enter a name'
     : owes && !limit
       ? 'Enter the limit'
       : owes && !(closes && payBy)
         ? 'Pick the bill days'
-        : null;
+        : owes && limit && used > limit
+          ? 'More used than the limit'
+          : null;
 
   const save = async () => {
     const ok = await persist(() =>
@@ -53,7 +58,9 @@ export function AccountForm({
         kind,
         currency,
         ...(owes && { creditLimit: limit, statementDay: Number(closes), dueDay: Number(payBy) }),
-        openingBalance: amount ? (owes ? -amount : amount) : undefined,
+        ...(owes
+          ? { openingBalance: used ? -used : undefined, billedBalance: billed || undefined }
+          : { openingBalance: amount || undefined }),
       }),
     );
     if (ok) onDone();
@@ -91,8 +98,16 @@ export function AccountForm({
             />
           </>
         )}
+        {owes && (
+          <AmountField
+            label="Unpaid on the last bill"
+            currency={currency}
+            value={billed}
+            onChange={setBilled}
+          />
+        )}
         <AmountField
-          label={owes ? 'Already used' : 'How much is in it now'}
+          label={owes ? 'Spent since the last bill' : 'How much is in it now'}
           currency={currency}
           value={amount}
           onChange={setAmount}
@@ -101,7 +116,8 @@ export function AccountForm({
       {owes && (
         <BlockFooter inset>
           Both days are on your statement: the day it's printed (tanggal cetak) and the day it's due
-          (jatuh tempo). Spending up to the closing day goes on that month's bill.
+          (jatuh tempo). Spending up to the closing day goes on that month's bill. What is still
+          unpaid on the last bill stays on it; what you spent since goes on the next one.
         </BlockFooter>
       )}
       <Block className="flex flex-col items-start gap-3 !mt-0">

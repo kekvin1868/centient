@@ -101,7 +101,7 @@ export function AccountPanel({
               : 'SET LIMIT + BILL DAYS ▸'}
           </button>
         )}
-        <PocketList account={a} onOpen={onPocket} onAdd={onAddPocket} />
+        <PocketList account={a} onOpen={onPocket} onAdd={onAddPocket} onCard={onCard} />
       </div>
     </div>
   );

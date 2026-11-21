@@ -75,7 +75,10 @@ export function FirstRun({ onDone }: { onDone: () => void }) {
         return;
       }
       case 'setBalance':
-        return accountApi.checkBalance(accountId(s.accountKey), { actual: s.actual });
+        return accountApi.checkBalance(accountId(s.accountKey), {
+          actual: s.actual,
+          billed: s.billed,
+        });
       case 'allocate':
         return entryApi.record({
           commands: s.moves.map(m => ({

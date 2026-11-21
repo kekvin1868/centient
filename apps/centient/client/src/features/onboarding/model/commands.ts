@@ -30,8 +30,8 @@ export type Step =
       name: string;
       kind: string;
     }
-  /** The account's total becomes its opening balance, which lands in Main. */
-  | { id: string; op: 'setBalance'; accountKey: string; actual: number }
+  /** The account's total becomes its opening balance, which lands in Main; a card's `billed` part is on its last bill. */
+  | { id: string; op: 'setBalance'; accountKey: string; actual: number; billed?: number }
   /** Then each other pocket's share moves out of Main, all in one request. */
   | {
       id: string;
@@ -96,7 +96,14 @@ export function toSteps(draft: Draft): Step[] {
     if (!total) continue;
     // A card's or pay later's amount is what's owed: a negative balance, kept whole in Main.
     if (owes(a.kind)) {
-      steps.push({ id: `bal:${a.key}`, op: 'setBalance', accountKey: a.key, actual: -total });
+      const billed = a.card?.billed ?? 0;
+      steps.push({
+        id: `bal:${a.key}`,
+        op: 'setBalance',
+        accountKey: a.key,
+        actual: -total,
+        ...(billed > 0 && { billed }),
+      });
       continue;
     }
     steps.push({ id: `bal:${a.key}`, op: 'setBalance', accountKey: a.key, actual: total });

@@ -49,6 +49,9 @@ export function createPocketsService({ ws, now, repos, catalog }: ServiceDeps) {
       const account = c.account(i.accountId).row;
       if (account.kind === 'IOU')
         throw new DomainError('IOU_POCKETS', 'What friends owe you has no pockets');
+      // A card's balance is what is used of its limit: there is no money in it to set aside.
+      if (account.kind === 'CREDIT_CARD' || account.kind === 'PAYLATER')
+        throw new DomainError('CARD_POCKETS', 'A card or pay later has no pockets');
       if ((i.kind === 'GOAL') !== Boolean(i.targetAmount))
         throw new DomainError(
           'GOAL_TARGET',

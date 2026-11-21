@@ -1,4 +1,5 @@
-// Update balance: type what the bank app shows; the difference is logged, optionally in a category.
+// Update balance: type what the bank app shows; the difference is logged, optionally in a category. A card / pay
+// later asks what is used now (its balance is that debt, below zero).
 import { Block, BlockFooter, Button } from 'konsta/react';
 import { useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
@@ -24,7 +25,10 @@ export function UpdateBalanceSheet({
   const [categoryId, setCategoryId] = useState<string | null>(null);
   if (!account) return null;
   const cur = account.currency_code;
-  const diff = actual === null ? 0 : actual - account.balance;
+  const card = account.kind === 'CREDIT_CARD' || account.kind === 'PAYLATER';
+  // A card's field is what is used (a positive number); its balance is minus that.
+  const sign = card ? -1 : 1;
+  const diff = actual === null ? 0 : sign * actual - account.balance;
   const cats = active(catalog.value.categories).filter(
     c =>
       c.kind === (diff < 0 ? 'EXPENSE' : 'INCOME') &&
@@ -33,7 +37,9 @@ export function UpdateBalanceSheet({
 
   const save = async () => {
     if (actual === null) return;
-    const ok = await persist(() => accountApi.checkBalance(account.id, { actual, categoryId }));
+    const ok = await persist(() =>
+      accountApi.checkBalance(account.id, { actual: sign * actual, categoryId }),
+    );
     if (ok) {
       onClose();
       showToast(diff === 0 ? 'Marked as checked' : 'Balance updated');
@@ -43,8 +49,10 @@ export function UpdateBalanceSheet({
   return (
     <Sheet open onClose={onClose} title={account.name}>
       <div className="mx-4 my-5">
-        <div className="text-[15px] font-semibold text-muted">Centient shows</div>
-        <BigMoney minor={account.balance} currency={cur} max={48} className="my-3" />
+        <div className="text-[15px] font-semibold text-muted">
+          {card ? 'Centient shows as used' : 'Centient shows'}
+        </div>
+        <BigMoney minor={sign * account.balance} currency={cur} max={48} className="my-3" />
         {account.reconciled_at && (
           <div className="text-[13px] text-muted">
             Last checked {account.reconciled_at.slice(0, 10)}
@@ -53,7 +61,7 @@ export function UpdateBalanceSheet({
       </div>
       <Group>
         <AmountField
-          label="What does your bank app show?"
+          label={card ? 'How much is used now?' : 'What does your bank app show?'}
           currency={cur}
           value={actual}
           onChange={setActual}
@@ -63,7 +71,9 @@ export function UpdateBalanceSheet({
       {actual !== null && diff !== 0 && (
         <>
           <BlockFooter inset>
-            {formatMoney(Math.abs(diff), cur)} {diff < 0 ? 'less' : 'more'} than Centient had.
+            {card
+              ? `${formatMoney(Math.abs(diff), cur)} ${diff < 0 ? 'more' : 'less'} used than Centient had.`
+              : `${formatMoney(Math.abs(diff), cur)} ${diff < 0 ? 'less' : 'more'} than Centient had.`}
           </BlockFooter>
           <Group
             label={diff < 0 ? 'Where did it go?' : 'Where did it come from?'}

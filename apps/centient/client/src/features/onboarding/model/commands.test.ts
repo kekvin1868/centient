@@ -84,8 +84,16 @@ describe('toSteps', () => {
     d = setCard(d, d[0].key, { limit: 21_000_000, closes: 31, payBy: 5 });
     d = setCard(d, n.key, { limit: 12_000_000, closes: 20, payBy: null });
     expect(cardsUnset(d).map(a => a.key)).toEqual([n.key]);
-    d = setCard(d, n.key, { limit: 12_000_000, closes: 20, payBy: 5 });
+    d = setCard(d, n.key, {
+      limit: 12_000_000,
+      closes: 20,
+      payBy: 5,
+      billed: 1_000_000,
+      since: 600_000,
+    });
     expect(cardsUnset(d)).toEqual([]);
+    // Used = last bill + since, a debt; the last bill's part is sent apart so it lands on that bill.
+    expect(d.find(a => a.key === n.key)!.pockets[0].balance).toBe(1_600_000);
     const steps = toSteps(d);
     expect(steps.find(s => s.op === 'patchAccount' && s.accountId === 'm')).toMatchObject({
       json: { kind: 'PAYLATER', credit_limit: 21_000_000, statement_day: 31, due_day: 5 },
@@ -94,5 +102,20 @@ describe('toSteps', () => {
       kind: 'CREDIT_CARD',
       card: { creditLimit: 12_000_000, statementDay: 20, dueDay: 5 },
     });
+    expect(steps.find(s => s.op === 'setBalance' && s.accountKey === n.key)).toMatchObject({
+      actual: -1_600_000,
+      billed: 1_000_000,
+    });
+  });
+
+  it('a card has no pockets: turning an account into one drops them and starts the balance over', () => {
+    let d = seed();
+    const p = addPocket(d, d[0].key);
+    d = editPocket(p.draft, d[0].key, p.key, { name: 'Rent', balance: 300 });
+    d = editPocket(d, d[0].key, d[0].pockets[0].key, { balance: 700 });
+    const card = setKind(d, d[0].key, 'CREDIT_CARD');
+    expect(card[0].pockets.map(x => [x.main, x.balance])).toEqual([[true, null]]);
+    expect(setKind(card, d[0].key, 'BANK')[0].pockets[0].balance).toBeNull();
+    expect(setKind(d, d[0].key, 'EWALLET')[0].pockets).toHaveLength(2); // bank to e-wallet keeps them
   });
 });

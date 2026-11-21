@@ -62,7 +62,7 @@ test('first run: a card asks its limit and bill days, and CONFIRM waits for them
   await page.getByRole('button', { name: 'CLICK TO START' }).tap();
   await expect(page.getByRole('heading', { name: 'ACCOUNTS' })).toBeVisible({ timeout: 10_000 });
 
-  // Main Account keeps 5.000.000; Miscs becomes a credit card with 1.600.000 already used.
+  // Main Account keeps 5.000.000; Miscs becomes a credit card: 1.000.000 unpaid on its last bill, 600.000 since.
   await page.getByRole('button', { name: /^Balance/ }).tap();
   await page.keyboard.type('5j');
   await page.keyboard.press('Enter');
@@ -76,14 +76,11 @@ test('first run: a card asks its limit and bill days, and CONFIRM waits for them
     .tap();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'SET LIMIT + BILL DAYS ▸' })).toBeVisible();
+  // A card has no pockets: its hero is what is USED of the limit.
+  await expect(page.getByRole('button', { name: 'Used, not set' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '+ POCKET' })).toHaveCount(0);
+  await expect(page.getByText('A card has no pockets')).toBeVisible();
   await shot('1-first-run-card-unset');
-
-  await page.getByRole('button', { name: /^Balance/ }).tap();
-  const used = page.getByRole('dialog', { name: 'Balance in Miscs' });
-  await expect(used).toContainText('How much is already used on Miscs?');
-  await page.keyboard.type('1600k');
-  await page.keyboard.press('Enter');
-  await expect(used).toBeHidden();
 
   // CONFIRM before the card is set up: it jumps to the card sheet instead of the summary.
   await page.getByRole('button', { name: 'CONFIRM ▸' }).tap();
@@ -106,12 +103,20 @@ test('first run: a card asks its limit and bill days, and CONFIRM waits for them
   await expect(sheet.locator('.k-day b')).toHaveText(['20', '5']);
   await sheet.getByRole('button', { name: 'CLOSES ON later' }).tap(); // 21
   await sheet.getByRole('button', { name: 'CLOSES ON earlier' }).tap(); // back to 20
+  // What is used, in two parts: still unpaid on the last bill, and spent since.
+  await sheet.getByRole('tab', { name: 'LAST BILL' }).tap();
+  await expect(sheet).toContainText("Still unpaid on Miscs's last bill?");
+  await page.keyboard.type('1j');
+  await sheet.getByRole('tab', { name: 'SINCE' }).tap();
+  await page.keyboard.type('600k');
+  await expect(sheet).toContainText('USED Rp1.600.000 OF Rp12.000.000');
   await shot('3-card-sheet-filled');
   await sheet.getByRole('button', { name: 'SET ▸' }).tap();
   await expect(sheet).toBeHidden();
   await expect(
     page.getByRole('button', { name: 'LIMIT Rp12.000.000 · CLOSES 20 · PAY BY 5' }),
   ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Used, Rp1.600.000' })).toBeVisible();
 
   // The summary shows what is left of the limit and the two days.
   await page.getByRole('button', { name: 'CONFIRM ▸' }).tap();
@@ -122,13 +127,24 @@ test('first run: a card asks its limit and bill days, and CONFIRM waits for them
   await confirm.getByRole('button', { name: 'CONFIRM ▸' }).tap();
   await expect(page.getByRole('img', { name: 'Centient' })).toBeVisible();
 
-  expect(await account('Miscs')).toMatchObject({
+  const miscs = await account('Miscs');
+  expect(miscs).toMatchObject({
     kind: 'CREDIT_CARD',
     credit_limit: 12_000_000,
     statement_day: 20,
     due_day: 5,
   });
   expect(await balance('Miscs')).toBe(-1_600_000);
+  // The unpaid part sits on the last bill; what was spent since goes on the next (unless today is the closing day).
+  const bill = (
+    (await (await page.request.get('/api/recurring')).json()).cards as {
+      accountId: string;
+      bill: number;
+      spentSince: number;
+    }[]
+  ).find(c => c.accountId === miscs.id)!;
+  const today = new Date(Date.now() + 7 * 3600e3).getUTCDate();
+  if (today !== 20) expect(bill).toMatchObject({ bill: 1_000_000, spentSince: 600_000 });
 });
 
 test('add a pay later: limit and both bill days are required; the server refuses without them', async () => {
@@ -152,6 +168,10 @@ test('add a pay later: limit and both bill days are required; the server refuses
     .getByRole('combobox', { name: 'Bill closes on day' })
     .selectOption({ label: 'Last day (31)' });
   await sheet.getByRole('combobox', { name: 'Pay by day' }).selectOption({ label: '5' });
+  // Used (last bill + since) can't be more than the limit.
+  await sheet.getByRole('textbox', { name: 'Unpaid on the last bill' }).fill('22000000');
+  await expect(sheet.getByRole('button', { name: 'More used than the limit' })).toBeDisabled();
+  await sheet.getByRole('textbox', { name: 'Unpaid on the last bill' }).fill('');
   await expect(sheet).toContainText('tanggal cetak');
   await shot('5-add-pay-later');
   await sheet.getByRole('button', { name: 'Add account' }).tap();
@@ -178,7 +198,22 @@ test('Money: the picked card shows its own limit bar, and no limits box', async 
 
   await pick('Miscs');
   await expect(page.getByText('Used Rp1.600.000 of Rp12.000.000')).toBeVisible();
+  await expect(page.getByRole('region', { name: /^Pockets in/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Move money/ })).toHaveCount(0);
   await shot('7-money-credit-card', picked('CREDIT_CARD'));
+
+  // Update balance on a card asks what is used now; more used is logged as spending.
+  await page.getByRole('button', { name: 'Update balance' }).tap();
+  const upd = page.getByRole('dialog', { name: 'Miscs' });
+  await expect(upd).toContainText('Centient shows as used');
+  await expect(upd).toContainText('Rp1.600.000');
+  await upd.getByRole('textbox', { name: 'How much is used now?' }).fill('1700000');
+  await expect(upd).toContainText('Rp100.000 more used than Centient had.');
+  await shot('7b-update-card-balance');
+  await upd.getByRole('button', { name: 'Skip and update' }).tap();
+  await expect(upd).toBeHidden();
+  expect(await balance('Miscs')).toBe(-1_700_000);
+  await expect(page.getByText('Used Rp1.700.000 of Rp12.000.000')).toBeVisible();
   await expect(limits()).toHaveCount(0);
 });
 
@@ -198,7 +233,7 @@ test('Home on All accounts keeps the limits box with both kinds', async () => {
   await expect(limits()).toBeVisible();
   await expect(limits()).toContainText('Credit card');
   await expect(limits()).toContainText('Pay later');
-  await expect(limits()).toContainText('Rp10.400.000');
+  await expect(limits()).toContainText('Rp10.300.000');
   await expect(limits()).toContainText('Rp21.000.000');
   await expect(limits()).not.toContainText('Not in total');
   await limits().scrollIntoViewIfNeeded();

@@ -76,7 +76,8 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
         }}
         onPay={(x, mode) => setPay({ tabId: x.id, mode })}
       >
-        {a && a.kind !== 'IOU' && (
+        {/* A card has no pockets: its balance is what is used of its limit. */}
+        {a && a.kind !== 'IOU' && !takesInstallments(a.kind) && (
           <AccountPockets
             key={`pockets:${a.id}`}
             account={a}
