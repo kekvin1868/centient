@@ -1277,7 +1277,8 @@
   letter-spacing: 0.1em;
   padding: 8px 10px;
 }
-.k-kinds button[aria-pressed='true'] {
+.k-kinds button[aria-pressed='true'],
+.k-kinds button[aria-selected='true'] {
   border-color: var(--n-cyan);
   color: var(--n-cyan);
 }

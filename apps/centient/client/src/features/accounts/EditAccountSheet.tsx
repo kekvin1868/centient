@@ -13,7 +13,8 @@ import { Group, Row } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
 import { CurrencyPicker } from '../../ui/CurrencyPicker';
-import { accountApi, toAccountKind } from '../../models/account';
+import { isCard } from '../../../../src/domain/recurring';
+import { accountApi, cantSave, toAccountKind } from '../../models/account';
 import type { RowPatch } from '../../models/api';
 import { entryQueries } from '../../models/entry';
 import { queryClient, persist } from '../../models/query';
@@ -39,15 +40,9 @@ export function EditAccountSheet({
   // Old names are saved for every account; only people tabs list them for now.
   const formerly =
     a.kind === 'IOU' ? (catalog.value.accounts.find(x => x.id === a.id)?.formerNames ?? []) : [];
-  const billed = kind === 'CREDIT_CARD' || kind === 'PAYLATER';
+  const billed = isCard(kind);
   // A card / pay later can't lose its limit or bill days: without them it has no bill.
-  const missing = !name.trim()
-    ? 'Enter a name'
-    : billed && !limit
-      ? 'Enter the limit'
-      : billed && !(statementDay && dueDay)
-        ? 'Pick the bill days'
-        : null;
+  const missing = cantSave({ name, card: billed, limit, days: [statementDay, dueDay] });
   const patch = async (json: RowPatch, done: string) => {
     if (!(await persist(() => accountApi.update(a.id, json)))) return;
     onClose();

@@ -2,6 +2,7 @@
 // later asks what is used now (its balance is that debt, below zero).
 import { Block, BlockFooter, Button } from 'konsta/react';
 import { useState } from 'react';
+import { isCard } from '../../../../src/domain/recurring';
 import type { Account } from '../../../../src/repos/accounts';
 import { formatMoney } from '../../lib/format';
 import { categoryEmoji } from '../../lib/labels';
@@ -25,7 +26,7 @@ export function UpdateBalanceSheet({
   const [categoryId, setCategoryId] = useState<string | null>(null);
   if (!account) return null;
   const cur = account.currency_code;
-  const card = account.kind === 'CREDIT_CARD' || account.kind === 'PAYLATER';
+  const card = isCard(account.kind);
   // A card's field is what is used (a positive number); its balance is minus that.
   const sign = card ? -1 : 1;
   const diff = actual === null ? 0 : sign * actual - account.balance;

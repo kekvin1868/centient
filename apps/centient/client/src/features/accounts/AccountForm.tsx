@@ -1,6 +1,6 @@
 // Add an account: name, type, what's in it now. A card / pay later asks its limit, the day its bill closes and the
-// day it must be paid (all required: without them it has no bill) and what is already used. Currency stays rupiah
-// unless you ask for another.
+// day it must be paid (all required: without them it has no bill), what is still unpaid on its last bill and what was
+// spent since (`cantSave` says what is missing). Currency stays rupiah unless you ask for another.
 import { Block, BlockFooter, Button } from 'konsta/react';
 import { useState } from 'react';
 import { ACCOUNT_KINDS, MONTH_DAYS } from '../../lib/format';
@@ -8,7 +8,8 @@ import { AmountField } from '../../ui/AmountField';
 import { InputRow, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { CurrencyPicker } from '../../ui/CurrencyPicker';
-import { accountApi } from '../../models/account';
+import { isCard } from '../../../../src/domain/recurring';
+import { accountApi, cantSave } from '../../models/account';
 import { persist } from '../../models/query';
 
 const KINDS = [
@@ -38,18 +39,10 @@ export function AccountForm({
   const [payBy, setPayBy] = useState<string | null>(null);
   const [currency, setCurrency] = useState('IDR');
   const [otherCurrency, setOtherCurrency] = useState(false);
-  const owes = kind === 'CREDIT_CARD' || kind === 'PAYLATER';
+  const card = isCard(kind);
   // A card: used = still unpaid on the last bill (on that bill) + spent since (on the next one).
   const used = (billed ?? 0) + (amount ?? 0);
-  const missing = !name.trim()
-    ? 'Enter a name'
-    : owes && !limit
-      ? 'Enter the limit'
-      : owes && !(closes && payBy)
-        ? 'Pick the bill days'
-        : owes && limit && used > limit
-          ? 'More used than the limit'
-          : null;
+  const missing = cantSave({ name, card, limit, days: [closes, payBy], used });
 
   const save = async () => {
     const ok = await persist(() =>
@@ -57,8 +50,8 @@ export function AccountForm({
         name: name.trim(),
         kind,
         currency,
-        ...(owes && { creditLimit: limit, statementDay: Number(closes), dueDay: Number(payBy) }),
-        ...(owes
+        ...(card && { creditLimit: limit, statementDay: Number(closes), dueDay: Number(payBy) }),
+        ...(card
           ? { openingBalance: used ? -used : undefined, billedBalance: billed || undefined }
           : { openingBalance: amount || undefined }),
       }),
@@ -79,7 +72,7 @@ export function AccountForm({
         {(otherCurrency || kind === 'EXCHANGE') && (
           <CurrencyPicker value={currency} onChange={setCurrency} />
         )}
-        {owes && (
+        {card && (
           <>
             <AmountField label="Limit" currency={currency} value={limit} onChange={setLimit} />
             <PickerRow
@@ -96,24 +89,22 @@ export function AccountForm({
               options={MONTH_DAYS}
               onChange={setPayBy}
             />
+            <AmountField
+              label="Unpaid on the last bill"
+              currency={currency}
+              value={billed}
+              onChange={setBilled}
+            />
           </>
         )}
-        {owes && (
-          <AmountField
-            label="Unpaid on the last bill"
-            currency={currency}
-            value={billed}
-            onChange={setBilled}
-          />
-        )}
         <AmountField
-          label={owes ? 'Spent since the last bill' : 'How much is in it now'}
+          label={card ? 'Spent since the last bill' : 'How much is in it now'}
           currency={currency}
           value={amount}
           onChange={setAmount}
         />
       </Group>
-      {owes && (
+      {card && (
         <BlockFooter inset>
           Both days are on your statement: the day it's printed (tanggal cetak) and the day it's due
           (jatuh tempo). Spending up to the closing day goes on that month's bill. What is still

@@ -1,6 +1,7 @@
 // What CONFIRM sends, as plain steps. Each step has a stable id, so a save that fails halfway can be retried and
 // skips what already went through. New accounts and pockets are referred to by draft key until they exist.
-import { accountBalance, kept, owes, type Draft } from './draft';
+import { isCard } from '../../../../../src/domain/recurring';
+import { accountBalance, kept, type Draft } from './draft';
 
 type AccountPatch = {
   name?: string;
@@ -50,7 +51,7 @@ export function toSteps(draft: Draft): Step[] {
     const json: AccountPatch = {};
     if (a.name !== a.seedName) json.name = a.name;
     json.kind = a.kind; // cheap to resend, and the seed's kind isn't kept in the draft
-    if (owes(a.kind) && a.card)
+    if (isCard(a.kind) && a.card)
       Object.assign(json, {
         credit_limit: a.card.limit!,
         statement_day: a.card.closes!,
@@ -66,7 +67,7 @@ export function toSteps(draft: Draft): Step[] {
         accountKey: a.key,
         name: a.name,
         kind: a.kind,
-        ...(owes(a.kind) &&
+        ...(isCard(a.kind) &&
           a.card && {
             card: {
               creditLimit: a.card.limit!,
@@ -95,7 +96,7 @@ export function toSteps(draft: Draft): Step[] {
     const total = accountBalance(a);
     if (!total) continue;
     // A card's or pay later's amount is what's owed: a negative balance, kept whole in Main.
-    if (owes(a.kind)) {
+    if (isCard(a.kind)) {
       const billed = a.card?.billed ?? 0;
       steps.push({
         id: `bal:${a.key}`,

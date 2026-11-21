@@ -4,7 +4,7 @@ import type { ServiceDeps } from '../../context';
 import { addDays, addMonths, jakartaToday, realDay } from '../../domain/cycle';
 import { daysBetween } from '../../domain/forecast';
 import { DomainError } from '../../domain/ledger';
-import { costOf, dueDates, looksMonthly, statementOf } from '../../domain/recurring';
+import { costOf, dueDates, isCard, looksMonthly, statementOf } from '../../domain/recurring';
 import type { Recurring } from '../../repos/recurring';
 import type { LedgerService } from '../ledger/service';
 import { advance, scheduleOf } from './advance';
@@ -24,7 +24,6 @@ type Input = {
 
 // "Found in your entries" looks this far back: room for three or four monthly payments.
 const LOOK_BACK_DAYS = 100;
-const CARD_KINDS = ['CREDIT_CARD', 'PAYLATER'];
 
 export function createRecurringService({
   ws,
@@ -105,7 +104,7 @@ export function createRecurringService({
 
       const cards = await Promise.all(
         c.accounts
-          .filter(a => CARD_KINDS.includes(a.kind) && a.statement_day && !a.archived_at)
+          .filter(a => isCard(a.kind) && a.statement_day && !a.archived_at)
           .map(async a => {
             const { cutOff, dueOn } = statementOf(a.statement_day!, a.due_day, day);
             const s = await repos.recurring.statement(ws, a.id, cutOff);

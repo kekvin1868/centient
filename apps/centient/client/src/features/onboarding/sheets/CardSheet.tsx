@@ -7,7 +7,7 @@ import { formatMoney } from '../../../lib/format';
 import { Keypad, keypadKey, keypadValue, pressKey } from '../../../ui/night/Keypad';
 import { NightSheet } from '../../../ui/night/NightSheet';
 import { typing } from '../../../ui/night/useLayers';
-import type { AccountDraft, CardDraft } from '../model/draft';
+import { dayWord, type AccountDraft, type CardDraft } from '../model/draft';
 
 type Props = {
   account: AccountDraft;
@@ -21,7 +21,6 @@ const TABS: { field: Field; label: string }[] = [
   { field: 'billed', label: 'LAST BILL' },
   { field: 'since', label: 'SINCE' },
 ];
-const dayText = (d: number | null) => (d === null ? '??' : d === 31 ? 'LAST' : String(d));
 /** One step along 1-31, wrapping; from ?? it starts on `from`. */
 const step = (d: number | null, by: number, from: number) =>
   d === null ? from : ((d - 1 + by + 31) % 31) + 1;
@@ -109,7 +108,6 @@ export function CardSheet({ account, onSave, onClose }: Props) {
                   type="button"
                   role="tab"
                   aria-selected={on === t.field}
-                  aria-pressed={on === t.field}
                   onClick={() => setOn(t.field)}
                 >
                   {t.label}
@@ -142,7 +140,7 @@ export function CardSheet({ account, onSave, onClose }: Props) {
                         ◂
                       </button>
                       <b className={day === null ? 'unk' : ''} aria-live="polite">
-                        {dayText(day)}
+                        {dayWord(day)}
                       </b>
                       <button
                         type="button"

@@ -2,7 +2,7 @@
 import type { ServiceDeps } from '../../context';
 import type { Patch } from '../../lib/schemas';
 import { jakartaToday, toOccurredAt } from '../../domain/cycle';
-import { statementOf } from '../../domain/recurring';
+import { isCard, statementOf } from '../../domain/recurring';
 import {
   assertBalanced,
   DomainError,
@@ -13,9 +13,6 @@ import {
 import type { Account } from '../../repos/accounts';
 
 export type AccountsService = ReturnType<typeof createAccountsService>;
-
-/** Credit card and pay later: a limit and a monthly bill (closing day + pay-by day). */
-export const isCard = (kind: string) => kind === 'CREDIT_CARD' || kind === 'PAYLATER';
 
 export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) {
   const stamp = () => new Date(now()).toISOString();

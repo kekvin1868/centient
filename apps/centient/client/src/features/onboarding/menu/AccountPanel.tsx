@@ -4,7 +4,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { ACCOUNT_KINDS, formatMoney } from '../../../lib/format';
 import { RichType } from '../../../ui/night/RichType';
-import { cardSet, NAME_MAX, owes, type AccountDraft } from '../model/draft';
+import { isCard } from '../../../../../src/domain/recurring';
+import { cardSet, dayWord, NAME_MAX, type AccountDraft } from '../model/draft';
 import { PocketList } from './PocketList';
 
 /** Static jolt, a quick scanline redraw, or a glitch. */
@@ -90,14 +91,14 @@ export function AccountPanel({
             {!a ? '—' : !a.seedName ? 'DELETE' : a.kept ? 'DROP' : 'KEEP'}
           </button>
         </div>
-        {a?.kept && owes(a.kind) && (
+        {a?.kept && isCard(a.kind) && (
           <button
             type="button"
             className={`n-btn n-card ${cardSet(a) ? '' : 'unset'}`}
             onClick={onCard}
           >
             {cardSet(a)
-              ? `LIMIT ${formatMoney(a.card!.limit!)} · CLOSES ${a.card!.closes === 31 ? 'LAST' : a.card!.closes} · PAY BY ${a.card!.payBy === 31 ? 'LAST' : a.card!.payBy}`
+              ? `LIMIT ${formatMoney(a.card!.limit!)} · CLOSES ${dayWord(a.card!.closes)} · PAY BY ${dayWord(a.card!.payBy)}`
               : 'SET LIMIT + BILL DAYS ▸'}
           </button>
         )}

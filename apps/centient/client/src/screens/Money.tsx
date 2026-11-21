@@ -9,7 +9,7 @@ import { shownBalance, TotalBalance } from '../features/accounts/TotalBalance';
 import { Budgets } from '../features/budgets/Budgets';
 import { PaidBackSheet } from '../features/entries/PaidBackSheet';
 import { InstallmentsSection } from '../features/installments/InstallmentsSection';
-import { takesInstallments } from '../features/installments/plans';
+import { isCard } from '../../../src/domain/recurring';
 import { AccountPockets } from '../features/pockets/AccountPockets';
 import { CardStatement } from '../features/recurring/CardStatement';
 import { Page } from '../layouts/Page';
@@ -77,7 +77,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
         onPay={(x, mode) => setPay({ tabId: x.id, mode })}
       >
         {/* A card has no pockets: its balance is what is used of its limit. */}
-        {a && a.kind !== 'IOU' && !takesInstallments(a.kind) && (
+        {a && a.kind !== 'IOU' && !isCard(a.kind) && (
           <AccountPockets
             key={`pockets:${a.id}`}
             account={a}
@@ -85,10 +85,8 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
             pockets={pockets}
           />
         )}
-        {a && takesInstallments(a.kind) && <CardStatement key={`bill:${a.id}`} account={a} />}
-        {a && takesInstallments(a.kind) && (
-          <InstallmentsSection key={`plans:${a.id}`} account={a} />
-        )}
+        {a && isCard(a.kind) && <CardStatement key={`bill:${a.id}`} account={a} />}
+        {a && isCard(a.kind) && <InstallmentsSection key={`plans:${a.id}`} account={a} />}
       </PickedAccount>
       {pay && <PaidBackSheet {...pay} onClose={() => setPay(null)} />}
       <Budgets />

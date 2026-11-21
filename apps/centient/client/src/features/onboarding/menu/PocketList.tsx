@@ -3,7 +3,8 @@
 // the list. A card / pay later has no pockets: its hero is what is USED of the limit, and a tap opens its card sheet.
 import { formatMoney } from '../../../lib/format';
 import { useExits } from '../../../ui/night/useExits';
-import { owes, type AccountDraft } from '../model/draft';
+import { isCard } from '../../../../../src/domain/recurring';
+import type { AccountDraft } from '../model/draft';
 
 export function PocketList({
   account,
@@ -17,7 +18,7 @@ export function PocketList({
   onCard: () => void;
 }) {
   const main = account?.pockets.find(p => p.main);
-  const card = account && owes(account.kind);
+  const card = account && isCard(account.kind);
   const shown = useExits(account?.pockets.filter(p => !p.main) ?? [], p => p.key);
   return (
     <>

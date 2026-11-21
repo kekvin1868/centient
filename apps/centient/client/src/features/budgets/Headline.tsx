@@ -9,7 +9,8 @@ import { budgetQueries } from '../../models/budget';
 import { usePrices, type Prices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 import { CardLimits } from '../accounts/CardLimits';
-import { isLimit, shownBalance, totalOf } from '../accounts/TotalBalance';
+import { isCard } from '../../../../src/domain/recurring';
+import { shownBalance, totalOf } from '../accounts/TotalBalance';
 import { HomeBudgets } from './HomeBudgets';
 
 type Head = {
@@ -30,14 +31,14 @@ function headOf(sel: string | null, bal: Balances, prices: Prices): Head {
       minor: shownBalance(a),
       currency: a.currency_code,
       note:
-        isLimit(a) && a.credit_limit
+        isCard(a.kind) && a.credit_limit
           ? `Left to spend · owed ${formatMoney(Math.max(0, -a.balance), a.currency_code)}`
           : (ACCOUNT_KINDS[a.kind] ?? ''),
       hurt: false,
       cta: 'Update balance',
     };
   const { total, priced } = totalOf(bal.accounts, prices);
-  const n = bal.accounts.filter(a => !isLimit(a)).length;
+  const n = bal.accounts.filter(a => !isCard(a.kind)).length;
   return {
     label: `Your money${priced.size ? ' ≈' : ''}`,
     minor: total,

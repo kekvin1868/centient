@@ -9,6 +9,7 @@ import { IdleHint } from '../../../ui/night/IdleHint';
 import { NightList, type NightRow } from '../../../ui/night/NightList';
 import { gestureProps } from '../../../ui/night/useGesture';
 import { typing, useLayerKeys } from '../../../ui/night/useLayers';
+import { isCard } from '../../../../../src/domain/recurring';
 import { FlowBoard } from '../board/FlowBoard';
 import type { Board } from '../board/state';
 import { HINTS } from '../model/copy';
@@ -18,7 +19,6 @@ import {
   addPocket,
   cardsUnset,
   kept,
-  owes,
   deletePocket,
   MAX_ACCOUNTS,
   removePocket,
@@ -112,19 +112,19 @@ export function NightMenu({
     if (a?.kept) setOpen({ kind: 'type' });
   };
   const newPocket = () => {
-    if (!a?.kept || owes(a.kind)) return;
+    if (!a?.kept || isCard(a.kind)) return;
     const r = addPocket(draft, a.key);
     change(r.draft);
     setOpen({ kind: 'pocket', key: r.key });
   };
   // 0 is the balance (Main, always first); 1-9 the pockets under it.
   const openPocket = (i: number) => {
-    if (a && owes(a.kind)) return i === 0 ? card() : undefined;
+    if (a && isCard(a.kind)) return i === 0 ? card() : undefined;
     const p = a?.kept && a.pockets[i];
     if (p) setOpen({ kind: 'pocket', key: p.key });
   };
   const card = () => {
-    if (a?.kept && owes(a.kind)) setOpen({ kind: 'card' });
+    if (a?.kept && isCard(a.kind)) setOpen({ kind: 'card' });
   };
   // A card / pay later without its limit and bill days would have no bill: CONFIRM takes you to it instead.
   const confirm = () => {
