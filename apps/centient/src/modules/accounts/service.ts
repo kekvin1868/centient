@@ -13,6 +13,9 @@ import type { Account } from '../../repos/accounts';
 
 export type AccountsService = ReturnType<typeof createAccountsService>;
 
+/** Credit card and pay later: a limit and a monthly bill (closing day + pay-by day). */
+export const isCard = (kind: string) => kind === 'CREDIT_CARD' || kind === 'PAYLATER';
+
 export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) {
   const stamp = () => new Date(now()).toISOString();
 
@@ -24,16 +27,25 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
       provider?: string | null;
       currency?: string;
       dueDay?: number | null;
+      statementDay?: number | null;
       creditLimit?: number | null;
       openingBalance?: number;
     }): Promise<Account> {
+      const card = isCard(i.kind);
+      // Without these the card has no bill and its limit reads as debt (owner test 2026-11-21).
+      if (card && !(i.creditLimit && i.statementDay && i.dueDay))
+        throw new DomainError(
+          'CARD_SETUP',
+          'A card or pay later needs its limit, closing day and pay-by day',
+        );
       const account = await repos.accounts.create(ws, {
         name: i.name.trim(),
         kind: i.kind,
         provider: i.provider?.trim().toUpperCase() || null,
         currency_code: i.currency ?? 'IDR',
         due_day: i.dueDay ?? null,
-        credit_limit: i.creditLimit ?? null,
+        statement_day: card ? i.statementDay! : null,
+        credit_limit: card ? i.creditLimit! : null,
       });
       catalog.invalidate();
       // Opening balance is an INCOME in "Opening balance"; a card's or paylater's debt is negative.

@@ -130,7 +130,13 @@ describe('insights totals (R4.1 - R4.4)', () => {
 
   it('T4.6 an installment payment (TRANSFER to a pay later account) is not spending', async () => {
     const t = await november();
-    const paylater = await t.svc.accounts.create({ name: 'Kredivo', kind: 'PAYLATER' });
+    const paylater = await t.svc.accounts.create({
+      name: 'Kredivo',
+      kind: 'PAYLATER',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
     await t.svc.ledger.record([
       {
         type: 'TRANSFER',

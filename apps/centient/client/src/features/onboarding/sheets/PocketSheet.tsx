@@ -88,7 +88,7 @@ export function PocketSheet({ draft, account, pocket, onSave, onDelete, onClose 
 
   const question = owe ? (
     <>
-      What do you owe on <em>{account.name}</em>?
+      How much is already used on <em>{account.name}</em>?
     </>
   ) : pocket.main ? (
     <>

@@ -2,10 +2,25 @@
 // skips what already went through. New accounts and pockets are referred to by draft key until they exist.
 import { accountBalance, kept, owes, type Draft } from './draft';
 
+type AccountPatch = {
+  name?: string;
+  kind?: string;
+  credit_limit?: number;
+  statement_day?: number;
+  due_day?: number;
+};
+
 export type Step =
   | { id: string; op: 'deleteAccount'; accountId: string }
-  | { id: string; op: 'patchAccount'; accountId: string; json: { name?: string; kind?: string } }
-  | { id: string; op: 'createAccount'; accountKey: string; name: string; kind: string }
+  | { id: string; op: 'patchAccount'; accountId: string; json: AccountPatch }
+  | {
+      id: string;
+      op: 'createAccount';
+      accountKey: string;
+      name: string;
+      kind: string;
+      card?: { creditLimit: number; statementDay: number; dueDay: number };
+    }
   | { id: string; op: 'patchPocket'; pocketId: string; name: string }
   | {
       id: string;
@@ -32,9 +47,15 @@ export function toSteps(draft: Draft): Step[] {
     if (a.id && !a.kept) steps.push({ id: `del:${a.key}`, op: 'deleteAccount', accountId: a.id });
   for (const a of kept(draft)) {
     if (!a.id) continue;
-    const json: { name?: string; kind?: string } = {};
+    const json: AccountPatch = {};
     if (a.name !== a.seedName) json.name = a.name;
     json.kind = a.kind; // cheap to resend, and the seed's kind isn't kept in the draft
+    if (owes(a.kind) && a.card)
+      Object.assign(json, {
+        credit_limit: a.card.limit!,
+        statement_day: a.card.closes!,
+        due_day: a.card.payBy!,
+      });
     steps.push({ id: `acc:${a.key}`, op: 'patchAccount', accountId: a.id, json });
   }
   for (const a of kept(draft))
@@ -45,6 +66,14 @@ export function toSteps(draft: Draft): Step[] {
         accountKey: a.key,
         name: a.name,
         kind: a.kind,
+        ...(owes(a.kind) &&
+          a.card && {
+            card: {
+              creditLimit: a.card.limit!,
+              statementDay: a.card.closes!,
+              dueDay: a.card.payBy!,
+            },
+          }),
       });
   for (const a of kept(draft)) {
     for (const p of a.pockets) {

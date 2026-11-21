@@ -9,6 +9,7 @@ import { formatMoney } from '../../lib/format';
 import { idrValue, priceAge } from '../../lib/prices';
 import { usePrices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
+import { HpBar } from '../../ui/HpBar';
 import { isLimit, shownBalance } from './TotalBalance';
 import { UpdateBalanceSheet } from './UpdateBalanceSheet';
 import { isStandIn, me } from '../../lib/state';
@@ -82,12 +83,24 @@ export function PickedAccount({
               </div>
             )}
             {capped && (
-              <div className="mt-2 text-[14px] font-semibold text-muted">
-                Left to spend · owed{' '}
-                <span className="num text-ink">
-                  {formatMoney(Math.max(0, -a.balance), a.currency_code)}
-                </span>{' '}
-                of <span className="num">{formatMoney(capped, a.currency_code)}</span>
+              // The card's own limit, once: left to spend above, a bar in the card's colour, what is used of it.
+              <div className={`rarity-${a.kind} mt-1`}>
+                <div className="text-[14px] font-semibold text-muted">left to spend</div>
+                <div className="mt-2">
+                  <HpBar
+                    value={Math.max(0, free)}
+                    max={capped}
+                    size="big"
+                    fill="bg-[var(--rarity)]"
+                  />
+                </div>
+                <p className="mt-1.5 text-[14px] text-muted">
+                  Used{' '}
+                  <span className="num font-bold text-ink">
+                    {formatMoney(Math.max(0, -a.balance), a.currency_code)}
+                  </span>{' '}
+                  of <span className="num">{formatMoney(capped, a.currency_code)}</span>
+                </p>
               </div>
             )}
             {a.currency_code !== 'IDR' && <CryptoValue account={a} />}

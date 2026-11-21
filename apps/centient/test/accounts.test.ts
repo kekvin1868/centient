@@ -36,14 +36,26 @@ describe('accounts in any currency', () => {
     ).toBe('JPY');
   });
 
+  it('refuses a card or pay later without its limit, closing day and pay-by day', async () => {
+    const ws = await ensure('nolimit@test');
+    for (const missing of ['creditLimit', 'statementDay', 'dueDay'] as const) {
+      const i = { name: 'Kartu', kind: 'CREDIT_CARD', creditLimit: 1, statementDay: 20, dueDay: 5 };
+      await expect(svc(ws).accounts.create({ ...i, [missing]: null })).rejects.toMatchObject({
+        code: 'CARD_SETUP',
+      });
+    }
+  });
+
   it('saves a new pay later account with its limit, so nothing reads as owed', async () => {
     const ws = await ensure('limit@test');
     const pl = await svc(ws).accounts.create({
       name: 'SPayLater',
       kind: 'PAYLATER',
       creditLimit: 21_000_000,
+      statementDay: 31,
+      dueDay: 5,
     });
-    expect(pl.credit_limit).toBe(21_000_000);
+    expect(pl).toMatchObject({ credit_limit: 21_000_000, statement_day: 31, due_day: 5 });
     expect((await w.repos.accounts.list(ws)).find(a => a.id === pl.id)!.credit_limit).toBe(
       21_000_000,
     );

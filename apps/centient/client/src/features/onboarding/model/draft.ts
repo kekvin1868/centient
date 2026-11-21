@@ -13,6 +13,8 @@ export type PocketDraft = {
   balance: number | null;
   main: boolean;
 };
+/** A card / pay later's limit and bill days (closing day, pay-by day); null = not set yet. */
+export type CardDraft = { limit: number | null; closes: number | null; payBy: number | null };
 /** `seedName` is the name it came with (null = added in this draft); a seeded account can be dropped and kept again. */
 export type AccountDraft = {
   key: string;
@@ -22,6 +24,8 @@ export type AccountDraft = {
   kind: string;
   kept: boolean;
   pockets: PocketDraft[];
+  /** Only read while the kind is a card / pay later; kept when the type changes away and back. */
+  card?: CardDraft;
 };
 export type Draft = AccountDraft[];
 
@@ -84,6 +88,7 @@ export function fromCatalog(accounts: Account[], envelopes: Envelope[]): Draft {
         kind: a.kind,
         kept: true,
         pockets: [mainPocket(a.default_envelope_id), ...others],
+        card: { limit: a.credit_limit, closes: a.statement_day, payBy: a.due_day },
       };
     });
 }
@@ -103,6 +108,12 @@ export const rename = (d: Draft, k: string, name: string) => {
   return v ? map(d, k, a => ({ ...a, name: v })) : d;
 };
 export const setKind = (d: Draft, k: string, kind: string) => map(d, k, a => ({ ...a, kind }));
+export const setCard = (d: Draft, k: string, card: CardDraft) => map(d, k, a => ({ ...a, card }));
+
+/** Whether a card / pay later has its limit and both bill days (without them it has no bill). */
+export const cardSet = (a: AccountDraft) => Boolean(a.card?.limit && a.card.closes && a.card.payBy);
+/** Kept cards / pay later still missing their limit or a bill day: CONFIRM waits for them. */
+export const cardsUnset = (d: Draft) => kept(d).filter(a => owes(a.kind) && !cardSet(a));
 
 /** Seeded accounts drop and come back; ones added in this draft are simply removed. */
 export const toggle = (d: Draft, k: string) => {

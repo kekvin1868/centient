@@ -14,6 +14,7 @@ export const accountsRoutes = new Hono<AppEnv>()
         provider: text(30).nullish(),
         currency: currency.optional(),
         dueDay: z.number().int().min(1).max(31).nullish(),
+        statementDay: z.number().int().min(1).max(31).nullish(),
         creditLimit: money.nullish(),
         openingBalance: z.number().int().optional(),
       }),

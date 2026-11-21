@@ -20,7 +20,8 @@ export function ConfirmChanges({ draft, links, sketches, onConfirm, onClose }: P
     await onConfirm();
     setBusy(false);
   };
-  const unknown = kept(draft).filter(a => accountBalance(a) === null).length;
+  // A card with nothing typed for "already used" simply starts unused: not a ???.
+  const unknown = kept(draft).filter(a => accountBalance(a) === null && !owes(a.kind)).length;
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   return (
     <NightSheet
@@ -45,6 +46,11 @@ export function ConfirmChanges({ draft, links, sketches, onConfirm, onClose }: P
                 (ACCOUNT_KINDS[a.kind] ?? a.kind).toUpperCase(),
                 plural(a.pockets.length, 'pocket', 'pockets'),
               ];
+              const card = owes(a.kind) && a.card?.limit ? a.card : null;
+              if (card)
+                note.push(
+                  `CLOSES ${card.closes === 31 ? 'LAST' : card.closes} · PAY BY ${card.payBy === 31 ? 'LAST' : card.payBy}`,
+                );
               if (!a.seedName) note.push('NEW');
               else if (a.name !== a.seedName) note.push(`WAS ${a.seedName}`);
               return (
@@ -53,10 +59,13 @@ export function ConfirmChanges({ draft, links, sketches, onConfirm, onClose }: P
                   <span className="money">
                     {!a.kept ? (
                       'DROPPED'
+                    ) : card ? (
+                      // A card shows what is left of its limit, as everywhere else in the app.
+                      `LEFT ${formatMoney(card.limit! - (b ?? 0))}`
                     ) : b === null ? (
                       <span className="unk">???</span>
                     ) : (
-                      `${owes(a.kind) ? 'OWE ' : ''}${formatMoney(b)}`
+                      formatMoney(b)
                     )}
                   </span>
                   <small>{note.join(' · ')}</small>
