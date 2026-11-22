@@ -95,7 +95,7 @@ test('12× on the receipt: Each month is the price ÷ 12; typing more shows the 
   await expect(each).toHaveValue('1.000.000');
   await expect(receipt().getByText(/interest/)).toHaveCount(0); // 0%: nothing to say
   await each.fill('1050000');
-  await expect(receipt()).toContainText('incl. Rp50.000 interest');
+  await expect(receipt()).toContainText('incl. Rp50.000 interest'); // per month (owner 2026-11-22)
   await receipt().getByRole('button', { name: 'Log it' }).tap();
   await expect(receipt()).toBeHidden();
 
@@ -128,7 +128,7 @@ test('changing the count on the entry: the plan follows', async () => {
   await expect(pay.getByRole('button', { name: '12×' })).toHaveAttribute('aria-pressed', 'true');
   await expect(edit.getByRole('textbox', { name: 'Each month' })).toHaveValue('1.050.000');
   await pay.getByRole('button', { name: '6×' }).tap();
-  // A new count starts again from the price ÷ count.
+  // A new count starts again from the price ÷ count (owner 2026-11-22: never guess the bank's new rate).
   await expect(edit.getByRole('textbox', { name: 'Each month' })).toHaveValue('2.000.000');
   await edit.getByRole('button', { name: 'Save' }).tap();
   await expect(edit).toBeHidden();
@@ -192,14 +192,20 @@ test('over the limit: a live line under Paid with, then a sheet with no "Save an
   expect((await account('Kredivo')).balance).toBe(0);
 });
 
-test('Pay with another account: accounts that can cover it come first, each with what is left', async () => {
+test('Pay with another account: ones that cover it first, the rest marked Not enough', async () => {
   await receipt().getByRole('button', { name: 'Log it' }).tap();
   await overLimit()
     .getByRole('button', { name: /Pay with another account/ })
     .tap();
+  // Owner 2026-11-22: every account you can pay with (cards by limit left, the rest by balance), the ones that
+  // cover the spend first and tappable; the rest listed under them, marked Not enough, not tappable.
   const choices = overLimit().getByRole('button', { name: /left/ });
   await expect(choices.first()).toContainText('BCA'); // 8jt left: covers it
   await expect(overLimit().getByRole('button', { name: /^Mandiri/ })).toContainText('Rp10.000.000');
+  const short = overLimit().getByRole('button', { name: /^Dailies/ }); // seeded, Rp0
+  await expect(short).toContainText('Not enough');
+  await expect(short).toBeDisabled();
+  await expect(choices.last()).toContainText('Not enough');
   await overLimit()
     .getByRole('button', { name: /^Mandiri/ })
     .tap();
@@ -276,8 +282,8 @@ test('quick add: "12x" on an account that is not a card asks "Pay later or card?
 });
 
 test('quick add: a plan with interest asks "Each month?"', async () => {
-  // ASSUMED trigger (owner to confirm): an amount after the count, "12x 1.05jt", is the monthly payment;
-  // the card asks "Each month?" with it filled in, so a typo is caught before it becomes 12 bills.
+  // Owner 2026-11-22: an amount after the count, "6x 1.05jt", is the monthly payment; the card asks
+  // "Each month?" with it filled in, so a typo is caught before it becomes 6 bills.
   await box().fill('tv 6jt bca 6x 1.05jt');
   await expect(page.getByText('Each month?')).toBeVisible();
   const each = page.getByRole('textbox', { name: 'Each month' });
