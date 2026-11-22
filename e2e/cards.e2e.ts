@@ -239,3 +239,100 @@ test('Home on All accounts keeps the limits box with both kinds', async () => {
   await limits().scrollIntoViewIfNeeded();
   await shot('8-home-all-accounts');
 });
+
+test('add a credit card: what is used splits into the last bill and spent since', async () => {
+  await tab('Menu').tap();
+  await page.getByRole('option', { name: 'Accounts & pockets', exact: true }).tap();
+  await page.getByRole('button', { name: 'Add account' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Add account' });
+  await sheet.getByRole('textbox', { name: 'Name' }).fill('BCA Card');
+  await sheet.getByRole('combobox', { name: 'Type' }).selectOption({ label: 'Credit card' });
+  await sheet.getByRole('textbox', { name: 'Limit' }).fill('10000000');
+  await sheet.getByRole('combobox', { name: 'Bill closes on day' }).selectOption({ label: '25' });
+  await sheet.getByRole('combobox', { name: 'Pay by day' }).selectOption({ label: '10' });
+  await sheet.getByRole('textbox', { name: 'Unpaid on the last bill' }).fill('2000000');
+  await sheet.getByRole('textbox', { name: 'Spent since the last bill' }).fill('500000');
+  await shot('9-add-credit-card');
+  await sheet.getByRole('button', { name: 'Add account' }).tap();
+  await expect(sheet).toBeHidden();
+
+  const bca = await account('BCA Card');
+  expect(bca).toMatchObject({
+    kind: 'CREDIT_CARD',
+    credit_limit: 10_000_000,
+    statement_day: 25,
+    due_day: 10,
+  });
+  expect(await balance('BCA Card')).toBe(-2_500_000);
+  const bill = (
+    (await (await page.request.get('/api/recurring')).json()).cards as {
+      accountId: string;
+      bill: number;
+      spentSince: number;
+    }[]
+  ).find(c => c.accountId === bca.id)!;
+  const today = new Date(Date.now() + 7 * 3600e3).getUTCDate();
+  if (today !== 25) expect(bill).toMatchObject({ bill: 2_000_000, spentSince: 500_000 });
+});
+
+test('a card has no pockets: Add pocket leaves cards out, the server refuses one', async () => {
+  await page.getByRole('button', { name: 'Add pocket' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Add pocket' });
+  const inside = await sheet
+    .getByRole('combobox', { name: 'Inside' })
+    .locator('option')
+    .allTextContents();
+  expect(inside).toContain('Main Account');
+  for (const card of ['Miscs', 'SPayLater', 'BCA Card']) expect(inside).not.toContain(card);
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+
+  const refused = await page.request.post('/api/envelopes', {
+    data: { accountId: (await account('Miscs')).id, name: 'Rent', kind: 'SPENDING' },
+  });
+  expect(refused.ok()).toBe(false);
+  expect(await refused.text()).toContain('CARD_POCKETS');
+});
+
+test('Edit account: a card keeps its limit and bill days, and can change them', async () => {
+  await page.getByRole('button', { name: /^Miscs/ }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Miscs' });
+  await sheet.getByRole('textbox', { name: 'Limit' }).fill('');
+  await expect(sheet.getByRole('button', { name: 'Enter the limit' })).toBeDisabled();
+  await sheet.getByRole('textbox', { name: 'Limit' }).fill('15000000');
+  await sheet.getByRole('combobox', { name: 'Bill closes on day' }).selectOption({ label: '25' });
+  await shot('10-edit-card');
+  await sheet.getByRole('button', { name: 'Save' }).tap();
+  await expect(sheet).toBeHidden();
+  expect(await account('Miscs')).toMatchObject({
+    credit_limit: 15_000_000,
+    statement_day: 25,
+    due_day: 5,
+  });
+});
+
+test('a card from before (no bill days) asks for them where its bill goes', async () => {
+  // Cards made before slice 1 have no bill days; the API still lets a PATCH clear them, which stands in for one.
+  const spl = await account('SPayLater');
+  await page.request.patch(`/api/accounts/${spl.id}`, {
+    data: { statement_day: null, due_day: null },
+  });
+  await page.reload();
+  await tab('Money').tap();
+  await pick('SPayLater');
+  const bill = page.getByRole('region', { name: 'Card bill' });
+  await expect(bill).toContainText('needs its limit and bill days');
+  await shot('11-old-card');
+  await bill.getByRole('button', { name: 'Set limit and bill days ▸' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'SPayLater' });
+  await expect(sheet.getByRole('button', { name: 'Pick the bill days' })).toBeDisabled();
+  await sheet
+    .getByRole('combobox', { name: 'Bill closes on day' })
+    .selectOption({ label: 'Last day (31)' });
+  await sheet.getByRole('combobox', { name: 'Pay by day' }).selectOption({ label: '5' });
+  await sheet.getByRole('button', { name: 'Save' }).tap();
+  await expect(sheet).toBeHidden();
+  await expect(bill.getByRole('button', { name: 'Set limit and bill days ▸' })).toHaveCount(0);
+  await expect(bill).not.toContainText('needs its limit');
+  expect(await account('SPayLater')).toMatchObject({ statement_day: 31, due_day: 5 });
+});
