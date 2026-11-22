@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p apps/centient && tsc --noEmit -p apps/centient/client",
+    "typecheck": "tsc --noEmit -p apps/centient && tsc --noEmit -p apps/centient/client && tsc --noEmit -p e2e",
+    "lint": "oxlint --type-aware --tsconfig e2e/tsconfig.json e2e playwright.config.ts",
     "dev": "npm run dev -w apps/centient",
     "phone": "npm run phone -w apps/centient",
     "deploy": "npm run deploy -w apps/centient",
@@ -20,6 +21,9 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261016.1",
     "@playwright/test": "1.63.0",
+    "@types/node": "26.6.6",
+    "oxlint": "1.92.0",
+    "oxlint-tsgolint": "7.0.2006",
     "prettier": "3.9.10",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5",

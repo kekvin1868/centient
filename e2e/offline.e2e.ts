@@ -77,9 +77,10 @@ test('closing and reopening the app offline keeps what waits', async () => {
     JSON.parse(localStorage.getItem('centient:outbox') ?? '[]'),
   );
   expect(kept.map((i: { op: string }) => i.op)).toEqual(['create', 'create']);
-  // Nothing reached the server.
-  await page.context().setOffline(false);
+  // Nothing reached the server. Counted before the network is back: WebKit fires `online` by itself then, and the
+  // send starts at once.
   expect(await logged()).toHaveLength(1);
+  await page.context().setOffline(false);
 });
 
 test('back online: each one is saved once, with the id the phone gave it', async () => {
@@ -107,6 +108,12 @@ test('back online: each one is saved once, with the id the phone gave it', async
 });
 
 test('offline: deleting a saved entry hides it and gives the money back; online it is gone', async () => {
+  // The waiting balances are built by code the app loads while idle after it opens (Safari has no
+  // requestIdleCallback: 1.5 s after). Gone offline before that, a delete can't be counted (in dev there is no
+  // service worker to serve it), so wait for it first.
+  const builder = page.waitForResponse(r => r.url().includes('/models/waiting'));
+  await page.reload();
+  await builder;
   await page.context().setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
   const kopi = row('Kopi');

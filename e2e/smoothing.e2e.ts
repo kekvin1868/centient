@@ -14,7 +14,11 @@ test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
   await page.goto('/');
 });
-test.afterAll(async () => page.close());
+test.afterAll(async () => {
+  // Reset so the next project (another browser) starts from a fresh first run too.
+  await page.request.post('/api/workspace/reset');
+  await page.close();
+});
 
 const api = (path: string, init?: { method?: string; data?: unknown }) =>
   page.request.fetch(`/api${path}`, { method: init?.method ?? 'GET', data: init?.data });
@@ -292,8 +296,8 @@ test('pockets live inside an account: add one, move money in, the account balanc
   await page.keyboard.press('Enter');
   const move = page.getByRole('dialog', { name: 'Add money to Rent' });
   // It opens once the actions sheet is gone, so the focus handed back doesn't land behind it.
-  await page.waitForTimeout(500); // the actions sheet's exit is over by now
-  expect(await move.evaluate(d => d.contains(document.activeElement))).toBe(true);
+  await expect(page.getByRole('dialog', { name: /^Rent/ })).toBeHidden();
+  await expect.poll(() => move.evaluate(d => d.contains(document.activeElement))).toBe(true);
   await move.getByRole('textbox', { name: 'Amount' }).fill('(1000000+500000');
   await expect(move.getByRole('button', { name: 'Check the amount' })).toBeDisabled();
   await move.getByRole('textbox', { name: 'Amount' }).fill('(1000000+500000)*2/2'); // a sum, worked out
@@ -754,7 +758,10 @@ test('budgets are grouped per currency, and the ? beside the heading explains th
   expect(Math.abs(title.y + title.height / 2 - (button.y + button.height / 2))).toBeLessThan(8); // same row
   expect(button.x).toBeGreaterThan(title.x + title.width); // title left, button right
   expect(page.viewportSize()!.width - (button.x + button.width)).toBeLessThan(40); // at the far right
-  await help.tap();
+  // Opened by keyboard: focus going back matters to keyboard users (Safari doesn't focus a tapped button, so a tap
+  // leaves nothing to hand back to).
+  await help.focus();
+  await help.press('Enter');
   const guide = page.getByRole('dialog', { name: 'Insights Glossary' });
   for (const word of ['On track', 'Likely over', 'Over'])
     await expect(guide.getByText(word, { exact: true })).toBeVisible();

@@ -1,0 +1,14 @@
+{
+  // Type-checks the Playwright specs and config (npm run typecheck). Playwright runs them itself; nothing is emitted.
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "es2022",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "types": ["node"]
+  },
+  "include": ["*.ts", "../playwright.config.ts"]
+}
