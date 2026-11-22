@@ -10,7 +10,6 @@ import {
   rowsByDay,
   rowsOf,
 } from './billRun';
-import type { Plan } from './installment';
 import { bill } from './recurring.fixture';
 
 const today = '2026-11-15';
@@ -138,50 +137,38 @@ describe('the list', () => {
     ]);
   });
 
-  it("puts card bills and each plan's next installment among the bills, outside the run", () => {
+  it('puts card bills among the bills, outside the run; plans ride inside them', () => {
     const card = {
       accountId: 'card',
       cutOff: '2026-10-28',
-      dueOn: '2026-11-28',
+      dueOn: '2026-11-08',
       bill: 1_240_000,
       left: 1_240_000,
+      paidSince: 0,
       spentSince: 0,
+      before: null,
       lines: { carry: 0, spent: 0, slices: [], interest: [] },
     };
-    const part = (no: number, due: string, left: number) => ({ no, due, left, shares: [] });
-    const plan = {
-      id: 'p1',
-      accountId: 'paylater',
-      name: 'Phone',
-      installments: 6,
-      schedule: [
-        part(1, '2026-10-12', 0),
-        part(2, '2026-11-12', 500_000),
-        part(3, '2026-12-12', 500_000),
-      ],
-      next: { no: 2, due: '2026-11-12', left: 500_000, overdue: true },
-    } as unknown as Plan;
     const others = otherDues(
       [
+        { ...card, accountId: 'later', dueOn: '2026-12-28' },
         card,
         { ...card, accountId: 'paid-off', left: 0 },
         { ...card, accountId: 'no-day', dueOn: null },
       ],
-      [plan],
       today,
     );
-    expect(others.map(o => [o.key, o.late, o.next])).toEqual([
-      ['plan:p1:2', true, true],
-      ['card:card', false, true],
-      ['plan:p1:3', false, false],
+    expect(others.map(o => [o.key, o.late])).toEqual([
+      ['card:card', true],
+      ['card:later', false],
     ]);
-    expect(outsideRun(others, today)).toBe(2);
+    expect(outsideRun(others, today)).toBe(1);
 
     const groups = billGroups([bill({ id: 'soon', dues: ['2026-11-22'] })], today, others);
     expect(groups.map(g => [g.label, g.rows.map(r => ('item' in r ? r.item.id : r.key))])).toEqual([
-      ['Late', ['plan:p1:2']],
+      ['Late', ['card:card']],
       ['Next 7 days', ['soon']],
-      ['Later', ['card:card']],
+      ['Later', ['card:later']],
     ]);
     // The month's run is bills only.
     expect(monthRun([bill({ dues: ['2026-11-22'] })], today)[0]).toMatchObject({ count: 1 });

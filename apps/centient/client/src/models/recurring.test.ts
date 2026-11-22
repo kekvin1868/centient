@@ -1,6 +1,6 @@
 // How due dates read on screen (pure; no network).
 import { describe, expect, it } from 'vitest';
-import { comingUp, dueByDay, dueWords } from './recurring';
+import { afterCardBills, comingUp, dueByDay, dueWords } from './recurring';
 import { bill } from './recurring.fixture';
 
 describe('due dates on screen', () => {
@@ -19,7 +19,9 @@ describe('due dates on screen', () => {
       dueOn: '2026-11-15',
       bill: 1_000_000,
       left: 600_000,
+      paidSince: 400_000,
       spentSince: 0,
+      before: null,
       lines: { carry: 0, spent: 0, slices: [], interest: [] },
     };
     const list = {
@@ -42,6 +44,35 @@ describe('due dates on screen', () => {
       'card:card',
       'recurring:soon',
     ]);
+  });
+
+  it('takes card bills left to pay and card spending since off your money', () => {
+    const card = {
+      accountId: 'bca',
+      cutOff: '2026-11-20',
+      dueOn: '2026-12-05',
+      bill: 1_500_000,
+      left: 1_000_000,
+      paidSince: 500_000,
+      spentSince: 300_000,
+      before: null,
+      lines: { carry: 0, spent: 0, slices: [], interest: [] },
+    };
+    const idr = (id: string) => id !== 'usd';
+    expect(
+      afterCardBills(
+        10_000_000,
+        [
+          card,
+          { ...card, accountId: 'paid', left: 0, spentSince: 0 },
+          { ...card, accountId: 'refund', left: 0, spentSince: -50_000 },
+          { ...card, accountId: 'usd' },
+        ],
+        idr,
+      ),
+    ).toBe(8_700_000);
+    // No card owes anything: no line.
+    expect(afterCardBills(10_000_000, [{ ...card, left: 0, spentSince: 0 }], idr)).toBeNull();
   });
 
   it('groups bills by the day they fall due', () => {

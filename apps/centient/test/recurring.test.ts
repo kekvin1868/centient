@@ -380,7 +380,9 @@ describe('card statement', () => {
       dueOn: '2026-12-05',
       bill: 1_000_000,
       left: 1_000_000,
+      paidSince: 0,
       spentSince: 150_000,
+      before: null,
       lines: { carry: 0, spent: 1_000_000, slices: [], interest: [] },
     });
     await t.svc().ledger.record([
@@ -393,6 +395,56 @@ describe('card statement', () => {
       },
     ]);
     expect(await bill()).toMatchObject({ bill: 1_000_000, left: 600_000, spentSince: 150_000 });
+  });
+
+  it('logs interest from the statement as its own line, tagged by where it came from', async () => {
+    const t = await workspace('2026-11-25');
+    const card = await t.svc().accounts.create({
+      name: 'BCA Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
+    await t.spend('2026-10-10', 500_000, 'tokopedia', card.id); // Oct bill, never paid
+    await t.spend('2026-11-01', 700_000, 'grab', card.id);
+    const plan = await t.svc().installments.create({
+      accountId: card.id,
+      name: 'Phone',
+      amountPerInstallment: 100_000,
+      installments: 3,
+      paidCount: 0,
+      myShare: 100_000,
+      others: [],
+      alreadyInBalance: true,
+    });
+    const bill = async () => (await t.svc().recurring.list()).cards[0];
+    const log = (from: { month: string } | { planId: string }, amount: number) =>
+      t.svc().recurring.logInterest(card.id, { amount, from });
+
+    const unpaid = await log({ month: '2026-10' }, 45_000);
+    await log({ planId: plan.id }, 10_000);
+    const b = await bill();
+    expect(b).toMatchObject({ before: '2026-10', bill: 500_000 + 700_000 + 55_000 });
+    expect(b.lines).toMatchObject({ carry: 500_000, spent: 700_000 });
+    expect(b.lines.interest).toEqual([
+      expect.objectContaining({ from: '2026-10', planId: null, planName: null, amount: 45_000 }),
+      expect.objectContaining({ from: null, planId: plan.id, planName: 'Phone', no: null }),
+    ]);
+    // In Fees & Interests, on the closing day of the bill just printed.
+    const fees = await t.cat('Fees & Interests');
+    const rows = await t.w.db
+      .prepare('SELECT category_id, occurred_at FROM transactions WHERE group_id = ?')
+      .bind(unpaid)
+      .all<{ category_id: string; occurred_at: string }>();
+    expect(rows.results[0]).toMatchObject({ category_id: fees });
+    expect(rows.results[0].occurred_at.slice(0, 10)).toBe('2026-11-20');
+
+    await expect(log({ month: '2026-11' }, 1)).rejects.toThrow('before the last one');
+    await expect(log({ planId: 'nope' }, 1)).rejects.toThrow('not on this card');
+    // The bank waived it: deleting the entry drops the line.
+    await t.svc().ledger.remove(unpaid);
+    expect((await bill()).lines.interest.map(i => i.amount)).toEqual([10_000]);
   });
 });
 

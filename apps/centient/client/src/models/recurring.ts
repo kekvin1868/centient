@@ -17,6 +17,7 @@ export type FoundPayment = Res<typeof client.api.recurring.found.$get>['found'][
 export type RecurringBody = Req<typeof client.api.recurring.$post>['json'];
 type Patch = Req<(typeof client.api.recurring)[':id']['$patch']>['json'];
 type Paid = Req<(typeof client.api.recurring)[':id']['paid']['$post']>['json'];
+type Interest = Req<(typeof client.api.recurring.cards)[':accountId']['interest']['$post']>['json'];
 const one = client.api.recurring[':id'];
 
 export const recurringQueries = {
@@ -51,6 +52,9 @@ export const recurringApi = {
   /** Undoes a payment: deletes the expense that paid a bill, and the server moves the bill back to that date. */
   unpay: (entryId: string) =>
     call(client.api.entries[':id'].$delete({ param: { id: entryId }, query: {} })),
+  /** "Log interest" on a card bill: the bank's interest from the statement, tagged by where it came from. */
+  logInterest: (accountId: string, json: Interest) =>
+    call(client.api.recurring.cards[':accountId'].interest.$post({ param: { accountId }, json })),
   /** "Not a subscription": this merchant is no longer offered under "Found in your entries". */
   hide: (merchant: string) => call(client.api.recurring.found.hide.$post({ json: { merchant } })),
 };
@@ -63,6 +67,25 @@ export function dueWords(due: string, today: string): string {
   if (days === 0) return 'Due today';
   if (days === 1) return 'Due tomorrow';
   return days > 0 ? `Due in ${days} days` : `${-days} day${days === -1 ? '' : 's'} late`;
+}
+
+/** A bill's month (YYYY-MM) as the statement names it: "Dec". */
+export const billMonth = (m: string) =>
+  new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
+
+/**
+ * Home's "After card bills": your money less what is left to pay of each printed card bill and what was spent on
+ * the cards since they closed (it is on the next bill). Future slices are left out. Only the cards in `currency`.
+ */
+export function afterCardBills(
+  money: number,
+  cards: CardStatement[],
+  inCurrency: (accountId: string) => boolean,
+) {
+  const owed = cards
+    .filter(c => inCurrency(c.accountId))
+    .reduce((s, c) => s + c.left + Math.max(0, c.spentSince), 0);
+  return owed ? money - owed : null;
 }
 
 /** One line of Home's "Coming up": a bill, or a card's statement with money left to pay. */

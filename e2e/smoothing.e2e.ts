@@ -336,7 +336,7 @@ test('a crypto account has no pockets yet and keeps its balance', async () => {
   );
 });
 
-test('pay later: add a shared plan, pay each share, attach proof', async () => {
+test("pay later: add a shared plan; your share rides the card bill, Brother's is marked with proof", async () => {
   await pick('Kredivo');
   await page.getByRole('button', { name: 'Add installments' }).tap();
   const form = page.getByRole('dialog', { name: 'Add installments' });
@@ -353,22 +353,18 @@ test('pay later: add a shared plan, pay each share, attach proof', async () => {
   expect(await balance('Brother')).toBe(894_000);
   await page.getByRole('button', { name: /iPhone, 1 of 3 paid/ }).tap();
   const plan = page.getByRole('dialog', { name: 'iPhone' });
-  await plan
-    .getByRole('combobox', { name: 'You pay from' })
-    .selectOption({ label: 'Main Account' });
-  await plan.getByRole('button', { name: 'Mark your share of installment 2 paid' }).tap();
-  await expect(
-    plan.getByRole('button', { name: 'Mark your share of installment 2 unpaid' }),
-  ).toBeVisible();
-  expect(await balance('Main Account')).toBe(5_000_000 - 447_000);
-  expect(await balance('Kredivo')).toBe(-1_788_000 + 447_000);
+  // Your share has no pay key: the card's bill pays it.
+  await expect(plan.locator('[data-installment="2"] [data-party="You"]')).toContainText(
+    'On the card bill',
+  );
+  await expect(plan.getByRole('button', { name: /Mark your share/ })).toHaveCount(0);
 
   await plan.getByRole('button', { name: "Mark Brother's share of installment 2 paid" }).tap();
   await expect(
     plan.getByRole('button', { name: "Mark Brother's share of installment 2 unpaid" }),
   ).toBeVisible();
   expect(await balance('Brother')).toBe(447_000);
-  expect(await balance('Kredivo')).toBe(-894_000);
+  expect(await balance('Kredivo')).toBe(-1_788_000 + 447_000);
 
   const png = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000', 'hex');
   await plan
@@ -380,10 +376,11 @@ test('pay later: add a shared plan, pay each share, attach proof', async () => {
   expect(file.status()).toBe(200);
   expect(file.headers()['content-type']).toBe('image/png');
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: /iPhone, 2 of 3 paid/ })).toBeVisible();
+  // Slice 2 rides the next bill: paid once that bill is, not by Brother's half.
+  await expect(page.getByRole('button', { name: /iPhone, 1 of 3 paid/ })).toBeVisible();
 });
 
-test('a plan only you pay has no proof of payment', async () => {
+test('a plan only you pay has no pay key and no proof of payment', async () => {
   const r = await api('/installments', {
     method: 'POST',
     data: {
@@ -403,10 +400,8 @@ test('a plan only you pay has no proof of payment', async () => {
   await pick('Kredivo');
   await page.getByRole('button', { name: /Shoes, 0 of 2 paid/ }).tap();
   const plan = page.getByRole('dialog', { name: 'Shoes' });
-  await plan.getByRole('button', { name: 'Mark your share of installment 1 paid' }).tap();
-  await expect(
-    plan.getByRole('button', { name: 'Mark your share of installment 1 unpaid' }),
-  ).toBeVisible();
+  await expect(plan.locator('[data-installment="1"]')).toContainText(/Slice 1 · \w{3} bill/);
+  await expect(plan.getByRole('button', { name: /Mark .* paid/ })).toHaveCount(0);
   await expect(plan.getByText(/Attach proof/)).toHaveCount(0);
 });
 

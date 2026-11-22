@@ -28,11 +28,15 @@ export type BillPlan = {
   paidBefore: number;
 };
 
-/** An interest line already posted: an EXPENSE entry on the card, from a plan's slice or typed by hand. */
+/**
+ * An interest line already posted: an EXPENSE entry on the card. From a plan's slice (planId + no, the daily job),
+ * or typed by hand from the statement: on an older bill's unpaid part (`from`, its month) or on a plan (planId).
+ */
 export type InterestLine = {
   entryId: string;
   planId: string | null;
   no: number | null;
+  from: Month | null;
   day: string;
   amount: number;
 };

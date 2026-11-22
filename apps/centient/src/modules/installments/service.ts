@@ -1,15 +1,18 @@
 // Installment plans on pay later and credit card accounts: N equal monthly installments, each shared by
 // one or more people. The price goes on the card at once (it blocks the limit) and each installment's slice
 // rides one of the card's bills (src/domain/cardBill.ts); its interest is posted at that bill's closing by the
-// daily job. Every person's share of every installment is paid on its own, and paying it logs an ordinary
-// transfer into the plan's account (yours from the account you pick, another person's from their IOU account),
-// so balances stay right and the entry shows in activity. Deleting that entry un-pays the share.
+// daily job. A slice is paid when the card bill it rides is paid: your share has no pay key of its own. Another
+// person's share is still marked paid on its own (a transfer from their IOU account into the card) until
+// friends on plans move to per-slice tabs; deleting that entry un-pays the share.
 import type { ServiceDeps } from '../../context';
+import type { Repos } from '../../middleware/init';
 import type { Command } from '../../lib/schemas';
 import {
+  cardBills,
   closingOf,
   firstBillFor,
   interestDue,
+  principalOf,
   priceLeft,
   sliceBill,
   type BillPlan,
@@ -61,6 +64,59 @@ export const billPlan = (p: PlanRow): BillPlan => ({
 const cardDays = (a: Pick<Account, 'statement_day' | 'due_day'> | undefined) =>
   a?.statement_day ? { closes: a.statement_day, payBy: a.due_day } : null;
 
+/**
+ * Every set-up card's bills by `today` (src/domain/cardBill.ts), by account id: what the Bills page, the card's
+ * statement and each plan's progress read. Plans of every card, posted interest and hand-typed interest in.
+ */
+export async function loadCardBills(repos: Repos, ws: string, accounts: Account[], today: string) {
+  const [days, { plans }, posted, typed] = await Promise.all([
+    repos.recurring.cardDays(ws),
+    repos.installments.listPlans(ws),
+    repos.installments.interest(ws),
+    repos.installments.handInterest(ws),
+  ]);
+  const interest = [
+    ...posted.flatMap(i =>
+      i.account_id !== null && i.day !== null && i.amount !== null
+        ? [
+            {
+              accountId: i.account_id,
+              entryId: i.entry_id,
+              planId: i.plan_id,
+              no: i.slice_no,
+              from: null,
+              day: i.day,
+              amount: i.amount,
+            },
+          ]
+        : [],
+    ),
+    ...typed.map(i => ({
+      accountId: i.account_id,
+      entryId: i.entry_id,
+      planId: i.plan_id,
+      no: null,
+      from: i.from_month,
+      day: i.day,
+      amount: i.amount,
+    })),
+  ];
+  return new Map(
+    accounts
+      .filter(a => isCard(a.kind) && a.statement_day && !a.archived_at)
+      .map(a => [
+        a.id,
+        cardBills(
+          { closes: a.statement_day!, payBy: a.due_day },
+          days.filter(d => d.account_id === a.id),
+          plans.filter(p => p.account_id === a.id).map(billPlan),
+          interest.filter(i => i.accountId === a.id).map(({ accountId: _, ...i }) => i),
+          today,
+        ),
+      ]),
+  );
+}
+
 export function createInstallmentsService({
   ws,
   now,
@@ -74,8 +130,22 @@ export function createInstallmentsService({
       catalog.load(),
     ]);
     const today = jakartaToday(now());
+    // Which slices the card bills paid: "planId:no".
+    const bills = await loadCardBills(repos, ws, c.accounts, today);
+    const paid = new Set(
+      [...bills.values()].flatMap(r =>
+        r.bills.flatMap(b => b.slices.filter(s => s.paid).map(s => `${s.planId}:${s.no}`)),
+      ),
+    );
     return plans.map(p =>
-      view(p, parties, payments, today, cardDays(c.accounts.find(a => a.id === p.account_id))),
+      view(
+        p,
+        parties,
+        payments,
+        today,
+        cardDays(c.accounts.find(a => a.id === p.account_id)),
+        paid,
+      ),
     );
   }
 
@@ -252,29 +322,17 @@ export function createInstallmentsService({
     },
 
     /**
-     * Marks one person's share of one installment paid: logs a transfer of that share into the plan's account,
-     * from `fromAccountId` for your share, from the person's IOU account for theirs.
+     * Marks another person's share of one installment paid: logs a transfer of that share from their IOU account
+     * into the plan's account. Your own share is paid with the card bill ("I paid it"), never here.
      */
-    async markPaid(
-      planId: string,
-      no: number,
-      seq: number,
-      i: { fromAccountId?: string; date?: string },
-    ) {
+    async markPaid(planId: string, no: number, seq: number, i: { date?: string }) {
       const plan = await planOf(planId);
       const { share, party } = shareOf(plan, no, seq);
+      const from = party.iouAccountId;
+      if (!from) throw new DomainError('PAY_THE_BILL', 'Your share is paid with the card bill');
       if (share.paid) throw new DomainError('ALREADY_PAID', 'That share is already paid');
-      const from = party.iouAccountId ?? i.fromAccountId;
-      if (!from) throw new DomainError('FROM_REQUIRED', 'Pick the account you paid from');
-      const c = await catalog.load();
-      if (
-        party.iouAccountId === null &&
-        ['IOU', 'PAYLATER', 'CREDIT_CARD'].includes(c.account(from).row.kind)
-      ) {
-        throw new DomainError('FROM_ACCOUNT', 'Pay from a bank, e-wallet or cash account');
-      }
       const date = i.date ?? jakartaToday(now());
-      const who = party.seq === 0 ? 'Your' : `${party.name}'s`;
+      const who = `${party.name}'s`;
       const [entryId] = await ledger.record([
         {
           type: 'TRANSFER',
@@ -465,12 +523,18 @@ function dueOf(firstBill: string, no: number, days: { closes: number; payBy: num
   return statementOf(days.closes, days.payBy, closing).dueOn;
 }
 
+/**
+ * A plan with its slices. A slice is paid when it was paid before the plan was added or the card bill it rides
+ * covered it (`billPaid`, "planId:no"); `left` is the slice's share of the price still owed. Others' shares keep
+ * their own paid marks (and proof) until friends on plans move to per-slice tabs.
+ */
 function view(
   p: PlanRow,
   parties: PartyRow[],
   payments: PaymentRow[],
   today: string,
   days: { closes: number; payBy: number | null } | null,
+  billPaid: Set<string>,
 ) {
   const own = parties.filter(x => x.plan_id === p.id);
   const paid = payments.filter(x => x.plan_id === p.id);
@@ -484,10 +548,11 @@ function view(
         paid: pay ? { at: pay.paid_at, entryId: pay.entry_id, proof: pay.proof } : null,
       };
     });
-    const left = shares.reduce((s, x) => s + (x.paid ? 0 : x.amount), 0);
+    const done = no <= p.paid_before || billPaid.has(`${p.id}:${no}`);
+    const left = done ? 0 : principalOf(p.price, p.installments, no);
     // A card without bill days (made before they were required) keeps the plan's own dates.
     const due = (days && dueOf(p.first_bill, no, days)) ?? addMonths(p.first_due, no - p.anchor_no);
-    return { no, due, shares, left };
+    return { no, bill: sliceBill({ firstBill: p.first_bill }, no), due, shares, left };
   });
   const next = schedule.find(s => s.left > 0) ?? null;
   return {
@@ -507,7 +572,9 @@ function view(
     schedule,
     paidCount: schedule.filter(s => s.left === 0).length,
     remaining: schedule.reduce((s, x) => s + x.left, 0),
-    next: next ? { no: next.no, due: next.due, left: next.left, overdue: next.due < today } : null,
+    next: next
+      ? { no: next.no, bill: next.bill, due: next.due, left: next.left, overdue: next.due < today }
+      : null,
   };
 }
 

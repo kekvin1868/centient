@@ -1,14 +1,8 @@
-// One plan in the list: what is due next, and one pip per installment.
+// One plan in the list: progress only (its slices are paid with the card's bill), and one pip per slice.
 import { ClockCountdown } from '@phosphor-icons/react';
 import type { Plan } from '../../models/installment';
 import { formatMoney } from '../../lib/format';
-
-const shortDate = (d: string) =>
-  new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    timeZone: 'UTC',
-  });
+import { billMonth } from '../../models/recurring';
 
 export function PlanCard({
   plan: p,
@@ -38,7 +32,7 @@ export function PlanCard({
           className={`block truncate text-[13px] ${p.next?.overdue ? 'font-semibold text-negative' : 'text-muted'}`}
         >
           {p.next
-            ? `${formatMoney(p.next.left, currency)} ${p.next.overdue ? 'overdue since' : 'due'} ${shortDate(p.next.due)}`
+            ? `${formatMoney(p.amountPerInstallment, currency)} a month · slice ${p.next.no} on the ${billMonth(p.next.bill)} bill${p.next.overdue ? ', unpaid' : ''}`
             : 'All paid'}
           {p.parties.length > 1 ? ` · ${p.parties.length} people` : ''}
         </span>

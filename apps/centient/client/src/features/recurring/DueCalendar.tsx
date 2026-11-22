@@ -1,5 +1,5 @@
 // A month of due dates: on each day a bill falls due, a pink mark (blinking when late) or an upright "OK" once
-// all of that day's bills are paid, and a hollow mark for a card bill or an installment. Marks only: a day is not
+// all of that day's bills are paid, and a hollow mark for a card bill. Marks only: a day is not
 // a key (the list below says which bill). It goes back to the first saved payment and 11 months ahead, as far as
 // the server works the due dates out.
 import { useState } from 'react';
@@ -9,12 +9,11 @@ import { dayWords } from './BillLine';
 
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTHS_AHEAD = 11;
-/** "2 bills due", "1 bill paid, 1 card bill or installment", "1 card bill or installment due". */
+/** "2 bills due", "1 bill paid, 1 card bill", "1 card bill due". */
 const label = (bills: number, say: string, more: number) =>
   [
     bills && `${bills} bill${bills === 1 ? '' : 's'} ${say}`,
-    more &&
-      `${more} card bill${more === 1 ? '' : 's'} or installment${more === 1 ? '' : 's'}${bills ? '' : ' due'}`,
+    more && `${more} card bill${more === 1 ? '' : 's'}${bills ? '' : ' due'}`,
   ]
     .filter(Boolean)
     .join(', ');
@@ -25,7 +24,7 @@ export function DueCalendar({
   today,
 }: {
   byDay: Map<string, BillRow[]>;
-  /** Card bills and installments by day: marked hollow, never counted as bills. */
+  /** Card bills by day: marked hollow, never counted as bills. */
   others: Map<string, OtherDue[]>;
   today: string;
 }) {
@@ -122,7 +121,7 @@ export function DueCalendar({
           {others.size > 0 && (
             <span className="inline-flex items-center gap-1">
               <span aria-hidden="true" className="h-1.5 w-1.5 border border-current" />
-              card bill / installment
+              card bill
             </span>
           )}
         </p>

@@ -4,10 +4,9 @@ import type { ServiceDeps } from '../../context';
 import { addDays, addMonths, jakartaToday, realDay } from '../../domain/cycle';
 import { daysBetween } from '../../domain/forecast';
 import { DomainError } from '../../domain/ledger';
-import { cardBills } from '../../domain/cardBill';
-import { costOf, dueDates, isCard, looksMonthly } from '../../domain/recurring';
+import { costOf, dueDates, isCard, looksMonthly, statementOf } from '../../domain/recurring';
 import type { Recurring } from '../../repos/recurring';
-import { billPlan } from '../installments/service';
+import { loadCardBills } from '../installments/service';
 import type { LedgerService } from '../ledger/service';
 import { advance, scheduleOf } from './advance';
 
@@ -104,49 +103,30 @@ export function createRecurringService({
         });
       }
 
-      const [days, { plans }, posted] = await Promise.all([
-        repos.recurring.cardDays(ws),
+      const [bills, { plans }] = await Promise.all([
+        loadCardBills(repos, ws, c.accounts, day),
         repos.installments.listPlans(ws),
-        repos.installments.interest(ws),
       ]);
-      const cards = c.accounts
-        .filter(a => isCard(a.kind) && a.statement_day && !a.archived_at)
-        .map(a => {
-          const r = cardBills(
-            { closes: a.statement_day!, payBy: a.due_day },
-            days.filter(d => d.account_id === a.id),
-            plans.filter(p => p.account_id === a.id).map(billPlan),
-            posted.flatMap(i =>
-              i.account_id === a.id && i.day !== null && i.amount !== null
-                ? [
-                    {
-                      entryId: i.entry_id,
-                      planId: i.plan_id,
-                      no: i.slice_no,
-                      day: i.day,
-                      amount: i.amount,
-                    },
-                  ]
-                : [],
-            ),
-            day,
-          );
-          return {
-            accountId: a.id,
-            cutOff: r.bill.closesOn,
-            dueOn: r.bill.dueOn,
-            bill: Math.max(0, r.bill.total),
-            left: r.left,
-            spentSince: r.spentSince,
-            /** The last bill's lines: carry-over, regular spending, each plan's slice, interest. */
-            lines: {
-              carry: r.bill.carry,
-              spent: r.bill.spent,
-              slices: r.bill.slices,
-              interest: r.bill.interest,
-            },
-          };
-        });
+      const planName = (id: string | null) => plans.find(p => p.id === id)?.name ?? null;
+      const cards = [...bills].map(([accountId, r]) => ({
+        accountId,
+        cutOff: r.bill.closesOn,
+        dueOn: r.bill.dueOn,
+        bill: Math.max(0, r.bill.total),
+        left: r.left,
+        /** Paid into the card since the last closing: what "I paid it" and transfers in added up to. */
+        paidSince: r.paidSince,
+        spentSince: r.spentSince,
+        /** The bill before the last one: what "Unpaid from <month>" and "Log interest · on unpaid" name. */
+        before: r.bills.length > 1 ? r.bills.at(-2)!.month : null,
+        /** The last bill's lines: carry-over, regular spending, each plan's slice, interest. */
+        lines: {
+          carry: r.bill.carry,
+          spent: r.bill.spent,
+          slices: r.bill.slices,
+          interest: r.bill.interest.map(i => ({ ...i, planName: planName(i.planId) })),
+        },
+      }));
 
       return {
         today: day,
@@ -268,8 +248,65 @@ export function createRecurringService({
         .sort((a, b) => a.merchant.localeCompare(b.merchant));
     },
 
+    /**
+     * "Log interest" on a card bill: interest the bank charged, typed from the statement, as an expense on the
+     * card in Fees & Interests dated on the last closing day (so it lands on the bill just printed), tagged by
+     * where it came from: the unpaid part of an older bill (`month`) or a plan of this card. Never on a card's
+     * first bill: nothing was unpaid before it.
+     */
+    async logInterest(
+      accountId: string,
+      i: { amount: number; from: { month: string } | { planId: string } },
+    ) {
+      const c = await catalog.load();
+      const a = c.account(accountId).row;
+      if (!isCard(a.kind) || !a.statement_day)
+        throw new DomainError('CARD_SETUP', `Set ${a.name}'s limit and bill days first`);
+      const fees = c.categoryByName('Fees & Interests');
+      if (!fees)
+        throw new DomainError(
+          'NO_FEES_CATEGORY',
+          'Create a "Fees & Interests" expense category first',
+        );
+      const { cutOff } = statementOf(a.statement_day, a.due_day, today());
+      let label: string;
+      if ('month' in i.from) {
+        if (!/^\d{4}-\d{2}$/.test(i.from.month) || i.from.month >= cutOff.slice(0, 7))
+          throw new DomainError('INTEREST_SOURCE', 'Pick a bill before the last one');
+        label = `on unpaid ${monthName(i.from.month)}`;
+      } else {
+        const planId = i.from.planId;
+        const plan = (await repos.installments.listPlans(ws, accountId)).plans.find(
+          p => p.id === planId,
+        );
+        if (!plan) throw new DomainError('INTEREST_SOURCE', 'That plan is not on this card');
+        label = plan.name;
+      }
+      const entries = await ledger.prepare([
+        {
+          type: 'EXPENSE',
+          accountId,
+          categoryId: fees.id,
+          amount: i.amount,
+          date: cutOff,
+          note: `Interest · ${label}`,
+        },
+      ]);
+      const { ids, stmts } = repos.entries.insertStatements(ws, entries);
+      await repos.batch([...stmts, repos.installments.handInterestInsert(ws, ids[0], i.from)]);
+      return ids[0];
+    },
+
     async hide(merchant: string) {
       await repos.recurring.hide(ws, merchant.trim().toLowerCase());
     },
   };
 }
+
+/** "Dec 2026" for a bill month (YYYY-MM): the statement's own words. */
+const monthName = (m: string) =>
+  new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-GB', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
