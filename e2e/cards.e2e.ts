@@ -4,6 +4,8 @@
 // limits box, while Home on All accounts keeps the box with both kinds. Starts from a fresh first run and resets at
 // the end, so the next file does too.
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { execSync } from 'node:child_process';
+import { resolve } from 'node:path';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -69,12 +71,27 @@ test('first run: a card asks its limit and bill days, and CONFIRM waits for them
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await menu().getByRole('option', { name: /Miscs/ }).tap();
-  await page.getByRole('button', { name: 'TYPE ▾' }).tap();
-  await page
-    .getByRole('dialog', { name: 'Type of Miscs' })
-    .getByRole('option', { name: /CREDIT CARD/ })
-    .tap();
+  // A pocket made before the switch: going into a card drops it, undo brings it (and the old type) back.
+  await page.getByRole('button', { name: '+ POCKET' }).tap();
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  const pocket = page.getByRole('button', { name: /^Pocket 1/ });
+  await expect(pocket).toBeVisible();
+  const toCard = async () => {
+    await page.getByRole('button', { name: 'TYPE ▾' }).tap();
+    await page
+      .getByRole('dialog', { name: 'Type of Miscs' })
+      .getByRole('option', { name: /CREDIT CARD/ })
+      .tap();
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  };
+  await toCard();
+  await expect(pocket).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(pocket).toBeVisible();
+  await expect(page.getByRole('button', { name: 'SET LIMIT + BILL DAYS ▸' })).toHaveCount(0);
+  await toCard();
+  await expect(pocket).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'SET LIMIT + BILL DAYS ▸' })).toBeVisible();
   // A card has no pockets: its hero is what is USED of the limit.
   await expect(page.getByRole('button', { name: 'Used, not set' })).toBeVisible();
@@ -294,6 +311,23 @@ test('a card has no pockets: Add pocket leaves cards out, the server refuses one
   expect(await refused.text()).toContain('CARD_POCKETS');
 });
 
+test('Edit account: a bank with money in it can not turn into a card', async () => {
+  await page.getByRole('button', { name: /^Main Account/ }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Main Account' });
+  await sheet.getByRole('combobox', { name: 'Type' }).selectOption({ label: 'Credit card' });
+  await expect(sheet.getByRole('button', { name: 'Enter the limit' })).toBeDisabled();
+  await sheet.getByRole('textbox', { name: 'Limit' }).fill('10000000');
+  await sheet.getByRole('combobox', { name: 'Bill closes on day' }).selectOption({ label: '20' });
+  await sheet.getByRole('combobox', { name: 'Pay by day' }).selectOption({ label: '5' });
+  await sheet.getByRole('button', { name: 'Save' }).tap();
+  await expect(page.getByText('already has entries or pockets')).toBeVisible();
+  await shot('10a-bank-to-card-locked');
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  expect(await account('Main Account')).toMatchObject({ kind: 'BANK', credit_limit: null });
+  expect(await balance('Main Account')).toBe(5_000_000);
+});
+
 test('Edit account: a card keeps its limit and bill days, and can change them', async () => {
   await page.getByRole('button', { name: /^Miscs/ }).tap();
   const sheet = page.getByRole('dialog', { name: 'Miscs' });
@@ -312,11 +346,12 @@ test('Edit account: a card keeps its limit and bill days, and can change them', 
 });
 
 test('a card from before (no bill days) asks for them where its bill goes', async () => {
-  // Cards made before slice 1 have no bill days; the API still lets a PATCH clear them, which stands in for one.
+  // Cards made before slice 1 have no bill days. The API refuses that now, so clear them in the database itself.
   const spl = await account('SPayLater');
-  await page.request.patch(`/api/accounts/${spl.id}`, {
-    data: { statement_day: null, due_day: null },
-  });
+  execSync(
+    `npx wrangler d1 execute DB --local --persist-to "${resolve(import.meta.dirname, '../.e2e-state')}" --command "UPDATE accounts SET statement_day = NULL, due_day = NULL WHERE id = '${spl.id}'"`,
+    { cwd: resolve(import.meta.dirname, '../apps/centient'), stdio: 'ignore' },
+  );
   await page.reload();
   await tab('Money').tap();
   await pick('SPayLater');

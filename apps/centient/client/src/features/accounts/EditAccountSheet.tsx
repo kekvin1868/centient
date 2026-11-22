@@ -141,7 +141,10 @@ export function EditAccountSheet({
           )}
           <CurrencyPicker value={currency} onChange={setCurrency} />
         </Group>
-        <BlockFooter inset>Currency can change only before the account has entries.</BlockFooter>
+        <BlockFooter inset>
+          Currency can change only before the account has entries; card or pay later to another
+          type, or back, only before it has entries or pockets.
+        </BlockFooter>
         <Block className="flex flex-col gap-2.5">
           <Button large rounded disabled={Boolean(missing)} onClick={save}>
             {missing ?? 'Save'}
