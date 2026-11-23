@@ -22,6 +22,9 @@ export default defineConfig({
     baseURL: `http://localhost:${port}`,
     trace: CI ? 'on-first-retry' : 'retain-on-failure',
     reducedMotion: 'reduce',
+    // The phone's clock in Jakarta, like every user's: CI runs in UTC, so from 00:00 to 07:00 WIB the browser's
+    // "today" (the date picker's) and the server's WIB day were a day apart.
+    timezoneId: 'Asia/Jakarta',
   },
   projects: [
     { name: 'chromium', use: { ...devices['iPhone 13'], browserName: 'chromium' } },
