@@ -449,13 +449,15 @@ test('swiping a row left unlocks edit and delete; deleting can be undone, then g
   const row = page.locator('.entry-row', { hasText: 'Arcade' });
   await row.scrollIntoViewIfNeeded();
   // A slow phone: press, slide 40px, let go and the click all land before the next frame. Still a drag, not a tap
-  // (CI's WebKit once opened the entry it swiped). 40px stays under the 50px that opens the row.
+  // (CI's WebKit once opened the entry it swiped). Sent as a second finger, which motion ignores: a drag it saw
+  // start after its release stayed stuck and the real swipe below never moved the row.
   await row.getByRole('button', { name: /^Arcade/ }).evaluate(el => {
     const r = el.getBoundingClientRect();
     const at = (x: number, buttons: number) => ({
       bubbles: true,
-      pointerId: 1,
-      isPrimary: true,
+      pointerId: 2,
+      pointerType: 'touch',
+      isPrimary: false,
       clientX: x,
       clientY: r.y + r.height / 2,
       buttons,
