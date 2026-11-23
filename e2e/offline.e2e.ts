@@ -110,10 +110,12 @@ test('back online: each one is saved once, with the id the phone gave it', async
 test('offline: deleting a saved entry hides it and gives the money back; online it is gone', async () => {
   // The waiting balances are built by code the app loads while idle after it opens (Safari has no
   // requestIdleCallback: 1.5 s after). Gone offline before that, a delete can't be counted (in dev there is no
-  // service worker to serve it), so wait for it first.
+  // service worker to serve it), so wait for it first: the whole module, not just its file, since in dev the files
+  // it imports come after it (going offline between them failed the load on a slow CI machine).
   const builder = page.waitForResponse(r => r.url().includes('/models/waiting'));
   await page.reload();
-  await builder;
+  const url = (await builder).url();
+  await page.evaluate(async u => void (await import(u)), url);
   await page.context().setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event('offline')));
   const kopi = row('Kopi');
