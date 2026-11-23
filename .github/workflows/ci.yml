@@ -1,15 +1,23 @@
-# Every PR and every push to main: format, types, lint, unit tests, then the e2e suite in Chromium and WebKit.
-# Free on a public repo (GitHub-hosted Linux). The Playwright report (with traces of retried tests) is kept 14 days.
+# Only on a PR labelled `ci` (adding the label runs it; then every push to that PR), or by hand from the Actions
+# tab (Run workflow). Otherwise check locally before a PR: `npm run check`, the same steps.
+# Format, types, lint, unit tests, then the e2e suite in Chromium and WebKit. The Playwright report (with traces of
+# retried tests) is kept 14 days.
 name: CI
 on:
   pull_request:
-  push:
-    branches: [main]
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+    types: [opened, reopened, synchronize, labeled]
+  workflow_dispatch:
 jobs:
   check:
+    # Adding some other label to a `ci` PR doesn't run it again.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (contains(github.event.pull_request.labels.*.name, 'ci') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'ci'))
+    # On the job, so a skipped run (no label) never cancels a real one.
+    concurrency:
+      group: ci-${{ github.ref }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
