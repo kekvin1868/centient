@@ -130,7 +130,7 @@ export function CardSheet({ account, onSave, onClose }: Props) {
                     </p>
                   )}
                   {days.map(([label, day, setDay, from]) => (
-                    <div key={label} className="k-day">
+                    <div key={label} className="k-day" role="group" aria-label={label}>
                       <span>{label}</span>
                       <button
                         type="button"

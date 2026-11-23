@@ -151,11 +151,35 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
         (await catalog.load()).envelope(rest.default_envelope_id);
       if (typeof rest.provider === 'string')
         rest.provider = rest.provider.trim().toUpperCase() || null;
-      if (typeof rest.kind === 'string') {
-        const row = (await repos.accounts.list(ws)).find(a => a.id === id);
-        if (row && (row.kind === 'IOU') !== (rest.kind === 'IOU'))
+      const row = (await repos.accounts.list(ws)).find(a => a.id === id);
+      if (row && typeof rest.kind === 'string') {
+        if ((row.kind === 'IOU') !== (rest.kind === 'IOU'))
           throw new DomainError('KIND_LOCKED', '"Friends owe you" accounts keep their type');
+        // A card's balance is what is used of its limit, a bank's is money in it: neither carries over, nor do pockets.
+        if (
+          isCard(row.kind) !== isCard(rest.kind) &&
+          ((await repos.entries.hasTransactions(ws, id)) ||
+            (await repos.envelopes.list(ws)).some(
+              e => e.account_id === id && e.id !== row.default_envelope_id && !e.archived_at,
+            ))
+        )
+          throw new DomainError(
+            'CARD_KIND_LOCKED',
+            'This account already has entries or pockets. Add a new account instead.',
+          );
       }
+      // Touching a card's type, limit or days must leave all three set (a rename or hide of an old card still goes).
+      const next = { ...row, ...rest };
+      if (
+        row &&
+        isCard(String(next.kind)) &&
+        ['kind', 'credit_limit', 'statement_day', 'due_day'].some(k => k in rest) &&
+        !(next.credit_limit && next.statement_day && next.due_day)
+      )
+        throw new DomainError(
+          'CARD_SETUP',
+          'A card or pay later needs its limit, closing day and pay-by day',
+        );
       const currency = typeof rest.currency_code === 'string' ? rest.currency_code : null;
       if (currency && (await repos.entries.hasTransactions(ws, id)))
         throw new DomainError(
