@@ -663,8 +663,9 @@ test('a short person: I cover the rest from another account, or they pay the res
   await expect(who.getByText('You cover Rp15.000')).toBeVisible();
   await sheet.getByRole('button', { name: 'Log it' }).tap();
   await expect(sheet).toBeHidden();
+  // The cover is its own entry, saved after the bill: wait for it rather than read once.
+  await expect.poll(() => balance('Dailies')).toBe(daily0 - 15_000);
   expect(await balance('Main Account')).toBe(main0 - 85_000);
-  expect(await balance('Dailies')).toBe(daily0 - 15_000);
   expect(await balance('Andi')).toBe(10_000);
   const covering = (
     (await (await api('/entries?limit=10')).json()).items as {
@@ -684,8 +685,8 @@ test('a short person: I cover the rest from another account, or they pay the res
   await who.getByRole('combobox', { name: 'They paid into' }).selectOption({ label: 'Dailies' });
   await sheet.getByRole('button', { name: 'Log it' }).tap();
   await expect(sheet).toBeHidden();
+  await expect.poll(() => balance('Dailies')).toBe(daily0 + 10_000);
   expect(await balance('Main Account')).toBe(main0 - 100_000);
-  expect(await balance('Dailies')).toBe(daily0 + 10_000);
   expect(await balance('Andi')).toBe(15_000);
   await api(`/accounts/${await accountId('Andi')}`, { method: 'DELETE' });
   expect(await balance('Dailies')).toBe(daily0); // the entry went with the tab, and its payment with it
