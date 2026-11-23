@@ -185,10 +185,11 @@ test("a card's bill and an installment sit on the Bills page, tagged; the card i
   const card = await send('post', '/accounts', {
     name: 'BCA Card',
     kind: 'CREDIT_CARD',
+    creditLimit: 20_000_000,
+    // The statement closed three days ago: spending before it is billed, spending after goes on the next bill.
+    statementDay: Number(daysAgo(3).slice(8)),
     dueDay: 28,
   });
-  // The statement closed three days ago: spending before it is billed, spending after goes on the next bill.
-  await send('patch', `/accounts/${card.id}`, { statement_day: Number(daysAgo(3).slice(8)) });
   const spend = (date: string, amount: number) =>
     send('post', '/transactions', {
       type: 'EXPENSE',

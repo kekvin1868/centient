@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { limitRows } from './CardLimits';
-import { shownBalance } from './TotalBalance';
+import { overBy, shownBalance } from './TotalBalance';
 
 const acc = (kind: string, balance: number, credit_limit: number | null) => ({
   kind,
@@ -29,11 +29,21 @@ describe('limitRows', () => {
     expect(rows[0]).toMatchObject({
       kind: 'PAYLATER',
       count: 2,
-      owed: 800_000,
+      owed: 500_000, // used of the 2jt limit only, so left + used = limit
       limit: 2_000_000,
       left: 1_500_000,
+      over: 0,
       unset: 1,
+      unsetOwed: 300_000,
     });
+  });
+
+  it('a card past its limit counts Rp0 left and its own over, never eating what another card has left', () => {
+    const [card] = limitRows(
+      [acc('CREDIT_CARD', -12_500_000, 12_000_000), acc('CREDIT_CARD', -400_000, 8_000_000)],
+      idr,
+    );
+    expect(card).toMatchObject({ left: 7_600_000, over: 500_000, owed: 12_900_000 });
   });
 });
 
@@ -42,5 +52,12 @@ describe('shownBalance', () => {
     expect(shownBalance(acc('CREDIT_CARD', -1_600_000, 12_000_000))).toBe(10_400_000);
     expect(shownBalance(acc('CREDIT_CARD', -1_600_000, null))).toBe(-1_600_000);
     expect(shownBalance(acc('BANK', 4_400_000, null))).toBe(4_400_000);
+  });
+
+  it('past the limit: Rp0 left, and overBy says how far', () => {
+    expect(shownBalance(acc('CREDIT_CARD', -12_500_000, 12_000_000))).toBe(0);
+    expect(overBy(acc('CREDIT_CARD', -12_500_000, 12_000_000))).toBe(500_000);
+    expect(overBy(acc('CREDIT_CARD', -1_600_000, 12_000_000))).toBe(0);
+    expect(overBy(acc('PAYLATER', -1_600_000, null))).toBe(0);
   });
 });

@@ -33,7 +33,7 @@ import {
   type ReactNode,
 } from 'react';
 import { formatMoney, shortMoney } from '../../lib/format';
-import { buzz, reducedMotion } from '../../lib/motion';
+import { buzz, reducedMotion, useDragGuard } from '../../lib/motion';
 import { NameSticker } from '../../ui/NameSticker';
 
 type HandCard = {
@@ -43,6 +43,8 @@ type HandCard = {
   balance?: number;
   currency?: string;
   note?: ReactNode;
+  /** A card past its limit: by how much (its amount shows Rp0 left, in pink, with "Over …" under it). */
+  over?: number;
   /** "was Abang" / "archived" for a person's tab, for 2 days (lib/nameSticker). */
   stickers?: string[];
 };
@@ -116,7 +118,7 @@ export function AccountHand({
   );
   const [middle, setMiddle] = useState(Math.round(focus.get()));
   useMotionValueEvent(focus, 'change', f => setMiddle(Math.round(f)));
-  const dragged = useRef(false);
+  const { dragged, guard } = useDragGuard('x');
   const from = useRef(0);
   const clamp = (i: number) => Math.max(0, Math.min(n - 1, i));
   const turn = (i: number, pick: boolean) => {
@@ -142,8 +144,8 @@ export function AccountHand({
       onKeyDown={keys}
       className="relative mx-4 overflow-hidden rounded-[22px] border border-edge bg-raised/60 select-none"
       style={{ height: H + 72, touchAction: 'pan-y' }}
+      {...guard}
       onPanStart={() => {
-        dragged.current = true;
         from.current = focus.get();
         focus.stop();
       }}
@@ -154,9 +156,6 @@ export function AccountHand({
         focus.set(f);
       }}
       onPanEnd={(_, info) => {
-        setTimeout(() => {
-          dragged.current = false;
-        });
         const i = clamp(Math.round(focus.get() - info.velocity.x / 2600)); // a flick carries a card or two further
         buzz();
         turn(i, pickOnSettle);
@@ -265,7 +264,7 @@ function Card({
           onFocus={onFocus}
           onPointerMove={tilt}
           onPointerLeave={untilt}
-          aria-label={`${c.name}${money ? `, ${money}` : ''}`}
+          aria-label={`${c.name}${money ? `, ${money}` : ''}${c.over ? `, over by ${formatMoney(c.over, c.currency)}` : ''}`}
           className={`rarity-${c.kind} panel relative flex size-full flex-col overflow-hidden rounded-[14px] bg-white text-ink dark:bg-raised ${right ? 'items-end text-right' : 'text-left'}
             [transform:perspective(520px)_rotateX(var(--rx,0deg))_rotateY(var(--ry,0deg))] transition-[transform,box-shadow,border-color] duration-150
             ${on ? '!border-[var(--miku)] shadow-[0_6px_0_color-mix(in_oklab,var(--miku)_55%,transparent)]' : 'shadow-[-4px_4px_12px_rgb(0_0_0/0.10)]'}`}
@@ -284,14 +283,22 @@ function Card({
           ) : null}
           {money && (
             <span
-              className={`num truncate px-2.5 pt-1 text-[13px] font-bold ${c.balance! < 0 ? 'text-negative' : 'text-muted'}`}
+              className={`num truncate px-2.5 pt-1 text-[13px] font-bold ${c.balance! < 0 || c.over ? 'text-negative' : 'text-muted'}`}
             >
               {shortMoney(c.balance!, c.currency)}
             </span>
           )}
           <span className="mt-auto px-2.5 pb-2.5">
-            {c.note && (
-              <span className="block truncate text-[11px] font-semibold text-muted">{c.note}</span>
+            {c.over ? (
+              <span className="block truncate text-[11px] font-semibold text-negative">
+                Over {shortMoney(c.over, c.currency)}
+              </span>
+            ) : (
+              c.note && (
+                <span className="block truncate text-[11px] font-semibold text-muted">
+                  {c.note}
+                </span>
+              )
             )}
             <I className="mt-1 text-[var(--rarity)]" size={20} weight="fill" aria-hidden="true" />
           </span>

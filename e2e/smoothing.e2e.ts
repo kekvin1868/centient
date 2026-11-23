@@ -14,7 +14,11 @@ test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
   await page.goto('/');
 });
-test.afterAll(async () => page.close());
+test.afterAll(async () => {
+  // Reset so the next project (another browser) starts from a fresh first run too.
+  await page.request.post('/api/workspace/reset');
+  await page.close();
+});
 
 const api = (path: string, init?: { method?: string; data?: unknown }) =>
   page.request.fetch(`/api${path}`, { method: init?.method ?? 'GET', data: init?.data });
@@ -189,7 +193,14 @@ test('lists have one even hairline on the rounded card', async () => {
 test('accounts are a hand you turn: drag sideways and it settles on (and picks) the next card', async () => {
   await tab('Money').tap();
   for (const a of [
-    { name: 'Kredivo', kind: 'PAYLATER', openingBalance: -1_788_000 },
+    {
+      name: 'Kredivo',
+      kind: 'PAYLATER',
+      creditLimit: 5_000_000,
+      statementDay: 20,
+      dueDay: 5,
+      openingBalance: -1_788_000,
+    },
     { name: 'Jago', kind: 'BANK' },
     { name: 'Mandiri', kind: 'BANK' },
   ]) {
@@ -285,8 +296,8 @@ test('pockets live inside an account: add one, move money in, the account balanc
   await page.keyboard.press('Enter');
   const move = page.getByRole('dialog', { name: 'Add money to Rent' });
   // It opens once the actions sheet is gone, so the focus handed back doesn't land behind it.
-  await page.waitForTimeout(500); // the actions sheet's exit is over by now
-  expect(await move.evaluate(d => d.contains(document.activeElement))).toBe(true);
+  await expect(page.getByRole('dialog', { name: /^Rent/ })).toBeHidden();
+  await expect.poll(() => move.evaluate(d => d.contains(document.activeElement))).toBe(true);
   await move.getByRole('textbox', { name: 'Amount' }).fill('(1000000+500000');
   await expect(move.getByRole('button', { name: 'Check the amount' })).toBeDisabled();
   await move.getByRole('textbox', { name: 'Amount' }).fill('(1000000+500000)*2/2'); // a sum, worked out
@@ -438,6 +449,24 @@ test('an entry gets its own emoji, remembered for its merchant', async () => {
 test('swiping a row left unlocks edit and delete; deleting can be undone, then goes', async () => {
   const row = page.locator('.entry-row', { hasText: 'Arcade' });
   await row.scrollIntoViewIfNeeded();
+  // A slow phone: press, slide 40px, let go and the click all land before the next frame. Still a drag, not a tap
+  // (CI's WebKit once opened the entry it swiped). 40px stays under the 50px that opens the row.
+  await row.getByRole('button', { name: /^Arcade/ }).evaluate(el => {
+    const r = el.getBoundingClientRect();
+    const at = (x: number, buttons: number) => ({
+      bubbles: true,
+      pointerId: 1,
+      isPrimary: true,
+      clientX: x,
+      clientY: r.y + r.height / 2,
+      buttons,
+    });
+    el.dispatchEvent(new PointerEvent('pointerdown', at(r.right - 20, 1)));
+    el.dispatchEvent(new PointerEvent('pointermove', at(r.right - 60, 1)));
+    el.dispatchEvent(new PointerEvent('pointerup', at(r.right - 60, 0)));
+    el.dispatchEvent(new MouseEvent('click', at(r.right - 60, 0)));
+  });
+  await expect(page.getByRole('dialog', { name: 'Edit' })).toHaveCount(0);
   const box = (await row.boundingBox())!;
   await page.mouse.move(box.x + box.width - 20, box.y + box.height / 2);
   await page.mouse.down();
@@ -747,7 +776,10 @@ test('budgets are grouped per currency, and the ? beside the heading explains th
   expect(Math.abs(title.y + title.height / 2 - (button.y + button.height / 2))).toBeLessThan(8); // same row
   expect(button.x).toBeGreaterThan(title.x + title.width); // title left, button right
   expect(page.viewportSize()!.width - (button.x + button.width)).toBeLessThan(40); // at the far right
-  await help.tap();
+  // Opened by keyboard: focus going back matters to keyboard users (Safari doesn't focus a tapped button, so a tap
+  // leaves nothing to hand back to).
+  await help.focus();
+  await help.press('Enter');
   const guide = page.getByRole('dialog', { name: 'Insights Glossary' });
   for (const word of ['On track', 'Likely over', 'Over'])
     await expect(guide.getByText(word, { exact: true })).toBeVisible();

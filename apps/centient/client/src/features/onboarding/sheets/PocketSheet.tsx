@@ -13,7 +13,6 @@ import {
   defaultSource,
   editPocket,
   NAME_MAX,
-  owes,
   setAmount,
   sources,
   type AccountDraft,
@@ -22,6 +21,7 @@ import {
   type PocketKind,
   type Source,
 } from '../model/draft';
+import { isCard } from '../../../../../src/domain/recurring';
 import { PourBar, type Part } from './PourBar';
 
 type Props = {
@@ -45,7 +45,7 @@ export function PocketSheet({ draft, account, pocket, onSave, onDelete, onClose 
   const [from, setFrom] = useState(rows.find(r => (r.balance ?? 0) > 0) ?? null);
   const [refused, setRefused] = useState(0);
   const at = account.pockets.indexOf(pocket);
-  const owe = owes(account.kind);
+  const owe = isCard(account.kind);
 
   const press = (k: string) => {
     const next = pressKey(digits, k);
@@ -88,7 +88,7 @@ export function PocketSheet({ draft, account, pocket, onSave, onDelete, onClose 
 
   const question = owe ? (
     <>
-      What do you owe on <em>{account.name}</em>?
+      How much is already used on <em>{account.name}</em>?
     </>
   ) : pocket.main ? (
     <>

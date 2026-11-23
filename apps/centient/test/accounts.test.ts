@@ -36,14 +36,26 @@ describe('accounts in any currency', () => {
     ).toBe('JPY');
   });
 
+  it('refuses a card or pay later without its limit, closing day and pay-by day', async () => {
+    const ws = await ensure('nolimit@test');
+    for (const missing of ['creditLimit', 'statementDay', 'dueDay'] as const) {
+      const i = { name: 'Kartu', kind: 'CREDIT_CARD', creditLimit: 1, statementDay: 20, dueDay: 5 };
+      await expect(svc(ws).accounts.create({ ...i, [missing]: null })).rejects.toMatchObject({
+        code: 'CARD_SETUP',
+      });
+    }
+  });
+
   it('saves a new pay later account with its limit, so nothing reads as owed', async () => {
     const ws = await ensure('limit@test');
     const pl = await svc(ws).accounts.create({
       name: 'SPayLater',
       kind: 'PAYLATER',
       creditLimit: 21_000_000,
+      statementDay: 31,
+      dueDay: 5,
     });
-    expect(pl.credit_limit).toBe(21_000_000);
+    expect(pl).toMatchObject({ credit_limit: 21_000_000, statement_day: 31, due_day: 5 });
     expect((await w.repos.accounts.list(ws)).find(a => a.id === pl.id)!.credit_limit).toBe(
       21_000_000,
     );
@@ -153,5 +165,98 @@ describe('old names of an account', () => {
     expect(
       (await svc(ws).workspace.catalog()).accounts.find(x => x.id === b.id)!.formerNames,
     ).toEqual([]);
+  });
+});
+
+describe('a card opening: what is used, split between the last bill and since', () => {
+  // Today is 10 Nov: a card closing on the 5th, pay by the 25th, last closed 5 Nov (due 25 Nov).
+  const card = { kind: 'CREDIT_CARD', creditLimit: 12_000_000, statementDay: 5, dueDay: 25 };
+
+  it('puts the unpaid part on the last bill and the rest on the next', async () => {
+    const ws = await ensure('opening-split@test');
+    const a = await svc(ws).accounts.create({
+      name: 'BCA Card',
+      ...card,
+      openingBalance: -1_600_000,
+      billedBalance: 1_000_000,
+    });
+    const bill = (await svc(ws).recurring.list()).cards.find(x => x.accountId === a.id);
+    expect(bill).toMatchObject({
+      cutOff: '2026-11-05',
+      dueOn: '2026-11-25',
+      bill: 1_000_000,
+      left: 1_000_000,
+      spentSince: 600_000,
+    });
+    expect((await svc(ws).ledger.balances()).accounts.find(x => x.id === a.id)?.balance).toBe(
+      -1_600_000,
+    );
+  });
+
+  it('does the same for a first-run opening (reconcile), and refuses a bill above what is used', async () => {
+    const ws = await ensure('opening-reconcile@test');
+    const a = await svc(ws).accounts.create({ name: 'Kredivo', ...card, kind: 'PAYLATER' });
+    await expect(
+      svc(ws).accounts.reconcile(a.id, { actual: -500_000, billed: 600_000 }),
+    ).rejects.toMatchObject({ code: 'BILLED_TOO_MUCH' });
+    await svc(ws).accounts.reconcile(a.id, { actual: -500_000, billed: 500_000 });
+    const bill = (await svc(ws).recurring.list()).cards.find(x => x.accountId === a.id);
+    expect(bill).toMatchObject({ bill: 500_000, left: 500_000, spentSince: 0 });
+  });
+
+  it('has no pockets', async () => {
+    const ws = await ensure('card-pockets@test');
+    const a = await svc(ws).accounts.create({ name: 'BCA Card', ...card });
+    await expect(
+      svc(ws).pockets.create({ accountId: a.id, name: 'Trip', kind: 'SAVINGS' }),
+    ).rejects.toMatchObject({ code: 'CARD_POCKETS' });
+  });
+
+  it('an edit keeps a card set up: no card without its limit and days', async () => {
+    const ws = await ensure('card-edit@test');
+    const a = await svc(ws).accounts.create({ name: 'BCA Card', ...card });
+    await expect(svc(ws).accounts.update(a.id, { statement_day: null })).rejects.toMatchObject({
+      code: 'CARD_SETUP',
+    });
+    const bank = await svc(ws).accounts.create({ name: 'Jago', kind: 'BANK' });
+    await expect(
+      svc(ws).accounts.update(bank.id, { kind: 'PAYLATER', credit_limit: 1_000_000 }),
+    ).rejects.toMatchObject({ code: 'CARD_SETUP' });
+    await svc(ws).accounts.update(bank.id, {
+      kind: 'PAYLATER',
+      credit_limit: 1_000_000,
+      statement_day: 20,
+      due_day: 5,
+    });
+    // A card from before slice 1 (no days) can still be renamed or hidden.
+    await w.db.prepare('UPDATE accounts SET statement_day = NULL WHERE id = ?').bind(a.id).run();
+    await svc(ws).accounts.update(a.id, { name: 'Old BCA', archived: true });
+  });
+
+  it('bank ⇄ card only while the account has no entries and no pockets', async () => {
+    const ws = await ensure('card-kind@test');
+    const days = { credit_limit: 5_000_000, statement_day: 20, due_day: 5 };
+    const used = await svc(ws).accounts.create({
+      name: 'BCA',
+      kind: 'BANK',
+      openingBalance: 5_000,
+    });
+    await expect(
+      svc(ws).accounts.update(used.id, { kind: 'CREDIT_CARD', ...days }),
+    ).rejects.toMatchObject({ code: 'CARD_KIND_LOCKED' });
+    const pocketed = await svc(ws).accounts.create({ name: 'Jago', kind: 'BANK' });
+    await svc(ws).pockets.create({ accountId: pocketed.id, name: 'Rent', kind: 'SPENDING' });
+    await expect(
+      svc(ws).accounts.update(pocketed.id, { kind: 'CREDIT_CARD', ...days }),
+    ).rejects.toMatchObject({ code: 'CARD_KIND_LOCKED' });
+    const owed = await svc(ws).accounts.create({ name: 'Kredivo', ...card, kind: 'PAYLATER' });
+    await svc(ws).accounts.reconcile(owed.id, { actual: -100_000 });
+    await expect(svc(ws).accounts.update(owed.id, { kind: 'BANK' })).rejects.toMatchObject({
+      code: 'CARD_KIND_LOCKED',
+    });
+    // Within the same side, and on an empty account, the type still changes.
+    await svc(ws).accounts.update(used.id, { kind: 'EWALLET' });
+    const empty = await svc(ws).accounts.create({ name: 'Blu', kind: 'BANK' });
+    await svc(ws).accounts.update(empty.id, { kind: 'CREDIT_CARD', ...days });
   });
 });

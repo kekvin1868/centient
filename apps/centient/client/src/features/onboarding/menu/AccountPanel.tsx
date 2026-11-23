@@ -1,9 +1,11 @@
 // The picked account: channel number and type up top, its name typed in fresh on every change (or an input while
-// renaming), RENAME / TYPE / DROP, then its pockets. On the "+" row it offers ADD.
+// renaming), RENAME / TYPE / DROP, a card's limit and bill days (a key that opens CardSheet), then its pockets.
+// On the "+" row it offers ADD.
 import { useEffect, useRef, useState } from 'react';
-import { ACCOUNT_KINDS } from '../../../lib/format';
+import { ACCOUNT_KINDS, formatMoney } from '../../../lib/format';
 import { RichType } from '../../../ui/night/RichType';
-import { NAME_MAX, type AccountDraft } from '../model/draft';
+import { isCard } from '../../../../../src/domain/recurring';
+import { cardSet, dayWord, NAME_MAX, type AccountDraft } from '../model/draft';
 import { PocketList } from './PocketList';
 
 /** Static jolt, a quick scanline redraw, or a glitch. */
@@ -20,6 +22,7 @@ type Props = {
   onAdd: () => void;
   onPocket: (pocketKey: string) => void;
   onAddPocket: () => void;
+  onCard: () => void;
 };
 
 export function AccountPanel({
@@ -33,6 +36,7 @@ export function AccountPanel({
   onAdd,
   onPocket,
   onAddPocket,
+  onCard,
 }: Props) {
   const [change, setChange] = useState({ n: 0, cls: '' });
   const first = useRef(true);
@@ -87,7 +91,18 @@ export function AccountPanel({
             {!a ? '—' : !a.seedName ? 'DELETE' : a.kept ? 'DROP' : 'KEEP'}
           </button>
         </div>
-        <PocketList account={a} onOpen={onPocket} onAdd={onAddPocket} />
+        {a?.kept && isCard(a.kind) && (
+          <button
+            type="button"
+            className={`n-btn n-card ${cardSet(a) ? '' : 'unset'}`}
+            onClick={onCard}
+          >
+            {cardSet(a)
+              ? `LIMIT ${formatMoney(a.card!.limit!)} · CLOSES ${dayWord(a.card!.closes)} · PAY BY ${dayWord(a.card!.payBy)}`
+              : 'SET LIMIT + BILL DAYS ▸'}
+          </button>
+        )}
+        <PocketList account={a} onOpen={onPocket} onAdd={onAddPocket} onCard={onCard} />
       </div>
     </div>
   );

@@ -3,6 +3,9 @@
 import { addMonths } from './cycle';
 import { daysBetween } from './forecast';
 
+/** Credit card and pay later: a limit, a balance that is what is used of it (a debt), and a monthly bill. */
+export const isCard = (kind: string) => kind === 'CREDIT_CARD' || kind === 'PAYLATER';
+
 export type Schedule = {
   nextDue: string;
   dueDay: number;

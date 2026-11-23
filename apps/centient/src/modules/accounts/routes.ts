@@ -14,8 +14,10 @@ export const accountsRoutes = new Hono<AppEnv>()
         provider: text(30).nullish(),
         currency: currency.optional(),
         dueDay: z.number().int().min(1).max(31).nullish(),
+        statementDay: z.number().int().min(1).max(31).nullish(),
         creditLimit: money.nullish(),
         openingBalance: z.number().int().optional(),
+        billedBalance: z.number().int().min(0).optional(),
       }),
     ),
     async c => c.json(await c.var.services.accounts.create(c.req.valid('json')), 201),
@@ -23,7 +25,13 @@ export const accountsRoutes = new Hono<AppEnv>()
 
   .post(
     '/:id/balance',
-    json(z.object({ actual: z.number().int(), categoryId: id.nullish() })),
+    json(
+      z.object({
+        actual: z.number().int(),
+        categoryId: id.nullish(),
+        billed: z.number().int().min(0).optional(),
+      }),
+    ),
     async c =>
       c.json(await c.var.services.accounts.reconcile(c.req.param('id'), c.req.valid('json'))),
   )

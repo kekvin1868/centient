@@ -3,6 +3,7 @@ import type { ServiceDeps } from '../../context';
 import type { Patch } from '../../lib/schemas';
 import { addDays, cyclesIn, jakartaToday } from '../../domain/cycle';
 import { DomainError } from '../../domain/ledger';
+import { isCard } from '../../domain/recurring';
 import { commandOf } from '../../lib/entryCommand';
 import type { Envelope } from '../../repos/envelopes';
 
@@ -49,6 +50,9 @@ export function createPocketsService({ ws, now, repos, catalog }: ServiceDeps) {
       const account = c.account(i.accountId).row;
       if (account.kind === 'IOU')
         throw new DomainError('IOU_POCKETS', 'What friends owe you has no pockets');
+      // A card's balance is what is used of its limit: there is no money in it to set aside.
+      if (isCard(account.kind))
+        throw new DomainError('CARD_POCKETS', 'A card or pay later has no pockets');
       if ((i.kind === 'GOAL') !== Boolean(i.targetAmount))
         throw new DomainError(
           'GOAL_TARGET',

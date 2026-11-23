@@ -2,7 +2,8 @@
 import { useState } from 'react';
 import { ACCOUNT_KINDS, formatMoney } from '../../../lib/format';
 import { NightSheet } from '../../../ui/night/NightSheet';
-import { accountBalance, kept, owes, type Draft } from '../model/draft';
+import { isCard } from '../../../../../src/domain/recurring';
+import { accountBalance, dayWord, kept, type Draft } from '../model/draft';
 
 type Props = {
   draft: Draft;
@@ -20,7 +21,8 @@ export function ConfirmChanges({ draft, links, sketches, onConfirm, onClose }: P
     await onConfirm();
     setBusy(false);
   };
-  const unknown = kept(draft).filter(a => accountBalance(a) === null).length;
+  // A card with nothing typed for "already used" simply starts unused: not a ???.
+  const unknown = kept(draft).filter(a => accountBalance(a) === null && !isCard(a.kind)).length;
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   return (
     <NightSheet
@@ -45,6 +47,8 @@ export function ConfirmChanges({ draft, links, sketches, onConfirm, onClose }: P
                 (ACCOUNT_KINDS[a.kind] ?? a.kind).toUpperCase(),
                 plural(a.pockets.length, 'pocket', 'pockets'),
               ];
+              const card = isCard(a.kind) && a.card?.limit ? a.card : null;
+              if (card) note.push(`CLOSES ${dayWord(card.closes)} · PAY BY ${dayWord(card.payBy)}`);
               if (!a.seedName) note.push('NEW');
               else if (a.name !== a.seedName) note.push(`WAS ${a.seedName}`);
               return (
@@ -53,10 +57,13 @@ export function ConfirmChanges({ draft, links, sketches, onConfirm, onClose }: P
                   <span className="money">
                     {!a.kept ? (
                       'DROPPED'
+                    ) : card ? (
+                      // A card shows what is left of its limit, as everywhere else in the app.
+                      `LEFT ${formatMoney(card.limit! - (b ?? 0))}`
                     ) : b === null ? (
                       <span className="unk">???</span>
                     ) : (
-                      `${owes(a.kind) ? 'OWE ' : ''}${formatMoney(b)}`
+                      formatMoney(b)
                     )}
                   </span>
                   <small>{note.join(' · ')}</small>

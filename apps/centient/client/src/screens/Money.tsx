@@ -5,12 +5,11 @@ import { BlockTitle } from 'konsta/react';
 import { useEffect, useState } from 'react';
 import { AccountHand } from '../features/accounts/AccountHand';
 import { PickedAccount } from '../features/accounts/PickedAccount';
-import { CardLimits } from '../features/accounts/CardLimits';
-import { shownBalance, TotalBalance } from '../features/accounts/TotalBalance';
+import { overBy, shownBalance, TotalBalance } from '../features/accounts/TotalBalance';
 import { Budgets } from '../features/budgets/Budgets';
 import { PaidBackSheet } from '../features/entries/PaidBackSheet';
 import { InstallmentsSection } from '../features/installments/InstallmentsSection';
-import { takesInstallments } from '../features/installments/plans';
+import { isCard } from '../../../src/domain/recurring';
 import { AccountPockets } from '../features/pockets/AccountPockets';
 import { CardStatement } from '../features/recurring/CardStatement';
 import { Page } from '../layouts/Page';
@@ -62,6 +61,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
             name: x.name,
             kind: x.kind,
             balance: shownBalance(x),
+            over: overBy(x),
             currency: x.currency_code,
             note: v !== null ? `≈ ${formatMoney(v)}` : undefined,
             stickers: stickersOf(catalog.value.accounts.find(c => c.id === x.id)),
@@ -77,7 +77,8 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
         }}
         onPay={(x, mode) => setPay({ tabId: x.id, mode })}
       >
-        {a && a.kind !== 'IOU' && (
+        {/* A card has no pockets: its balance is what is used of its limit. */}
+        {a && a.kind !== 'IOU' && !isCard(a.kind) && (
           <AccountPockets
             key={`pockets:${a.id}`}
             account={a}
@@ -85,15 +86,10 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
             pockets={pockets}
           />
         )}
-        {a && takesInstallments(a.kind) && <CardStatement key={`bill:${a.id}`} account={a} />}
-        {a && takesInstallments(a.kind) && (
-          <InstallmentsSection key={`plans:${a.id}`} account={a} />
-        )}
+        {a && isCard(a.kind) && <CardStatement key={`bill:${a.id}`} account={a} />}
+        {a && isCard(a.kind) && <InstallmentsSection key={`plans:${a.id}`} account={a} />}
       </PickedAccount>
       {pay && <PaidBackSheet {...pay} onClose={() => setPay(null)} />}
-      <div className="mt-6">
-        <CardLimits accounts={bal.accounts} />
-      </div>
       <Budgets />
     </Page>
   );

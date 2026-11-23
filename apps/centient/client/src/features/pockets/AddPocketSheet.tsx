@@ -16,6 +16,7 @@ import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
 import { pocketApi } from '../../models/pocket';
 import { persist } from '../../models/query';
+import { isCard } from '../../../../src/domain/recurring';
 
 const KINDS = (Object.keys(POCKET_KINDS) as Envelope['kind'][]).map(k => ({
   value: k,
@@ -33,7 +34,8 @@ export function AddPocketSheet({
   account?: Account;
   onClose: () => void;
 }) {
-  const holders = everyday();
+  // A card / pay later has no pockets (what is used of a limit is not money to set aside).
+  const holders = everyday().filter(a => !isCard(a.kind));
   const [accountId, setAccountId] = useState<string | null>(account?.id ?? holders[0]?.id ?? null);
   const [name, setName] = useState('');
   const [color, setColor] = useState(nextPocketColor(colorsIn(accountId)));

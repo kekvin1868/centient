@@ -2,6 +2,7 @@
 // pure function that returns a new draft, so undo is just the previous value.
 import type { Account } from '../../../../../src/repos/accounts';
 import type { Envelope } from '../../../../../src/repos/envelopes';
+import { isCard } from '../../../../../src/domain/recurring';
 
 export type PocketKind = 'SPENDING' | 'SAVINGS';
 /** `balance` null = not set yet (shown as ???). `id` is the server's, null until saved. */
@@ -13,6 +14,20 @@ export type PocketDraft = {
   balance: number | null;
   main: boolean;
 };
+/**
+ * A card / pay later's limit and bill days (closing day, pay-by day), and what is used of the limit: `billed` still
+ * unpaid on its last bill, `since` spent after it. null = not set yet.
+ */
+export type CardDraft = {
+  limit: number | null;
+  closes: number | null;
+  payBy: number | null;
+  billed?: number | null;
+  since?: number | null;
+};
+/** What is used of a card's limit (its Main balance, a debt); null when neither part is set. */
+export const cardUsed = (c: CardDraft | undefined) =>
+  c?.billed == null && c?.since == null ? null : (c?.billed ?? 0) + (c?.since ?? 0);
 /** `seedName` is the name it came with (null = added in this draft); a seeded account can be dropped and kept again. */
 export type AccountDraft = {
   key: string;
@@ -22,6 +37,8 @@ export type AccountDraft = {
   kind: string;
   kept: boolean;
   pockets: PocketDraft[];
+  /** Only read while the kind is a card / pay later; kept when the type changes away and back. */
+  card?: CardDraft;
 };
 export type Draft = AccountDraft[];
 
@@ -38,8 +55,8 @@ export const SETUP_KINDS = [
   'EXCHANGE',
 ];
 
-/** Card and pay later balances are amounts owed. */
-export const owes = (kind: string) => kind === 'CREDIT_CARD' || kind === 'PAYLATER';
+/** A card's bill day as the setup shows it: 31 is the month's LAST day; ?? = not set. */
+export const dayWord = (d: number | null) => (d === null ? '??' : d === 31 ? 'LAST' : String(d));
 
 let seq = 0;
 const key = (p: string) => `${p}${++seq}`;
@@ -84,6 +101,7 @@ export function fromCatalog(accounts: Account[], envelopes: Envelope[]): Draft {
         kind: a.kind,
         kept: true,
         pockets: [mainPocket(a.default_envelope_id), ...others],
+        card: { limit: a.credit_limit, closes: a.statement_day, payBy: a.due_day },
       };
     });
 }
@@ -102,7 +120,28 @@ export const rename = (d: Draft, k: string, name: string) => {
   const v = name.trim().slice(0, NAME_MAX);
   return v ? map(d, k, a => ({ ...a, name: v })) : d;
 };
-export const setKind = (d: Draft, k: string, kind: string) => map(d, k, a => ({ ...a, kind }));
+/**
+ * Into or out of a card the balance changes meaning (money held vs what is used of a limit), so it starts over;
+ * a card has no pockets, so going into one drops them (undo brings them back).
+ */
+export const setKind = (d: Draft, k: string, kind: string) =>
+  map(d, k, a => {
+    if (isCard(kind) === isCard(a.kind)) return { ...a, kind };
+    const main = a.pockets.find(p => p.main)!;
+    return { ...a, kind, pockets: [{ ...main, balance: isCard(kind) ? cardUsed(a.card) : null }] };
+  });
+/** Also sets the card's Main balance to what is used (last bill + since). */
+export const setCard = (d: Draft, k: string, card: CardDraft) =>
+  map(d, k, a => ({
+    ...a,
+    card,
+    pockets: a.pockets.map(p => (p.main ? { ...p, balance: cardUsed(card) } : p)),
+  }));
+
+/** Whether a card / pay later has its limit and both bill days (without them it has no bill). */
+export const cardSet = (a: AccountDraft) => Boolean(a.card?.limit && a.card.closes && a.card.payBy);
+/** Kept cards / pay later still missing their limit or a bill day: CONFIRM waits for them. */
+export const cardsUnset = (d: Draft) => kept(d).filter(a => isCard(a.kind) && !cardSet(a));
 
 /** Seeded accounts drop and come back; ones added in this draft are simply removed. */
 export const toggle = (d: Draft, k: string) => {
@@ -182,7 +221,7 @@ export type SourceRow = {
 /** Other kept accounts that hold money (not cards / pay later), each BALANCE first with its pockets under it. */
 export const sources = (d: Draft, k: string): SourceRow[] =>
   d
-    .filter(a => a.kept && a.key !== k && !owes(a.kind))
+    .filter(a => a.kept && a.key !== k && !isCard(a.kind))
     .flatMap(a =>
       [...a.pockets]
         .sort((x, y) => Number(y.main) - Number(x.main))

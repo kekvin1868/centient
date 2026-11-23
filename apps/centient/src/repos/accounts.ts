@@ -28,7 +28,7 @@ export type NewAccount = Omit<
   | 'kept_until'
   | 'statement_day'
   | 'credit_limit'
-> & { credit_limit?: number | null };
+> & { credit_limit?: number | null; statement_day?: number | null };
 
 // "Debit card" is stored as kind BANK + subtype DEBIT_CARD (migration 0007: the accounts table's kind CHECK
 // cannot change without a rebuild that D1's always-on foreign keys block). Only this file knows that.
@@ -65,7 +65,7 @@ export function accountInserts(
     currencyRow(db, a.currency_code),
     db
       .prepare(
-        'INSERT INTO accounts (id, workspace_id, name, kind, subtype, provider, currency_code, due_day, credit_limit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO accounts (id, workspace_id, name, kind, subtype, provider, currency_code, due_day, statement_day, credit_limit) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .bind(
         id,
@@ -76,6 +76,7 @@ export function accountInserts(
         a.provider,
         a.currency_code,
         a.due_day,
+        a.statement_day ?? null,
         a.credit_limit ?? null,
       ),
     db
@@ -106,7 +107,7 @@ export function accountsRepo(db: D1Database) {
         ...a,
         id,
         default_envelope_id: `${id}:main`,
-        statement_day: null,
+        statement_day: a.statement_day ?? null,
         credit_limit: a.credit_limit ?? null,
         reconciled_at: null,
         archived_at: null,

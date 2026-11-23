@@ -32,6 +32,9 @@ async function setup(w: World) {
   const kredivo = await s().accounts.create({
     name: 'Kredivo',
     kind: 'PAYLATER',
+    creditLimit: 5_000_000,
+    statementDay: 20,
+    dueDay: 5,
     openingBalance: -1_788_000,
   });
   const balance = async (id: string) =>
@@ -234,7 +237,13 @@ describe('installment plans', () => {
       alreadyInBalance: true,
     };
     await t.s().installments.create({ ...plan, accountId: t.kredivo });
-    const card = await t.s().accounts.create({ name: 'BCA Card', kind: 'CREDIT_CARD' });
+    const card = await t.s().accounts.create({
+      name: 'BCA Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
     await t.s().installments.create({ ...plan, accountId: card.id, name: 'Laptop' });
     await t.s().accounts.remove(t.kredivo);
     expect((await t.s().installments.list()).map(p => p.name)).toEqual(['Laptop']);

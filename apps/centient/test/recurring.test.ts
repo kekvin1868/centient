@@ -366,10 +366,10 @@ describe('card statement', () => {
     const card = await t.svc().accounts.create({
       name: 'BCA Card',
       kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
       dueDay: 5,
     });
-    expect((await t.svc().recurring.list()).cards).toEqual([]);
-    await t.svc().accounts.update(card.id, { statement_day: 20 });
     await t.spend('2026-11-01', 700_000, 'tokopedia', card.id);
     await t.spend('2026-11-20', 300_000, 'grab', card.id);
     await t.spend('2026-11-21', 150_000, 'kopi', card.id);
