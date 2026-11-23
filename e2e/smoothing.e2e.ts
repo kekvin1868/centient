@@ -449,6 +449,24 @@ test('an entry gets its own emoji, remembered for its merchant', async () => {
 test('swiping a row left unlocks edit and delete; deleting can be undone, then goes', async () => {
   const row = page.locator('.entry-row', { hasText: 'Arcade' });
   await row.scrollIntoViewIfNeeded();
+  // A slow phone: press, slide 40px, let go and the click all land before the next frame. Still a drag, not a tap
+  // (CI's WebKit once opened the entry it swiped). 40px stays under the 50px that opens the row.
+  await row.getByRole('button', { name: /^Arcade/ }).evaluate(el => {
+    const r = el.getBoundingClientRect();
+    const at = (x: number, buttons: number) => ({
+      bubbles: true,
+      pointerId: 1,
+      isPrimary: true,
+      clientX: x,
+      clientY: r.y + r.height / 2,
+      buttons,
+    });
+    el.dispatchEvent(new PointerEvent('pointerdown', at(r.right - 20, 1)));
+    el.dispatchEvent(new PointerEvent('pointermove', at(r.right - 60, 1)));
+    el.dispatchEvent(new PointerEvent('pointerup', at(r.right - 60, 0)));
+    el.dispatchEvent(new MouseEvent('click', at(r.right - 60, 0)));
+  });
+  await expect(page.getByRole('dialog', { name: 'Edit' })).toHaveCount(0);
   const box = (await row.boundingBox())!;
   await page.mouse.move(box.x + box.width - 20, box.y + box.height / 2);
   await page.mouse.down();

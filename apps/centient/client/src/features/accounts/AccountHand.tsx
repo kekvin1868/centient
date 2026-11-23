@@ -33,7 +33,7 @@ import {
   type ReactNode,
 } from 'react';
 import { formatMoney, shortMoney } from '../../lib/format';
-import { buzz, reducedMotion } from '../../lib/motion';
+import { buzz, reducedMotion, useDragGuard } from '../../lib/motion';
 import { NameSticker } from '../../ui/NameSticker';
 
 type HandCard = {
@@ -118,7 +118,7 @@ export function AccountHand({
   );
   const [middle, setMiddle] = useState(Math.round(focus.get()));
   useMotionValueEvent(focus, 'change', f => setMiddle(Math.round(f)));
-  const dragged = useRef(false);
+  const { dragged, guard } = useDragGuard('x');
   const from = useRef(0);
   const clamp = (i: number) => Math.max(0, Math.min(n - 1, i));
   const turn = (i: number, pick: boolean) => {
@@ -144,8 +144,8 @@ export function AccountHand({
       onKeyDown={keys}
       className="relative mx-4 overflow-hidden rounded-[22px] border border-edge bg-raised/60 select-none"
       style={{ height: H + 72, touchAction: 'pan-y' }}
+      {...guard}
       onPanStart={() => {
-        dragged.current = true;
         from.current = focus.get();
         focus.stop();
       }}
@@ -156,9 +156,6 @@ export function AccountHand({
         focus.set(f);
       }}
       onPanEnd={(_, info) => {
-        setTimeout(() => {
-          dragged.current = false;
-        });
         const i = clamp(Math.round(focus.get() - info.velocity.x / 2600)); // a flick carries a card or two further
         buzz();
         turn(i, pickOnSettle);

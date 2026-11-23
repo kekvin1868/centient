@@ -2,7 +2,7 @@
 // Screens and dialogs animate with the retro effects in ui/night (useFx, fx-* classes).
 import { animate } from 'motion';
 import { useMotionValue, type PanInfo } from 'motion/react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 
 const EASE = [0.32, 0.72, 0, 1] as const;
 export const reducedMotion = () =>
@@ -81,13 +81,35 @@ export const retroList = (
 };
 
 /**
+ * Tells a drag from a tap for the click that follows it: spread `guard` on the dragged element and skip the tap
+ * while `dragged.current`. It reads the pointer itself (moved over 10px while pressed), not motion's onDragStart:
+ * that one waits for an animation frame, and on a slow WebKit the click after letting go came first, so a swipe
+ * opened the entry it swiped. Stays up until the next press.
+ */
+export function useDragGuard(axis: 'x' | 'y') {
+  const dragged = useRef(false);
+  const from = useRef(0);
+  const at = (e: ReactPointerEvent) => (axis === 'x' ? e.clientX : e.clientY);
+  const guard = {
+    onPointerDownCapture: (e: ReactPointerEvent) => {
+      dragged.current = false;
+      from.current = at(e);
+    },
+    onPointerMoveCapture: (e: ReactPointerEvent) => {
+      if (e.buttons && Math.abs(at(e) - from.current) > 10) dragged.current = true;
+    },
+  };
+  return { dragged, guard };
+}
+
+/**
  * A list row that slides left `width` px to show its actions (an entry row, a hidden pocket). `open` follows the
  * list, so another row opening closes this one; a drag past 50px or a flick opens it, 30px back closes it.
  * Spread `drag` on the row's `m.div`. `dragged` is true during a drag, so a tap inside it is not a click.
  */
 export function useSwipe(width: number, open: boolean, onSwipe: (open: boolean) => void) {
   const x = useMotionValue(0);
-  const dragged = useRef(false);
+  const { dragged, guard } = useDragGuard('x');
   const settle = (to: number) =>
     animate(
       x,
@@ -103,13 +125,8 @@ export function useSwipe(width: number, open: boolean, onSwipe: (open: boolean) 
     dragConstraints: { left: -width, right: 0 },
     dragElastic: { left: 0.15, right: 0.02 },
     dragMomentum: false,
-    onDragStart: () => {
-      dragged.current = true;
-    },
+    ...guard,
     onDragEnd: (_: unknown, info: PanInfo) => {
-      setTimeout(() => {
-        dragged.current = false;
-      });
       const opening = info.offset.x < -50 || info.velocity.x < -350;
       const closing = info.offset.x > 30 || info.velocity.x > 350;
       const next = open ? !closing : opening;
