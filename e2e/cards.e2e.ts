@@ -4,102 +4,7 @@
 // limits box, while Home on All accounts keeps the box with both kinds.
 // Each test starts from a fresh workspace and makes what it needs through the API, so any test runs alone and one
 // failure stays one failure. The file resets at the end, so the next file starts from a fresh first run too.
-import { test as base, expect, type Locator, type Page } from '@playwright/test';
-import { execSync } from 'node:child_process';
-import { resolve } from 'node:path';
-
-type Acc = {
-  id: string;
-  name: string;
-  kind: string;
-  credit_limit: number | null;
-  statement_day: number | null;
-  due_day: number | null;
-};
-type CardSeed = {
-  kind: 'CREDIT_CARD' | 'PAYLATER';
-  limit: number;
-  closes: number;
-  due: number;
-  /** Still unpaid on the last bill. */
-  billed?: number;
-  /** Spent since the last bill. */
-  since?: number;
-};
-
-/** Today's day of the month on the server's clock (WIB). */
-const today = () => new Date(Date.now() + 7 * 3600e3).getUTCDate();
-/** A closing day that is never today, so what is billed vs spent since is the same on every day of the month. */
-const notToday = (day: number) => (day === today() ? day + 1 : day);
-
-/** The app as these tests read and drive it, on the test's own page. */
-function cardsApp(page: Page) {
-  const api = async (method: 'get' | 'post' | 'patch', path: string, data?: unknown) => {
-    const r = await page.request[method](`/api${path}`, { data });
-    expect(r.ok(), `${method.toUpperCase()} ${path}: ${await r.text()}`).toBe(true);
-    return r.json();
-  };
-  const account = async (name: string) =>
-    ((await api('get', '/catalog')).accounts as Acc[]).find(a => a.name === name)!;
-  const tab = (name: string) => page.getByRole('button', { name, exact: true });
-  return {
-    api,
-    account,
-    balance: async (name: string) =>
-      ((await api('get', '/balances')).accounts as { name: string; balance: number }[]).find(
-        a => a.name === name,
-      )!.balance,
-    /** The card's bill as the server splits it: on the last bill, and spent since. */
-    bill: async (accountId: string) =>
-      (
-        (await api('get', '/recurring')).cards as {
-          accountId: string;
-          bill: number;
-          spentSince: number;
-        }[]
-      ).find(c => c.accountId === accountId)!,
-    /** Skips the first run. */
-    onboard: () => api('patch', '/workspace', { onboarded: true }),
-    addCard: async (name: string, c: CardSeed) =>
-      (await api('post', '/accounts', {
-        name,
-        kind: c.kind,
-        creditLimit: c.limit,
-        statementDay: c.closes,
-        dueDay: c.due,
-        openingBalance: -((c.billed ?? 0) + (c.since ?? 0)) || undefined,
-        billedBalance: c.billed,
-      })) as Acc,
-    setBalance: async (name: string, actual: number) =>
-      api('post', `/accounts/${(await account(name)).id}/balance`, { actual }),
-    tab,
-    limits: () => page.getByRole('region', { name: 'Cards and pay later' }),
-    openAccounts: async () => {
-      await tab('Menu').tap();
-      await page.getByRole('option', { name: 'Accounts & pockets', exact: true }).tap();
-    },
-    /** Picks an account card on Money the way a keyboard user would: focus turns the hand to it, Enter picks it. */
-    pick: async (name: string) => {
-      const card = page
-        .getByRole('group', { name: 'Accounts' })
-        .getByRole('button', { name: new RegExp(`^${name}`) });
-      await card.focus();
-      await card.press('Enter');
-      await expect(card).toHaveAttribute('aria-pressed', 'true');
-    },
-    /** E2E_SHOTS=<dir> saves a screenshot at each step worth looking at (for a human check); off by default. */
-    shot: async (name: string, part?: Locator) => {
-      if (process.env.E2E_SHOTS)
-        await (part ?? page).screenshot({ path: `${process.env.E2E_SHOTS}/${name}.png` });
-    },
-    /** The picked account's details on Money (name, hero, its limit bar); only framed for a screenshot. */
-    picked: (kind: string) => page.locator(`.rarity-${kind}`).last().locator('xpath=../..'),
-  };
-}
-
-const test = base.extend<{ app: ReturnType<typeof cardsApp> }>({
-  app: async ({ page }, use) => use(cardsApp(page)),
-});
+import { expect, notToday, sql, test, type CardSeed } from './cardsApp';
 
 test.beforeEach(async ({ page }) => {
   await page.request.post('/api/workspace/reset');
@@ -443,10 +348,7 @@ test('a card from before (no bill days) asks for them where its bill goes', asyn
   await app.onboard();
   const spl = await app.addCard('SPayLater', payLater);
   // Cards made before slice 1 have no bill days. The API refuses that now, so clear them in the database itself.
-  execSync(
-    `npx wrangler d1 execute DB --local --persist-to "${resolve(import.meta.dirname, '../.e2e-state')}" --command "UPDATE accounts SET statement_day = NULL, due_day = NULL WHERE id = '${spl.id}'"`,
-    { cwd: resolve(import.meta.dirname, '../apps/centient'), stdio: 'ignore' },
-  );
+  sql(`UPDATE accounts SET statement_day = NULL, due_day = NULL WHERE id = '${spl.id}'`);
   await page.goto('/');
   await app.tab('Money').tap();
   await app.pick('SPayLater');
