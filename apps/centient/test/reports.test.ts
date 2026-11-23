@@ -116,7 +116,7 @@ describe('insights totals (R4.1 - R4.4)', () => {
       'Food & Drink': 550_000,
       Shopping: 800_000,
       Transport: 50_000,
-      Fees: 2_500,
+      'Fees & Interests': 2_500,
     });
     expect(r.categories.map(c => c.amount)).toEqual([800_000, 550_000, 50_000, 2_500]); // largest first
     expect(r.categories.reduce((s, c) => s + c.amount, 0)).toBe(r.spending);

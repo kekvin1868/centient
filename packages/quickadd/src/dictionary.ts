@@ -177,7 +177,7 @@ add(
 add('kondangan,nikahan,amplop', 'Family & Giving', [50_000, 10_000_000]);
 add('mom,mama,mamah,mami,papa,papi,ayah,dad,ortu', 'Family & Giving', [10_000, 100_000_000]);
 add('buku,kursus,les,sekolah,kuliah', 'Education', [10_000, 50_000_000]);
-add('admin', 'Fees', [500, 100_000]);
+add('admin', 'Fees & Interests', [500, 100_000]);
 add('gaji,bonus', 'Salary', [100_000, 1_000_000_000]);
 add('angpao,thr', 'Angpao & THR', [10_000, 100_000_000]);
 add('cashback,bunga', 'Interest & cashback', [100, 10_000_000]);

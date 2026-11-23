@@ -205,11 +205,12 @@ test("a card's bill and an installment sit on the Bills page, tagged; the card i
     name: 'Phone',
     amountPerInstallment: 500_000,
     installments: 3,
-    firstDue: today,
     paidCount: 0,
     myShare: 500_000,
     others: [],
-    alreadyInBalance: true,
+    // Bought today: the price goes on the card, its first slice on the next bill (not this one).
+    alreadyInBalance: false,
+    categoryId: fun.id,
   });
 
   // Bills: both are listed with a tag and their own key, and marked hollow on the calendar; the month's
@@ -224,7 +225,7 @@ test("a card's bill and an installment sit on the Bills page, tagged; the card i
   await expect(cardRow).toContainText('not in the bar');
   const planRow = bills.getByRole('listitem').filter({ hasText: 'Phone · 1 of 3' });
   await expect(planRow).toContainText('PLAN');
-  await expect(planRow).toContainText(/\w{3} \d+ \w{3} · today · not in the bar/);
+  await expect(planRow).toContainText(/Due in \d+ days · not in the bar/);
   await expect(bills.getByText('card bill / installment')).toBeVisible();
   await planRow.getByRole('button', { name: 'Pay Phone · 1 of 3' }).tap();
   await expect(sheet('Phone')).toContainText('0 of 3 paid');

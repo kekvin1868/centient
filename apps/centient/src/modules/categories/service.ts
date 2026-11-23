@@ -5,7 +5,7 @@ import { DomainError } from '../../domain/ledger';
 import type { Category } from '../../repos/categories';
 
 // Looked up by name by the app itself (transfer fees, opening balances, balance corrections).
-const BUILT_IN_CATEGORIES = ['Fees', 'Opening balance', 'Balance adjustment'];
+const BUILT_IN_CATEGORIES = ['Fees & Interests', 'Opening balance', 'Balance adjustment'];
 
 export function createCategoriesService({ ws, now, repos, catalog }: ServiceDeps) {
   return {

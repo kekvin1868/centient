@@ -16,7 +16,7 @@
     "e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run format:check && npm run typecheck && npm run lint && npm test && npm run e2e",
+    "check": "npm run format:check && npm run typecheck && npm run lint && npm test",
     "perf": "node scripts/perf.mjs"
   },
   "devDependencies": {

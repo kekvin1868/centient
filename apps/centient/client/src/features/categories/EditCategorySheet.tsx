@@ -13,7 +13,7 @@ import { categoryApi } from '../../models/category';
 import { persist } from '../../models/query';
 
 // Looked up by name by the app (fees, opening balances, corrections).
-const BUILT_IN = ['Fees', 'Opening balance', 'Balance adjustment'];
+const BUILT_IN = ['Fees & Interests', 'Opening balance', 'Balance adjustment'];
 
 export function EditCategorySheet({
   category: c,

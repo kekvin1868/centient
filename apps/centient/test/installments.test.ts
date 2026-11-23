@@ -52,7 +52,6 @@ describe('installment plans', () => {
       name: 'iPhone',
       amountPerInstallment: 894_000,
       installments: 3,
-      firstDue: '2026-09-05',
       paidCount: 1,
       myShare: 447_000,
       others: [{ name: 'Brother', share: 447_000 }],
@@ -64,9 +63,10 @@ describe('installment plans', () => {
     expect(plan).toMatchObject({
       paidCount: 1,
       remaining: 1_788_000,
-      next: { no: 2, due: '2026-10-05', left: 894_000, overdue: true },
+      next: { no: 2, due: '2026-11-05', left: 894_000, overdue: false },
     });
-    expect(plan.schedule.map(s => s.due)).toEqual(['2026-09-05', '2026-10-05', '2026-11-05']);
+    // Added on 17 Oct with one paid: installment 2 rides the bill closing 20 Oct, due 5 Nov.
+    expect(plan.schedule.map(s => s.due)).toEqual(['2026-10-05', '2026-11-05', '2026-12-05']);
 
     // I pay my half of installment 2 from BCA: 1/2 of 894k.
     let p = await t.s().installments.markPaid(plan.id, 2, 0, { fromAccountId: t.bca });
@@ -131,7 +131,6 @@ describe('installment plans', () => {
       name: 'Sofa',
       amountPerInstallment: 900_000,
       installments: 3,
-      firstDue: '2026-11-25',
       paidCount: 0,
       myShare: 300_000,
       others: [
@@ -150,7 +149,6 @@ describe('installment plans', () => {
       name: 'Shoes',
       amountPerInstallment: 200_000,
       installments: 2,
-      firstDue: '2026-11-01',
       paidCount: 0,
       myShare: 200_000,
       others: [],
@@ -171,7 +169,6 @@ describe('installment plans', () => {
         name: 'Bad',
         amountPerInstallment: 100_000,
         installments: 2,
-        firstDue: '2026-11-01',
         paidCount: 0,
         myShare: 40_000,
         others: [{ name: 'Brother', share: 50_000 }],
@@ -184,7 +181,6 @@ describe('installment plans', () => {
         name: 'Bad',
         amountPerInstallment: 100_000,
         installments: 2,
-        firstDue: '2026-11-01',
         paidCount: 0,
         myShare: 100_000,
         others: [],
@@ -206,7 +202,6 @@ describe('installment plans', () => {
         name: 'TV',
         amountPerInstallment: 300_000,
         installments: 3,
-        firstDue: '2026-11-01',
         paidCount: 0,
         myShare: 300_000,
         others: [],
@@ -230,7 +225,6 @@ describe('installment plans', () => {
       name: 'Phone',
       amountPerInstallment: 500_000,
       installments: 3,
-      firstDue: '2026-11-01',
       paidCount: 0,
       myShare: 500_000,
       others: [],
@@ -263,34 +257,6 @@ describe('installment plans', () => {
     expect(await t.s().installments.list()).toEqual([]);
   });
 
-  it('moves the next unpaid installment and every later one; paid ones stay paid', async () => {
-    const { w } = world();
-    const t = await setup(w);
-    const created = await t.s().installments.create({
-      accountId: t.kredivo,
-      name: 'Phone',
-      amountPerInstallment: 500_000,
-      installments: 4,
-      firstDue: '2026-01-05',
-      paidCount: 1,
-      myShare: 500_000,
-      others: [],
-      alreadyInBalance: true,
-    });
-    const moved = await t.s().installments.moveDues(created.id, '2026-03-31');
-    expect(moved.schedule.map(s => [s.due, s.left])).toEqual([
-      ['2026-02-28', 0],
-      ['2026-03-31', 500_000],
-      ['2026-04-30', 500_000],
-      ['2026-05-31', 500_000],
-    ]);
-    expect(moved.next?.due).toBe('2026-03-31');
-    // Moving again after paying the next one starts from the new next.
-    await t.s().installments.markPaid(created.id, 2, 0, { fromAccountId: t.bca });
-    const again = await t.s().installments.moveDues(created.id, '2026-04-12');
-    expect(again.schedule.slice(2).map(s => s.due)).toEqual(['2026-04-12', '2026-05-12']);
-  });
-
   it('counts a new plan purchase in budgets a month at a time, and says the whole amount', async () => {
     const { w } = world();
     const t = await setup(w);
@@ -301,7 +267,6 @@ describe('installment plans', () => {
       name: 'hu,an',
       amountPerInstallment: 234_444,
       installments: 3,
-      firstDue: '2026-11-20',
       paidCount: 0,
       myShare: 234_444,
       others: [],
@@ -334,5 +299,125 @@ describe('installment plans', () => {
       '2026-03-31',
       '2026-04-30',
     ]);
+  });
+});
+
+// 10:00 in Jakarta on the given day.
+const at = (day: string) => Date.parse(`${day}T03:00:00Z`);
+
+describe('plans on the card bill', () => {
+  async function card(today: string) {
+    const clock = { now: at(today) };
+    const w = base({ now: () => clock.now });
+    const { workspaceId: ws } = await w.repos.workspaces.ensure('bill@test');
+    const s = () => w.svc(ws);
+    const kredivo = await s().accounts.create({
+      name: 'Kredivo',
+      kind: 'PAYLATER',
+      creditLimit: 10_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
+    const shopping = (await w.repos.categories.list(ws)).find(c => c.name === 'Shopping')!.id;
+    // A 3jt TV on 6 × 525rb: 25rb interest a slice.
+    const tv = await s().installments.create({
+      accountId: kredivo.id,
+      name: 'TV',
+      amountPerInstallment: 525_000,
+      installments: 6,
+      price: 3_000_000,
+      paidCount: 0,
+      myShare: 525_000,
+      others: [],
+      alreadyInBalance: false,
+      categoryId: shopping,
+    });
+    const bill = async () => (await s().recurring.list()).cards[0];
+    const go = (day: string) => (clock.now = at(day));
+    return { w, ws, s, kredivo: kredivo.id, tv, bill, go };
+  }
+
+  it('logs the price, bills one slice a month and posts its interest once at the closing', async () => {
+    const t = await card('2026-10-17');
+    expect(t.tv).toMatchObject({ price: 3_000_000, firstBill: '2026-10' });
+    expect(t.tv.schedule.map(x => x.due).slice(0, 2)).toEqual(['2026-11-05', '2026-12-05']);
+    const balance = (await t.s().ledger.balances()).accounts.find(a => a.id === t.kredivo)!;
+    expect(balance.balance).toBe(-3_000_000); // the price blocks the limit, interest is not owed yet
+    expect(await t.bill()).toMatchObject({ bill: 0, spentSince: 0 });
+
+    t.go('2026-10-21');
+    expect(await t.s().installments.postInterest()).toBe(1);
+    expect(await t.s().installments.postInterest()).toBe(0);
+    expect(await t.bill()).toMatchObject({
+      cutOff: '2026-10-20',
+      dueOn: '2026-11-05',
+      bill: 525_000,
+      lines: {
+        spent: 0,
+        slices: [{ name: 'TV', no: 1, of: 6, amount: 500_000, paid: false }],
+        interest: [{ day: '2026-10-20', amount: 25_000, no: 1 }],
+      },
+    });
+
+    // Days missed are caught up: two more closings, two more lines.
+    t.go('2026-12-22');
+    expect(await t.s().installments.postInterest()).toBe(2);
+  });
+
+  it('keeps an interest line deleted by hand deleted (the bank waived it)', async () => {
+    const t = await card('2026-10-17');
+    t.go('2026-10-21');
+    await t.s().installments.postInterest();
+    const [line] = (await t.bill()).lines.interest;
+    await t.w.repos.entries.remove(t.ws, line.entryId);
+    expect(await t.s().installments.postInterest()).toBe(0);
+    expect(await t.bill()).toMatchObject({ bill: 500_000, lines: { interest: [] } });
+  });
+
+  it('"Move to next bill" moves every slice a bill on and takes back interest posted too soon', async () => {
+    const t = await card('2026-10-17');
+    t.go('2026-10-21');
+    await t.s().installments.postInterest();
+    const moved = await t.s().installments.nextBill(t.tv.id);
+    expect(moved.firstBill).toBe('2026-11');
+    expect(moved.schedule[0].due).toBe('2026-12-05');
+    expect(await t.bill()).toMatchObject({ bill: 0, lines: { slices: [], interest: [] } });
+    t.go('2026-11-21');
+    expect(await t.s().installments.postInterest()).toBe(1);
+    expect((await t.bill()).lines.interest).toMatchObject([{ day: '2026-11-20', no: 1 }]);
+    // Two bills on, its slices are history: it can't move any more.
+    t.go('2026-12-21');
+    await expect(t.s().installments.nextBill(t.tv.id)).rejects.toThrow('already on bills');
+  });
+
+  it('a plan whose purchase is deleted goes with it', async () => {
+    const t = await card('2026-10-17');
+    const plan = (await t.w.repos.installments.listPlans(t.ws)).plans[0];
+    await t.w.repos.entries.remove(t.ws, plan.purchase_entry_id!);
+    expect(await t.s().installments.list()).toEqual([]);
+  });
+
+  it('needs the bill days and a price no more than the installments', async () => {
+    const t = await card('2026-10-17');
+    const { id: old } = await t.w.repos.accounts.create(t.ws, {
+      name: 'Old',
+      kind: 'PAYLATER',
+      currency_code: 'IDR',
+    } as never);
+    const plan = {
+      name: 'Phone',
+      amountPerInstallment: 500_000,
+      installments: 3,
+      paidCount: 0,
+      myShare: 500_000,
+      others: [],
+      alreadyInBalance: true,
+    };
+    await expect(t.s().installments.create({ ...plan, accountId: old })).rejects.toThrow(
+      'bill days',
+    );
+    await expect(
+      t.s().installments.create({ ...plan, accountId: t.kredivo, price: 1_600_000 }),
+    ).rejects.toThrow('more than');
   });
 });

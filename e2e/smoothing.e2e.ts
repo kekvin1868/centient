@@ -122,7 +122,7 @@ test('only the ten broad spending categories are offered', async () => {
   expect(options.slice(1)).toEqual([
     'Education',
     'Family & Giving',
-    'Fees',
+    'Fees & Interests',
     'Food & Drink',
     'Fun',
     'Health',
@@ -395,7 +395,6 @@ test('a plan only you pay has no proof of payment', async () => {
       name: 'Shoes',
       amountPerInstallment: 200_000,
       installments: 2,
-      firstDue: '2026-12-01',
       paidCount: 0,
       myShare: 200_000,
       others: [],
@@ -450,13 +449,15 @@ test('swiping a row left unlocks edit and delete; deleting can be undone, then g
   const row = page.locator('.entry-row', { hasText: 'Arcade' });
   await row.scrollIntoViewIfNeeded();
   // A slow phone: press, slide 40px, let go and the click all land before the next frame. Still a drag, not a tap
-  // (CI's WebKit once opened the entry it swiped). 40px stays under the 50px that opens the row.
+  // (CI's WebKit once opened the entry it swiped). Sent as a second finger, which motion ignores: a drag it saw
+  // start after its release stayed stuck and the real swipe below never moved the row.
   await row.getByRole('button', { name: /^Arcade/ }).evaluate(el => {
     const r = el.getBoundingClientRect();
     const at = (x: number, buttons: number) => ({
       bubbles: true,
-      pointerId: 1,
-      isPrimary: true,
+      pointerId: 2,
+      pointerType: 'touch',
+      isPrimary: false,
       clientX: x,
       clientY: r.y + r.height / 2,
       buttons,
@@ -662,8 +663,9 @@ test('a short person: I cover the rest from another account, or they pay the res
   await expect(who.getByText('You cover Rp15.000')).toBeVisible();
   await sheet.getByRole('button', { name: 'Log it' }).tap();
   await expect(sheet).toBeHidden();
+  // The cover is its own entry, saved after the bill: wait for it rather than read once.
+  await expect.poll(() => balance('Dailies')).toBe(daily0 - 15_000);
   expect(await balance('Main Account')).toBe(main0 - 85_000);
-  expect(await balance('Dailies')).toBe(daily0 - 15_000);
   expect(await balance('Andi')).toBe(10_000);
   const covering = (
     (await (await api('/entries?limit=10')).json()).items as {
@@ -683,8 +685,8 @@ test('a short person: I cover the rest from another account, or they pay the res
   await who.getByRole('combobox', { name: 'They paid into' }).selectOption({ label: 'Dailies' });
   await sheet.getByRole('button', { name: 'Log it' }).tap();
   await expect(sheet).toBeHidden();
+  await expect.poll(() => balance('Dailies')).toBe(daily0 + 10_000);
   expect(await balance('Main Account')).toBe(main0 - 100_000);
-  expect(await balance('Dailies')).toBe(daily0 + 10_000);
   expect(await balance('Andi')).toBe(15_000);
   await api(`/accounts/${await accountId('Andi')}`, { method: 'DELETE' });
   expect(await balance('Dailies')).toBe(daily0); // the entry went with the tab, and its payment with it

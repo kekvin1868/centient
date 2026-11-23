@@ -4,8 +4,10 @@ import type { ServiceDeps } from '../../context';
 import { addDays, addMonths, jakartaToday, realDay } from '../../domain/cycle';
 import { daysBetween } from '../../domain/forecast';
 import { DomainError } from '../../domain/ledger';
-import { costOf, dueDates, isCard, looksMonthly, statementOf } from '../../domain/recurring';
+import { cardBills } from '../../domain/cardBill';
+import { costOf, dueDates, isCard, looksMonthly } from '../../domain/recurring';
 import type { Recurring } from '../../repos/recurring';
+import { billPlan } from '../installments/service';
 import type { LedgerService } from '../ledger/service';
 import { advance, scheduleOf } from './advance';
 
@@ -77,7 +79,7 @@ export function createRecurringService({
     /**
      * Everything the Bills page and Home's "Coming up" show: each bill with its due dates for the
      * next 12 months and its payments (oldest due date first), what the bills cost per currency, and each card's
-     * statement.
+     * last bill (src/domain/cardBill.ts): what it asks, what is left of it, its lines, what was spent since.
      */
     async list() {
       const day = today();
@@ -102,23 +104,49 @@ export function createRecurringService({
         });
       }
 
-      const cards = await Promise.all(
-        c.accounts
-          .filter(a => isCard(a.kind) && a.statement_day && !a.archived_at)
-          .map(async a => {
-            const { cutOff, dueOn } = statementOf(a.statement_day!, a.due_day, day);
-            const s = await repos.recurring.statement(ws, a.id, cutOff);
-            const bill = Math.max(0, -s.balance);
-            return {
-              accountId: a.id,
-              cutOff,
-              dueOn,
-              bill,
-              left: Math.max(0, bill - s.paid),
-              spentSince: s.spent,
-            };
-          }),
-      );
+      const [days, { plans }, posted] = await Promise.all([
+        repos.recurring.cardDays(ws),
+        repos.installments.listPlans(ws),
+        repos.installments.interest(ws),
+      ]);
+      const cards = c.accounts
+        .filter(a => isCard(a.kind) && a.statement_day && !a.archived_at)
+        .map(a => {
+          const r = cardBills(
+            { closes: a.statement_day!, payBy: a.due_day },
+            days.filter(d => d.account_id === a.id),
+            plans.filter(p => p.account_id === a.id).map(billPlan),
+            posted.flatMap(i =>
+              i.account_id === a.id && i.day !== null && i.amount !== null
+                ? [
+                    {
+                      entryId: i.entry_id,
+                      planId: i.plan_id,
+                      no: i.slice_no,
+                      day: i.day,
+                      amount: i.amount,
+                    },
+                  ]
+                : [],
+            ),
+            day,
+          );
+          return {
+            accountId: a.id,
+            cutOff: r.bill.closesOn,
+            dueOn: r.bill.dueOn,
+            bill: Math.max(0, r.bill.total),
+            left: r.left,
+            spentSince: r.spentSince,
+            /** The last bill's lines: carry-over, regular spending, each plan's slice, interest. */
+            lines: {
+              carry: r.bill.carry,
+              spent: r.bill.spent,
+              slices: r.bill.slices,
+              interest: r.bill.interest,
+            },
+          };
+        });
 
       return {
         today: day,

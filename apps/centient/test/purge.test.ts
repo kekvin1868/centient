@@ -62,7 +62,6 @@ async function filled(w: ReturnType<typeof world>, email: string) {
     name: 'Phone',
     amountPerInstallment: 500_000,
     installments: 3,
-    firstDue: '2026-12-05',
     paidCount: 0,
     myShare: 250_000,
     others: [{ name: 'Budi', share: 250_000 }],
@@ -70,6 +69,8 @@ async function filled(w: ReturnType<typeof world>, email: string) {
     categoryId: await cat('Shopping'),
   });
   await svc().installments.markPaid(plan.id, 1, 0, { fromAccountId: bca.id });
+  // An interest line the daily job posted (it posts at a closing; here written straight in).
+  await w.repos.batch([w.repos.installments.interestInsert(ws, plan.id, 1, bill)]);
   await svc().installments.attachProof(plan.id, 1, 0, {
     name: 'proof.png',
     type: 'image/png',

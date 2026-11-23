@@ -1,4 +1,6 @@
-// Installment plans on pay later / credit card accounts, with who owes what and which shares are paid.
+// Installment plans on pay later / credit card accounts, with who owes what and which shares are paid, and the
+// interest lines posted for their slices.
+import { all } from './sql';
 
 export type PlanRow = {
   id: string;
@@ -7,10 +9,31 @@ export type PlanRow = {
   amount_per_installment: number;
   installments: number;
   first_due: string;
-  /** The installment `first_due` belongs to (1 until the due dates are moved). */
+  /** The installment `first_due` belongs to (1 until the due dates are moved). Used only on a card without bill days. */
   anchor_no: number;
   created_at: string;
+  /** What the limit blocks: the price, without interest. */
+  price: number;
+  bought_on: string;
+  /** YYYY-MM: the bill slice 1 rides on (src/domain/cardBill.ts). */
+  first_bill: string;
+  paid_before: number;
+  purchase_entry_id: string | null;
 };
+/** A posted interest line (`plan_interest`); `day` and `amount` are null once its entry was deleted. */
+export type InterestRow = {
+  plan_id: string;
+  slice_no: number;
+  entry_id: string;
+  account_id: string | null;
+  day: string | null;
+  amount: number | null;
+};
+
+const LIVE_PURCHASE =
+  '(purchase_entry_id IS NULL OR purchase_entry_id IN (SELECT id FROM entry_groups WHERE deleted_at IS NULL))';
+const PLAN_COLUMNS =
+  'id, account_id, name, amount_per_installment, installments, first_due, anchor_no, created_at, price, bought_on, first_bill, paid_before, purchase_entry_id';
 export type PartyRow = {
   plan_id: string;
   seq: number;
@@ -35,14 +58,14 @@ export function installmentsRepo(db: D1Database) {
     /** The statements that write a plan, its parties and the installments already paid; the caller batches them. */
     planInserts(
       ws: string,
-      p: Omit<PlanRow, 'created_at' | 'anchor_no'>,
+      p: Omit<PlanRow, 'created_at' | 'anchor_no'> & { anchor_no: number },
       parties: PartyRow[],
       prepaid: Omit<PaymentRow, 'proof'>[],
     ): D1PreparedStatement[] {
       return [
         db
           .prepare(
-            'INSERT INTO installment_plans (id, workspace_id, account_id, name, amount_per_installment, installments, first_due) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO installment_plans (id, workspace_id, account_id, name, amount_per_installment, installments, first_due, anchor_no, price, bought_on, first_bill, paid_before, purchase_entry_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           )
           .bind(
             p.id,
@@ -52,6 +75,12 @@ export function installmentsRepo(db: D1Database) {
             p.amount_per_installment,
             p.installments,
             p.first_due,
+            p.anchor_no,
+            p.price,
+            p.bought_on,
+            p.first_bill,
+            p.paid_before,
+            p.purchase_entry_id,
           ),
         ...parties.map(x =>
           db
@@ -70,15 +99,18 @@ export function installmentsRepo(db: D1Database) {
       ];
     },
 
-    /** Live plans (optionally of one account) with their parties and paid shares. A share whose logged entry was deleted counts as unpaid. */
+    /**
+     * Live plans (optionally of one account) with their parties and paid shares. A share whose logged entry was
+     * deleted counts as unpaid; a plan whose logged purchase was deleted is gone with it.
+     */
     async listPlans(ws: string, accountId?: string) {
-      const live = 'workspace_id = ? AND deleted_at IS NULL AND (? IS NULL OR account_id = ?)';
+      const live = `workspace_id = ? AND deleted_at IS NULL AND (? IS NULL OR account_id = ?) AND ${LIVE_PURCHASE}`;
       const ids = `SELECT id FROM installment_plans WHERE ${live}`;
       const a = [ws, accountId ?? null, accountId ?? null];
       const [plans, parties, payments] = await db.batch<Record<string, unknown>>([
         db
           .prepare(
-            `SELECT id, account_id, name, amount_per_installment, installments, first_due, anchor_no, created_at FROM installment_plans WHERE ${live} ORDER BY first_due, created_at`,
+            `SELECT ${PLAN_COLUMNS} FROM installment_plans WHERE ${live} ORDER BY first_bill, created_at`,
           )
           .bind(...a),
         db
@@ -163,14 +195,55 @@ export function installmentsRepo(db: D1Database) {
       return r.meta.changes > 0;
     },
 
-    /** Installment `no` falls due on `due`; later ones follow a month apart. */
-    async moveDues(ws: string, id: string, no: number, due: string) {
+    /** Slice 1 rides bill `month` (YYYY-MM): "Move to next bill". */
+    async setFirstBill(ws: string, id: string, month: string) {
       await db
         .prepare(
-          'UPDATE installment_plans SET first_due = ?, anchor_no = ? WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL',
+          'UPDATE installment_plans SET first_bill = ? WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL',
         )
-        .bind(due, no, id, ws)
+        .bind(month, id, ws)
         .run();
+    },
+
+    /** Every interest line ever posted for the workspace's live plans, with its entry's day and amount while it lives. */
+    interest(ws: string) {
+      return all<InterestRow>(
+        db,
+        `SELECT i.plan_id, i.slice_no, i.entry_id, e.account_id, substr(t.occurred_at, 1, 10) AS day, -e.amount AS amount
+        FROM plan_interest i
+        JOIN installment_plans p ON p.id = i.plan_id AND p.deleted_at IS NULL
+        LEFT JOIN transactions t ON t.group_id = i.entry_id AND t.deleted_at IS NULL
+        LEFT JOIN entries e ON e.transaction_id = t.id AND e.account_id = p.account_id
+        WHERE i.workspace_id = ?`,
+        ws,
+      );
+    },
+
+    /** Marks slice `no`'s interest posted as `entryId`; batched with the entry, a second post fails the batch. */
+    interestInsert(ws: string, planId: string, no: number, entryId: string) {
+      return db
+        .prepare(
+          'INSERT INTO plan_interest (workspace_id, plan_id, slice_no, entry_id) VALUES (?, ?, ?, ?)',
+        )
+        .bind(ws, planId, no, entryId);
+    },
+
+    /** Forgets slice `no`'s posted interest so it can be posted again (its entry is removed by the caller). */
+    interestDelete(ws: string, planId: string, no: number) {
+      return db
+        .prepare(
+          'DELETE FROM plan_interest WHERE workspace_id = ? AND plan_id = ? AND slice_no = ?',
+        )
+        .bind(ws, planId, no);
+    },
+
+    /** Workspaces with a live plan that charges interest: the ones the daily job looks at. */
+    async withInterest() {
+      const r = await all<{ workspace_id: string }>(
+        db,
+        'SELECT DISTINCT workspace_id FROM installment_plans WHERE deleted_at IS NULL AND price < amount_per_installment * installments',
+      );
+      return r.map(x => x.workspace_id);
     },
 
     async deletePlan(ws: string, id: string) {

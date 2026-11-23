@@ -725,7 +725,9 @@ describe('deleting a category', () => {
       { alias: 'chiki', kind: 'CATEGORY', value: t.cat('Food & Drink') },
     ]);
     await w.repos.categories.create(t.ws, { name: 'Snacks', kind: 'EXPENSE' }); // name is free
-    await expect(svc(t.ws).categories.remove(t.cat('Fees'), t.cat('Other'))).rejects.toMatchObject({
+    await expect(
+      svc(t.ws).categories.remove(t.cat('Fees & Interests'), t.cat('Other')),
+    ).rejects.toMatchObject({
       code: 'BUILT_IN',
     });
     await expect(

@@ -9,7 +9,7 @@ export type Workspace = {
   onboarded_at: string | null;
 };
 
-// Few and broad on purpose: each one should be obvious to pick. "Fees" is looked up by name for transfer fees.
+// Few and broad on purpose: each one should be obvious to pick. "Fees & Interests" is looked up by name for transfer fees and plan interest.
 const SEED_EXPENSE = [
   'Food & Drink',
   'Transport',
@@ -19,7 +19,7 @@ const SEED_EXPENSE = [
   'Fun',
   'Education',
   'Family & Giving',
-  'Fees',
+  'Fees & Interests',
   'Other',
 ];
 // "Balance adjustment" holds uncategorised balance corrections (signed), so it is not a spending category.

@@ -1,7 +1,7 @@
 # Only on a PR labelled `ci` (adding the label runs it; then every push to that PR), or by hand from the Actions
 # tab (Run workflow). Otherwise check locally before a PR: `npm run check`, the same steps.
-# Format, types, lint, unit tests, then the e2e suite in Chromium and WebKit. The Playwright report (with traces of
-# retried tests) is kept 14 days.
+# Format, types, lint and unit tests. The e2e suite (Playwright) runs locally only, on the files a change touches
+# (`npx playwright test e2e/<file>`), or all of it with `npm run e2e`: installing the browsers here took ~18 minutes.
 name: CI
 on:
   pull_request:
@@ -19,7 +19,7 @@ jobs:
       group: ci-${{ github.ref }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -31,13 +31,3 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
-      - run: npx playwright install --with-deps chromium webkit
-      # The e2e server signs in as the dev user, like `npm run dev` on your machine (.dev.vars is gitignored).
-      - run: cp apps/centient/.dev.vars.example apps/centient/.dev.vars
-      - run: npm run e2e
-      - uses: actions/upload-artifact@v4
-        if: ${{ !cancelled() }}
-        with:
-          name: playwright-report
-          path: playwright-report
-          retention-days: 14

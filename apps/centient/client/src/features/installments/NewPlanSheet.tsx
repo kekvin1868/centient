@@ -5,9 +5,9 @@ import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
 import { formatMoney } from '../../lib/format';
-import { active, catalog, me } from '../../lib/state';
+import { active, catalog } from '../../lib/state';
 import { AmountField } from '../../ui/AmountField';
-import { DateRow, InputRow, PickerRow, StepperRow, ToggleRow } from '../../ui/Fields';
+import { InputRow, PickerRow, StepperRow, ToggleRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Segmented } from '../../ui/Segmented';
 import { Sheet } from '../../ui/Sheet';
@@ -26,12 +26,10 @@ export function NewPlanSheet({
   account: Account;
   onClose: () => void;
 }) {
-  const today = me.value?.today ?? '';
   const cur = account.currency_code;
   const [name, setName] = useState('');
   const [amount, setAmount] = useState<number | null>(null);
   const [count, setCount] = useState(3);
-  const [firstDue, setFirstDue] = useState(today);
   const [paidCount, setPaidCount] = useState(0);
   const [people, setPeople] = useState<Person[]>([]);
   const [split, setSplit] = useState<'equal' | 'custom'>('equal');
@@ -52,17 +50,15 @@ export function NewPlanSheet({
     ? 'Name what you bought'
     : !amount
       ? 'Enter the installment amount'
-      : !firstDue
-        ? 'Pick the first due date'
-        : people.some(p => !p.name.trim())
-          ? 'Name each person'
-          : split === 'custom' && sum !== amount
-            ? `Shares add up to ${formatMoney(sum, cur)}, not ${formatMoney(amount, cur)}`
-            : people.length && shares.others.some(x => x <= 0)
-              ? 'Every share must be more than zero'
-              : !inBalance && shares.mine > 0 && !categoryId
-                ? 'Pick a category'
-                : null;
+      : people.some(p => !p.name.trim())
+        ? 'Name each person'
+        : split === 'custom' && sum !== amount
+          ? `Shares add up to ${formatMoney(sum, cur)}, not ${formatMoney(amount, cur)}`
+          : people.length && shares.others.some(x => x <= 0)
+            ? 'Every share must be more than zero'
+            : !inBalance && shares.mine > 0 && !categoryId
+              ? 'Pick a category'
+              : null;
   const iouNames = active(catalog.value.accounts)
     .filter(a => a.kind === 'IOU')
     .map(a => a.name);
@@ -76,7 +72,6 @@ export function NewPlanSheet({
         name: name.trim(),
         amountPerInstallment: amount,
         installments: count,
-        firstDue,
         paidCount,
         myShare: shares.mine,
         others: people.map((p, k) => ({ name: p.name.trim(), share: shares.others[k] })),
@@ -93,7 +88,7 @@ export function NewPlanSheet({
 
   return (
     <Sheet open={open} onClose={onClose} title="Add installments">
-      <Group>
+      <Group foot={`The next installment goes on ${account.name}'s next bill.`}>
         <InputRow label="What" value={name} placeholder="e.g. iPhone" onInput={setName} />
         <AmountField label="Each installment" value={amount} currency={cur} onChange={setAmount} />
         <StepperRow
@@ -106,7 +101,6 @@ export function NewPlanSheet({
             if (paidCount >= v) setPaidCount(v - 1);
           }}
         />
-        <DateRow label="First due" value={firstDue} onChange={setFirstDue} />
         <StepperRow
           label="Already paid"
           value={paidCount}
