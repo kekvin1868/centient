@@ -12,9 +12,16 @@ export type Held = Pick<Account, 'currency_code' | 'kind'> & { balance: number }
 
 /** Credit card and pay later balances are debt against a limit, not money: CardLimits shows them. */
 
-/** What an account shows as its amount: a card / pay later with a limit shows what is left of it (limit − owed). */
-export const shownBalance = (a: Pick<Account, 'kind' | 'credit_limit'> & { balance: number }) =>
-  isCard(a.kind) && a.credit_limit ? a.credit_limit + a.balance : a.balance;
+type Limited = Pick<Account, 'kind' | 'credit_limit'> & { balance: number };
+
+/** What an account shows as its amount: a card / pay later with a limit shows what is left of it (limit − owed),
+ * never below 0: past the limit it is Rp0 left and `overBy` says how far (owner, 2026-11-23). */
+export const shownBalance = (a: Limited) =>
+  isCard(a.kind) && a.credit_limit ? Math.max(0, a.credit_limit + a.balance) : a.balance;
+
+/** How far a card / pay later is past its limit (banks let it happen: a purchase let through, interest, fees); 0 otherwise. */
+export const overBy = (a: Limited) =>
+  isCard(a.kind) && a.credit_limit ? Math.max(0, -(a.credit_limit + a.balance)) : 0;
 
 /** Your money in rupiah (crypto at its last price), limits left out; `unpriced` = currencies with no rupiah price, kept apart. */
 export function totalOf(accounts: Held[], p: Prices) {

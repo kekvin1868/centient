@@ -12,7 +12,7 @@ import { usePrices, type Prices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 import { CardLimits } from '../accounts/CardLimits';
 import { isCard } from '../../../../src/domain/recurring';
-import { shownBalance, totalOf } from '../accounts/TotalBalance';
+import { overBy, shownBalance, totalOf } from '../accounts/TotalBalance';
 import { HomeBudgets } from './HomeBudgets';
 
 type Head = {
@@ -27,18 +27,20 @@ type Head = {
 /** What the HUD says: the picked account's balance, else the total of every account (same as Money). */
 function headOf(sel: string | null, bal: Balances, prices: Prices): Head {
   const a = sel ? bal.accounts.find(x => x.id === sel) : undefined;
-  if (a)
+  if (a) {
+    const over = overBy(a);
     return {
       label: `In ${a.name}`,
       minor: shownBalance(a),
       currency: a.currency_code,
       note:
         isCard(a.kind) && a.credit_limit
-          ? `Left to spend · owed ${formatMoney(Math.max(0, -a.balance), a.currency_code)}`
+          ? `${over ? `Over by ${formatMoney(over, a.currency_code)}` : 'Left to spend'} · owed ${formatMoney(Math.max(0, -a.balance), a.currency_code)}`
           : (ACCOUNT_KINDS[a.kind] ?? ''),
-      hurt: false,
+      hurt: over > 0,
       cta: 'Update balance',
     };
+  }
   const { total, priced } = totalOf(bal.accounts, prices);
   const n = bal.accounts.filter(a => !isCard(a.kind)).length;
   return {

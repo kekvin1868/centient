@@ -15,22 +15,27 @@ const KINDS = [
   { kind: 'PAYLATER', label: 'Pay later', many: 'pay later accounts' },
 ] as const;
 
-/** Per kind with an account: owed, and for the accounts with a limit, the limit and what is left of it (rupiah). */
+/** Per kind with an account (rupiah). Of the accounts with a limit: used (`owed`), limit, left (each card stops at 0)
+ * and `over` (how far the ones past their limit are past it). The rest: how many (`unset`) and what they owe. */
 export function limitRows(accounts: Card[], idr: (minor: number, currency: string) => number) {
   return KINDS.flatMap(k => {
     const own = accounts.filter(a => a.kind === k.kind);
     if (!own.length) return [];
     const capped = own.filter(a => a.credit_limit);
+    const unset = own.filter(a => !a.credit_limit);
     const sum = (xs: Card[], f: (a: Card) => number) =>
       xs.reduce((s, a) => s + idr(f(a), a.currency_code), 0);
+    const debt = (a: Card) => Math.max(0, -a.balance);
     return [
       {
         ...k,
         count: own.length,
-        owed: sum(own, a => Math.max(0, -a.balance)),
+        owed: sum(capped, debt),
         limit: sum(capped, a => a.credit_limit!),
-        left: sum(capped, a => a.credit_limit! + a.balance),
-        unset: own.length - capped.length,
+        left: sum(capped, a => Math.max(0, a.credit_limit! + a.balance)),
+        over: sum(capped, a => Math.max(0, -(a.credit_limit! + a.balance))),
+        unset: unset.length,
+        unsetOwed: sum(unset, debt),
       },
     ];
   });
@@ -66,6 +71,11 @@ export function CardLimits({ accounts, onGo }: { accounts: Card[]; onGo?: () => 
                     </span>
                     <span className="text-[14px] text-muted">left to spend</span>
                   </div>
+                  {r.over > 0 && (
+                    <p className="text-[14px] font-semibold text-negative">
+                      Over by <span className="num">{formatMoney(r.over)}</span>
+                    </p>
+                  )}
                   <div className="mt-2">
                     <HpBar
                       value={Math.max(0, r.left)}
@@ -77,13 +87,14 @@ export function CardLimits({ accounts, onGo }: { accounts: Card[]; onGo?: () => 
                   <p className="mt-1.5 text-[14px] text-muted">
                     Used <span className="num font-bold text-ink">{formatMoney(r.owed)}</span> of{' '}
                     <span className="num">{formatMoney(r.limit)}</span>
-                    {r.unset > 0 && ` · ${r.unset} without a limit`}
+                    {r.unset > 0 &&
+                      ` · + ${formatMoney(r.unsetOwed)} on ${r.unset} without a limit`}
                   </p>
                 </>
               ) : (
                 <>
                   <div className="mt-1 flex items-baseline gap-2">
-                    <span className="num text-[24px] font-bold">{formatMoney(r.owed)}</span>
+                    <span className="num text-[24px] font-bold">{formatMoney(r.unsetOwed)}</span>
                     <span className="text-[14px] text-muted">owed</span>
                   </div>
                   {(() => {

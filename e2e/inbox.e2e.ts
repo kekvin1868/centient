@@ -176,9 +176,19 @@ test('a photo of a payment screen is read on the phone and waits in the Inbox', 
   await expect(card).toContainText('from a photo');
   await expect(card).toContainText('Yesterday');
 
-  // Edit opens the entry form with what was read; logging it from there adds the entry.
-  await card.getByLabel('Category for Kopi Senja').selectOption({ label: 'Food & Drink' });
+  // Edit opens the entry form with what was read; logging it from there adds the entry. The category save is held
+  // back (a slow phone): the pick shows at once and goes with Edit, it doesn't wait for the server.
+  let release = () => {};
+  const held = new Promise<void>(r => (release = r));
+  await page.route(/\/api\/inbox\/[^/]+$/, async r =>
+    r.request().method() === 'PATCH' ? (await held, r.continue()) : r.fallback(),
+  );
+  const category = card.getByLabel('Category for Kopi Senja');
+  await category.selectOption({ label: 'Food & Drink' });
+  await expect(category.locator('option:checked')).toHaveText('Food & Drink');
   await card.getByRole('button', { name: 'Edit Kopi Senja' }).tap();
+  release();
+  await page.unrouteAll({ behavior: 'wait' });
   await page
     .getByRole('dialog', { name: 'New entry' })
     .getByRole('button', { name: 'Log it' })
