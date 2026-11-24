@@ -123,7 +123,8 @@ test('paying part of the bill shows it paid and leaves the rest; Home shows mone
   await pay.getByLabel('Amount').fill('345000');
   await pay.getByRole('button', { name: 'Log the payment' }).tap();
   await expect(pay).toBeHidden();
-  await expect(lines()).toContainText('Paid since−Rp345.000');
+  await expect(lines()).toContainText(/Paid since \d{1,2} \w{3}−Rp345\.000/);
+  await expect(lines()).toContainText('Left to payRp500.000');
   await expect(billBox()).toContainText('Rp500.000');
   await expect(billBox()).toContainText(
     /Minimum paid ✓ · Rp500\.000 carries to the \w{3} bill · the bank will likely charge interest on it/,

@@ -29,6 +29,7 @@ import {
   statementGap,
   statementOf,
 } from '../../models/recurring';
+import { dayWords } from '../../models/dates';
 import { outboxItems } from '../../models/outbox';
 import { blankForm, toCommand, type LogItem } from '../entries/form';
 import { LogSheet } from '../entries/LogSheet';
@@ -167,8 +168,16 @@ export function CardStatement({ account }: { account: Account }) {
               </li>
               {card.paidSince > 0 && (
                 <li className="flex items-baseline justify-between gap-3 border-t border-edge py-2 text-[15px] text-muted">
-                  <span>Paid since</span>
+                  <span>
+                    Paid since {dayWords(card.cutOff, { day: 'numeric', month: 'short' })}
+                  </span>
                   <span className="num">−{money(card.paidSince)}</span>
+                </li>
+              )}
+              {card.paidSince > 0 && (
+                <li className="flex items-baseline justify-between gap-3 border-t border-edge py-2 text-[15px] font-bold">
+                  <span>Left to pay</span>
+                  <span className="num">{money(card.left)}</span>
                 </li>
               )}
               {statement && (
