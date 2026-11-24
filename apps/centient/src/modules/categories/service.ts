@@ -1,11 +1,10 @@
 // Category use cases: add, rename or archive, delete (moving what was in it).
 import type { ServiceDeps } from '../../context';
 import type { Patch } from '../../lib/schemas';
-import { DomainError } from '../../domain/ledger';
+import { BUILT_IN_CATEGORIES, DomainError } from '../../domain/ledger';
 import type { Category } from '../../repos/categories';
 
 // Looked up by name by the app itself (transfer fees, opening balances, balance corrections).
-const BUILT_IN_CATEGORIES = ['Fees & Interests', 'Opening balance', 'Balance adjustment'];
 
 export function createCategoriesService({ ws, now, repos, catalog }: ServiceDeps) {
   return {

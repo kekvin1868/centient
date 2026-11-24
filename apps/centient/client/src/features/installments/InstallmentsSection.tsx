@@ -1,5 +1,5 @@
-// The plans list under a lifted pay later / credit card card: one card per plan, a sheet per plan with one
-// "Mark paid" per person per installment, and the form to add a plan.
+// The plans list under a lifted pay later / credit card card: one card per plan (progress; slices are paid with
+// the card's bill), a sheet per plan, and the form to add a plan.
 import { Plus } from '@phosphor-icons/react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';

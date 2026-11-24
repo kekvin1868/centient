@@ -1,4 +1,4 @@
-// Home: what you can still spend (the HUD), installments due soon, the log box, then what waits under it (so
+// Home: what you can still spend (the HUD), the log box, then what waits under it (so
 // nothing pushes the log box off the screen): payments in the Inbox and bills coming up, and recent activity.
 import { useState } from 'react';
 import { AccountChip } from '../features/accounts/AccountChip';
@@ -11,7 +11,6 @@ import { NotSent } from '../features/entries/NotSent';
 import { Recent } from '../features/entries/Recent';
 import { InboxNotice } from '../features/inbox/InboxNotice';
 import { PhotoButton } from '../features/inbox/PhotoButton';
-import { DueSoon } from '../features/installments/DueSoon';
 import { ComingUp } from '../features/recurring/ComingUp';
 import { Page } from '../layouts/Page';
 import { lazySheet } from '../ui/lazySheet';
@@ -40,7 +39,6 @@ export function Home({ onGoMoney, onGoBills }: { onGoMoney: () => void; onGoBill
         <AccountChip onOpen={() => setPicking(true)} />
       </div>
       <Headline onGoMoney={onGoMoney} />
-      <DueSoon onGo={onGoMoney} />
       <ReturnDue onGo={onGoMoney} />
       <LogBox />
       <NotSent onOpen={setOpen} />

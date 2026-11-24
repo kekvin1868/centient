@@ -5,11 +5,8 @@ import { formatMoney } from '../../lib/format';
 import { categoryEmoji } from '../../lib/labels';
 import { catalog, nameOf } from '../../lib/state';
 import { paidLate, type BillRow } from '../../models/billRun';
-import { daysBetween } from '../../models/dates';
+import { dayWords, daysBetween } from '../../models/dates';
 import { dueWords } from '../../models/recurring';
-
-export const dayWords = (day: string, o: Intl.DateTimeFormatOptions) =>
-  new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', { ...o, timeZone: 'UTC' });
 
 /** When an open due date falls: within a week, the date and how far ("Fri 20 Nov · in 3 days"); else dueWords. */
 export const openWords = (due: string, today: string) => {

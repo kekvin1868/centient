@@ -15,6 +15,7 @@ import type { EntryType, Form } from './form';
 import { splitView, withPeople, type Mode } from './shares';
 import { withMyPotShare, withPot } from './form';
 import { PocketStamps } from './PocketStamps';
+import { BOOKKEEPING_CATEGORIES } from '../../../../src/domain/categories';
 
 const TYPES: { value: EntryType; label: string }[] = [
   { value: 'EXPENSE', label: 'Spent' },
@@ -79,9 +80,7 @@ export function EntryForm({
   const setAccount = (patch: Partial<Form>) =>
     set({ ...patch, parties: form.parties.map(p => ({ ...p, accountId: null })) });
   const categories = active(cat.categories)
-    .filter(
-      c => c.kind === form.type && c.name !== 'Balance adjustment' && c.name !== 'Opening balance',
-    )
+    .filter(c => c.kind === form.type && !BOOKKEEPING_CATEGORIES.includes(c.name))
     .map(c => ({ value: c.id, label: c.name }));
   // Pockets of the chosen account only (a pocket belongs to one account); none picked = where its new money goes.
   const pockets = active(cat.envelopes).filter(e => e.account_id === form.accountId);

@@ -1,4 +1,4 @@
-// Shared by the cards e2e specs (cards.e2e.ts = slice 1, cardLimits.e2e.ts = slice 0): the app as they read and
+// Shared by the cards e2e specs (cardLimits = slice 0, cards = slice 1, cardPay = slice 3): the app as they read and
 // drive it. Not a spec itself (Playwright refuses a spec imported by another), so the reset hooks stay in each spec.
 import { test as base, expect, type Locator, type Page } from '@playwright/test';
 export { expect };
@@ -12,6 +12,15 @@ export type Acc = {
   credit_limit: number | null;
   statement_day: number | null;
   due_day: number | null;
+};
+/** A card's bill from GET /api/recurring, the fields these specs read. */
+export type CardBill = {
+  accountId: string;
+  bill: number;
+  left: number;
+  spentSince: number;
+  before: string | null;
+  lines: { carry: number; interest: { from: string | null; amount: number }[] };
 };
 export type CardSeed = {
   kind: 'CREDIT_CARD' | 'PAYLATER';
@@ -53,15 +62,13 @@ export function cardsApp(page: Page) {
       ((await api('get', '/balances')).accounts as { name: string; balance: number }[]).find(
         a => a.name === name,
       )!.balance,
+    category: async (name: string) =>
+      ((await api('get', '/catalog')).categories as { id: string; name: string }[]).find(
+        c => c.name === name,
+      )!.id,
     /** The card's bill as the server splits it: on the last bill, and spent since. */
     bill: async (accountId: string) =>
-      (
-        (await api('get', '/recurring')).cards as {
-          accountId: string;
-          bill: number;
-          spentSince: number;
-        }[]
-      ).find(c => c.accountId === accountId)!,
+      ((await api('get', '/recurring')).cards as CardBill[]).find(c => c.accountId === accountId)!,
     /** Skips the first run. */
     onboard: () => api('patch', '/workspace', { onboarded: true }),
     addCard: async (name: string, c: CardSeed) =>

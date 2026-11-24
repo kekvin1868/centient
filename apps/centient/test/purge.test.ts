@@ -68,10 +68,15 @@ async function filled(w: ReturnType<typeof world>, email: string) {
     alreadyInBalance: false,
     categoryId: await cat('Shopping'),
   });
-  await svc().installments.markPaid(plan.id, 1, 0, { fromAccountId: bca.id });
+  await svc().installments.markPaid(plan.id, 1, 1, {});
+  // A spend on an older bill: interest is never typed on a card's first bill.
+  await svc().ledger.record([
+    { type: 'EXPENSE', accountId: card.id, categoryId: food, amount: 10_000, date: '2026-09-10' },
+  ]);
+  await svc().recurring.logInterest(card.id, { amount: 5_000, from: { planId: plan.id } });
   // An interest line the daily job posted (it posts at a closing; here written straight in).
   await w.repos.batch([w.repos.installments.interestInsert(ws, plan.id, 1, bill)]);
-  await svc().installments.attachProof(plan.id, 1, 0, {
+  await svc().installments.attachProof(plan.id, 1, 1, {
     name: 'proof.png',
     type: 'image/png',
     bytes: new Uint8Array([1, 2, 3]).buffer,

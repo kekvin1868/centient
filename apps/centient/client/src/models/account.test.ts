@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { limitRows } from './CardLimits';
-import { overBy, shownBalance } from './TotalBalance';
+import { cantSave, cardMissing, limitRows, overBy, shownBalance } from './account';
+import { cardSetUp } from '../../../src/domain/recurring';
 
 const acc = (kind: string, balance: number, credit_limit: number | null) => ({
   kind,
@@ -59,5 +59,24 @@ describe('shownBalance', () => {
     expect(overBy(acc('CREDIT_CARD', -12_500_000, 12_000_000))).toBe(500_000);
     expect(overBy(acc('CREDIT_CARD', -1_600_000, 12_000_000))).toBe(0);
     expect(overBy(acc('PAYLATER', -1_600_000, null))).toBe(0);
+  });
+});
+
+describe('a card before it saves', () => {
+  it('needs its limit, both bill days and no more used than the limit; each screen words it', () => {
+    expect(cardMissing({ limit: null, days: [20, 5] })).toBe('limit');
+    expect(cardMissing({ limit: 1_000, days: [20, null] })).toBe('days');
+    expect(cardMissing({ limit: 1_000, days: [20, 5], used: 2_000 })).toBe('used');
+    expect(cardMissing({ limit: 1_000, days: [20, 5], used: 1_000 })).toBeNull();
+    expect(cantSave({ name: 'BCA', card: true, limit: null, days: [] })).toBe('Enter the limit');
+    expect(cantSave({ name: 'BCA', card: false, limit: null, days: [] })).toBeNull();
+    expect(cantSave({ name: ' ', card: false, limit: null, days: [] })).toBe('Enter a name');
+  });
+
+  it('is set up once it has its limit and both bill days (the same test as the server)', () => {
+    const card = { kind: 'CREDIT_CARD', credit_limit: 1_000, statement_day: 20, due_day: 5 };
+    expect(cardSetUp(card)).toBe(true);
+    expect(cardSetUp({ ...card, due_day: null })).toBe(false);
+    expect(cardSetUp({ ...card, kind: 'BANK' })).toBe(false);
   });
 });

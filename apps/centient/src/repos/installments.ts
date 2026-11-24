@@ -219,6 +219,40 @@ export function installmentsRepo(db: D1Database) {
       );
     },
 
+    /** Interest typed by hand on a card bill (`card_interest`), live entries only, with where it came from. */
+    handInterest(ws: string) {
+      return all<{
+        entry_id: string;
+        account_id: string;
+        day: string;
+        amount: number;
+        from_month: string | null;
+        plan_id: string | null;
+      }>(
+        db,
+        `SELECT i.entry_id, e.account_id, substr(t.occurred_at, 1, 10) AS day, -e.amount AS amount, i.from_month, i.plan_id
+        FROM card_interest i
+        JOIN transactions t ON t.group_id = i.entry_id AND t.deleted_at IS NULL
+        JOIN entries e ON e.transaction_id = t.id AND e.amount < 0
+        WHERE i.workspace_id = ?`,
+        ws,
+      );
+    },
+
+    /** Tags a hand-typed interest entry; batched with the entry. */
+    handInterestInsert(ws: string, entryId: string, from: { month: string } | { planId: string }) {
+      return db
+        .prepare(
+          'INSERT INTO card_interest (entry_id, workspace_id, from_month, plan_id) VALUES (?, ?, ?, ?)',
+        )
+        .bind(
+          entryId,
+          ws,
+          'month' in from ? from.month : null,
+          'planId' in from ? from.planId : null,
+        );
+    },
+
     /** Marks slice `no`'s interest posted as `entryId`; batched with the entry, a second post fails the batch. */
     interestInsert(ws: string, planId: string, no: number, entryId: string) {
       return db

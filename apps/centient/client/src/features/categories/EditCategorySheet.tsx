@@ -2,6 +2,7 @@
 // up by name can't be deleted.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
+import { BUILT_IN_CATEGORIES } from '../../../../src/domain/categories';
 import type { Category } from '../../../../src/repos/categories';
 import { InputRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
@@ -11,9 +12,6 @@ import { DeleteCategorySheet } from './DeleteCategorySheet';
 import type { RowPatch } from '../../models/api';
 import { categoryApi } from '../../models/category';
 import { persist } from '../../models/query';
-
-// Looked up by name by the app (fees, opening balances, corrections).
-const BUILT_IN = ['Fees & Interests', 'Opening balance', 'Balance adjustment'];
 
 export function EditCategorySheet({
   category: c,
@@ -55,7 +53,7 @@ export function EditCategorySheet({
           >
             Hide this category
           </Button>
-          {!BUILT_IN.includes(c.name) && (
+          {!BUILT_IN_CATEGORIES.includes(c.name) && (
             <Button
               large
               rounded

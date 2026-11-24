@@ -9,6 +9,7 @@ import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
 import { categoryApi } from '../../models/category';
 import { persist } from '../../models/query';
+import { BOOKKEEPING_CATEGORIES } from '../../../../src/domain/categories';
 
 export function DeleteCategorySheet({
   category,
@@ -21,9 +22,7 @@ export function DeleteCategorySheet({
 }) {
   const others = active(catalog.value.categories).filter(
     c =>
-      c.kind === category.kind &&
-      c.id !== category.id &&
-      !['Balance adjustment', 'Opening balance'].includes(c.name),
+      c.kind === category.kind && c.id !== category.id && !BOOKKEEPING_CATEGORIES.includes(c.name),
   );
   const fallback =
     others.find(c => c.name === (category.kind === 'EXPENSE' ? 'Other' : 'Other income')) ??

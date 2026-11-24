@@ -1,11 +1,9 @@
 // Bills: what this month still asks for, a calendar of due dates, every bill grouped by how soon it is due, and
 // monthly payments found in the entries. A bill's PAID? key pays it in one tap; the bill itself opens its own
-// page (BillDetail), whose EDIT opens the form. Card bills and installments sit among them, tagged, with a key
-// that opens the card's pay dialog or the plan.
+// page (BillDetail), whose EDIT opens the form. Card bills sit among them, tagged, with a key that opens the
+// card's pay dialog (a plan's slices ride inside its card's bill).
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { usePlans } from '../features/installments/plans';
-import { PlanSheet } from '../features/installments/PlanSheet';
 import { BillDetail } from '../features/recurring/BillDetail';
 import { BillLine } from '../features/recurring/BillLine';
 import { DueCalendar } from '../features/recurring/DueCalendar';
@@ -43,8 +41,7 @@ const list = 'panel mx-4 bg-white dark:bg-raised';
 export function Bills() {
   const { data } = useQuery(recurringQueries.list());
   const [editing, setEditing] = useState<Editing | null>(null);
-  const plans = usePlans();
-  /** The card bill or installment whose pay dialog is open. */
+  /** The card bill whose pay dialog is open. */
   const [paying, setPaying] = useState<OtherDue | null>(null);
   /** The bill whose page is open. */
   const [opened, open, back] = useSubPage<string>();
@@ -55,7 +52,7 @@ export function Bills() {
   }, [data, opened, item]);
   const view = useMemo(() => {
     if (!data) return null;
-    const others = otherDues(data.cards, plans ?? [], data.today);
+    const others = otherDues(data.cards, data.today);
     return {
       others,
       runs: monthRun(data.items, data.today),
@@ -63,8 +60,8 @@ export function Bills() {
       othersByDay: othersByDay(others),
       groups: billGroups(data.items, data.today, others),
     };
-  }, [data, plans]);
-  const pay = usePayBill(view?.others.filter(o => o.next).map(otherName));
+  }, [data]);
+  const pay = usePayBill(view?.others.map(otherName));
   if (!data || !view) return <Page title="Bills" />;
   const { today } = data;
   const lines = (rows: BillGroup['rows']) =>
@@ -81,9 +78,7 @@ export function Bills() {
         />
       ),
     );
-  const card =
-    paying?.kind === 'CARD' && catalog.value.accounts.find(a => a.id === paying.accountId);
-  const planAccount = paying?.plan && catalog.value.accounts.find(a => a.id === paying.accountId);
+  const card = paying && catalog.value.accounts.find(a => a.id === paying.accountId);
 
   const sheets = (
     <>
@@ -93,14 +88,6 @@ export function Bills() {
           card={card}
           left={paying.amount}
           today={today}
-          onClose={() => setPaying(null)}
-        />
-      )}
-      {paying?.plan && planAccount && (
-        <PlanSheet
-          key={`plan:${paying.plan.id}`}
-          plan={plans?.find(p => p.id === paying.plan?.id) ?? null}
-          account={planAccount}
           onClose={() => setPaying(null)}
         />
       )}

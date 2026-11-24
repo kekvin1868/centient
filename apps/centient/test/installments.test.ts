@@ -9,6 +9,7 @@ import { world as base, type World } from './world';
 const NOW = Date.parse('2026-10-17T03:00:00Z'); // Sat 17 Oct 2026, 10:00 Jakarta
 
 function world() {
+  const clock = { now: NOW };
   const files = new Map<string, { body: ArrayBuffer; contentType: string }>();
   const store: FileStore = {
     async put(k, body, contentType) {
@@ -21,7 +22,7 @@ function world() {
       for (const k of keys) files.delete(k);
     },
   };
-  return { w: base({ now: () => NOW, store }), files };
+  return { w: base({ now: () => clock.now, store }), files, clock };
 }
 
 async function setup(w: World) {
@@ -44,8 +45,8 @@ async function setup(w: World) {
 }
 
 describe('installment plans', () => {
-  it('splits each installment per person, logs each paid share, and keeps balances right', async () => {
-    const { w } = world();
+  it('splits each installment per person; the card bill pays your slice, others mark theirs', async () => {
+    const { w, clock } = world();
     const t = await setup(w);
     const plan = await t.s().installments.create({
       accountId: t.kredivo,
@@ -63,25 +64,36 @@ describe('installment plans', () => {
     expect(plan).toMatchObject({
       paidCount: 1,
       remaining: 1_788_000,
-      next: { no: 2, due: '2026-11-05', left: 894_000, overdue: false },
+      next: { no: 2, bill: '2026-10', due: '2026-11-05', left: 894_000, overdue: false },
     });
     // Added on 17 Oct with one paid: installment 2 rides the bill closing 20 Oct, due 5 Nov.
     expect(plan.schedule.map(s => s.due)).toEqual(['2026-10-05', '2026-11-05', '2026-12-05']);
+    // Your share has no pay key of its own: it is paid with the card bill.
+    await expect(t.s().installments.markPaid(plan.id, 2, 0, {})).rejects.toThrow(
+      'paid with the card bill',
+    );
 
-    // I pay my half of installment 2 from BCA: 1/2 of 894k.
-    let p = await t.s().installments.markPaid(plan.id, 2, 0, { fromAccountId: t.bca });
-    expect(await t.balance(t.bca)).toBe(5_000_000 - 447_000);
-    expect(await t.balance(t.kredivo)).toBe(-1_788_000 + 447_000);
-    expect(p.next).toMatchObject({ no: 2, left: 447_000 });
-    await expect(
-      t.s().installments.markPaid(plan.id, 2, 0, { fromAccountId: t.bca }),
-    ).rejects.toThrow('already paid');
-
-    // Brother pays his half: it comes off what he owes and off the debt.
-    p = await t.s().installments.markPaid(plan.id, 2, 1, {});
+    // The Oct bill closes. Brother pays his half: it comes off what he owes and off the debt.
+    clock.now = Date.parse('2026-10-21T03:00:00Z');
+    let p = await t.s().installments.markPaid(plan.id, 2, 1, {});
     expect(await t.balance(brother.id)).toBe(447_000);
+    expect(await t.balance(t.kredivo)).toBe(-1_788_000 + 447_000);
+    expect(p).toMatchObject({ paidCount: 1, next: { no: 2 } }); // the bill is not paid whole yet
+    await expect(t.s().installments.markPaid(plan.id, 2, 1, {})).rejects.toThrow('already paid');
+
+    // I pay the rest of the bill ("I paid it"): slice 2 is paid.
+    const [mine] = await t.s().ledger.record([
+      {
+        type: 'TRANSFER',
+        fromAccountId: t.bca,
+        toAccountId: t.kredivo,
+        amount: 447_000,
+        date: '2026-10-21',
+      },
+    ]);
+    p = (await t.s().installments.list(t.kredivo))[0];
     expect(await t.balance(t.kredivo)).toBe(-894_000);
-    expect(p).toMatchObject({ paidCount: 2, next: { no: 3, left: 894_000 } });
+    expect(p).toMatchObject({ paidCount: 2, remaining: 894_000, next: { no: 3, bill: '2026-11' } });
 
     // Proof on his share, readable back; type and size are checked.
     const png = new Uint8Array([137, 80, 78, 71]).buffer;
@@ -111,12 +123,10 @@ describe('installment plans', () => {
         .installments.file(proof.id),
     ).rejects.toThrow('not found');
 
-    // Deleting my transfer from activity un-pays my share; undoing his removes his transfer.
-    const mine = p.schedule[1].shares[0].paid!.entryId!;
+    // Deleting my payment from activity un-pays the slice; undoing his removes his transfer.
     await t.s().ledger.remove(mine);
     p = (await t.s().installments.list(t.kredivo))[0];
-    expect(p.schedule[1].shares[0].paid).toBeNull();
-    p = await t.s().installments.markPaid(plan.id, 2, 0, { fromAccountId: t.bca }); // can be paid again
+    expect(p).toMatchObject({ paidCount: 1, next: { no: 2, overdue: false } });
     p = await t.s().installments.unmarkPaid(plan.id, 2, 1);
     expect(await t.balance(brother.id)).toBe(894_000);
     expect(p.schedule[1].shares[1].paid).toBeNull();
@@ -154,7 +164,6 @@ describe('installment plans', () => {
       others: [],
       alreadyInBalance: true,
     });
-    await t.s().installments.markPaid(solo.id, 1, 0, { fromAccountId: t.bca });
     await expect(
       t.s().installments.attachProof(solo.id, 1, 0, {
         name: 'a.png',

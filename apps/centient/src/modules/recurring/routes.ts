@@ -42,6 +42,30 @@ export const recurringRoutes = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
 
+  // "Log interest" on a card bill, tagged by where it came from.
+  .post(
+    '/cards/:accountId/interest',
+    json(
+      z.object({
+        amount: money,
+        from: z.union([
+          z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }),
+          z.object({ planId: id }),
+        ]),
+      }),
+    ),
+    async c =>
+      c.json(
+        {
+          entryId: await c.var.services.recurring.logInterest(
+            c.req.param('accountId'),
+            c.req.valid('json'),
+          ),
+        },
+        201,
+      ),
+  )
+
   .post('/:id/paid', json(z.object({ date: day.optional(), amount: money.optional() })), async c =>
     c.json({
       entryId: await c.var.services.recurring.paid(c.req.param('id'), c.req.valid('json')),
