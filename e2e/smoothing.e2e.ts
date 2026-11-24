@@ -403,8 +403,8 @@ test('a plan only you pay has no pay key and no proof of payment', async () => {
   await pick('Kredivo');
   await page.getByRole('button', { name: /Shoes, 0 of 2 paid/ }).tap();
   const plan = page.getByRole('dialog', { name: 'Shoes' });
-  await expect(plan.locator('[data-installment="1"]')).toContainText(
-    /Installment 1 of 2 · \w{3} bill/,
+  await expect(plan.getByRole('region', { name: 'Next installment' })).toContainText(
+    /NEXT\s*[A-Z]{3} bill\s*Rp200\.000/,
   );
   await expect(plan.getByRole('button', { name: /Mark .* paid/ })).toHaveCount(0);
   await expect(plan.getByText(/Attach proof/)).toHaveCount(0);

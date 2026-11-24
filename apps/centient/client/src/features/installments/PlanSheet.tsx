@@ -11,7 +11,7 @@ import { billMonth } from '../../models/dates';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
-import { installmentApi, moveWords, type Plan } from '../../models/installment';
+import { installmentApi, moveView, type Plan } from '../../models/installment';
 import { persist } from '../../models/query';
 import { attempt } from '../../lib/run';
 
@@ -26,7 +26,7 @@ export function PlanSheet({
 }) {
   const [confirm, setConfirm] = useState(false);
   /** The move's confirm sheet: open once the server said what it would take back. */
-  const [moving, setMoving] = useState<string | null>(null);
+  const [moving, setMoving] = useState<ReturnType<typeof moveView> | null>(null);
   if (!plan) return null;
   const today = me.value?.today ?? '';
   const cur = account.currency_code;
@@ -34,7 +34,7 @@ export function PlanSheet({
   const askMove = () =>
     attempt(async () => {
       const { interest } = await installmentApi.nextBillPreview(plan.id);
-      setMoving(moveWords(plan, interest, n => formatMoney(n, cur)));
+      setMoving(moveView(plan, interest));
     });
   const move = async () => {
     setMoving(null);
@@ -50,73 +50,99 @@ export function PlanSheet({
   return (
     <>
       <Sheet open={!confirm && !moving} onClose={onClose} title={plan.name}>
+        {/* At a glance: what is left, a pip per installment (filled = paid), and the next bill it rides. */}
         <div className="mx-4 my-4">
-          <div className="text-[15px] font-semibold text-muted">
+          <div className="num text-[28px] font-extrabold tracking-[-0.04em]">
+            {formatMoney(plan.remaining, cur)}{' '}
+            <span className="text-[17px] font-bold tracking-normal text-muted">left</span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5" aria-hidden="true">
+            {plan.schedule.map(s => (
+              <span
+                key={s.no}
+                className={`size-3.5 rounded-[2px] border-2 ${s.left === 0 ? 'border-miku bg-miku' : 'border-current opacity-40'}`}
+              />
+            ))}
+          </div>
+          <div className="mt-1.5 text-[15px] font-semibold text-muted">
             {plan.paidCount} of {plan.installments} paid ·{' '}
             {formatMoney(plan.amountPerInstallment, cur)} a month
           </div>
-          <div className="mt-1 text-[28px] font-extrabold tracking-[-0.04em] num">
-            {formatMoney(plan.remaining, cur)}{' '}
-            <span className="text-[17px] font-bold text-muted tracking-normal">left</span>
-          </div>
-          <div className="mt-2 text-[14px] text-muted">
-            {plan.parties.map(x => `${x.name} ${formatMoney(x.share, cur)}`).join(' · ')} each
-            installment
-          </div>
+          {shared && (
+            <div className="mt-1 text-[14px] text-muted">
+              {plan.parties.map(x => `${x.name} ${formatMoney(x.share, cur)}`).join(' · ')} each
+              installment
+            </div>
+          )}
         </div>
         {plan.next && (
-          <Block className="!my-3">
-            <Button large rounded tonal onClick={askMove}>
-              Move to next bill
-            </Button>
-            <p className="mt-2 text-[13px] text-muted">
-              If {account.name}'s bill didn't have it yet, every installment moves one bill on.
-            </p>
-          </Block>
-        )}
-        <p className="mx-4 mb-3 text-[13px] text-muted">
-          Each installment rides {account.name}'s bill. It is paid when you pay that bill.
-        </p>
-        <div className="mx-4 flex flex-col gap-3">
-          {plan.schedule.map(s => {
-            const overdue = s.left > 0 && s.due < today;
-            return (
-              <div
-                key={s.no}
-                className={`panel rounded-2xl bg-white p-3.5 dark:bg-raised ${s.left === 0 ? 'opacity-70' : ''}`}
-                data-installment={s.no}
+          <section
+            className="panel mx-4 mb-4 rounded-2xl bg-white px-4 py-3 dark:bg-raised"
+            aria-label="Next installment"
+          >
+            <div className="flex items-baseline gap-3">
+              <span className="text-[13px] font-bold tracking-[0.08em] text-muted">NEXT</span>
+              <span className="flex-1 text-[19px] font-extrabold">
+                {billMonth(plan.next.bill).toUpperCase()} bill
+              </span>
+              <span className="num text-[19px] font-extrabold">
+                {formatMoney(plan.next.left, cur)}
+              </span>
+            </div>
+            <div className="mt-2 flex items-center justify-end gap-2 text-[14px] text-muted">
+              <span>Not on this bill?</span>
+              <button
+                type="button"
+                className="keycap keycap-quiet !rounded-[3px] !text-[12px]"
+                aria-label="Move to next bill"
+                onClick={askMove}
               >
-                <div className="mb-2 flex items-baseline justify-between gap-2">
-                  <span className="text-[15px] font-bold">
-                    Installment {s.no} of {plan.installments} · {billMonth(s.bill)} bill
-                  </span>
-                  <span
-                    className={`text-[13px] font-semibold ${overdue ? 'text-negative' : 'text-muted'}`}
-                  >
-                    {s.left === 0
-                      ? 'Paid'
-                      : `${overdue ? 'Overdue · ' : ''}${dayLabel(s.due, today)}`}
-                  </span>
+                MOVE ▸
+              </button>
+            </div>
+          </section>
+        )}
+        <div className="mx-4 flex flex-col gap-3">
+          {shared &&
+            plan.schedule.map(s => {
+              const overdue = s.left > 0 && s.due < today;
+              return (
+                <div
+                  key={s.no}
+                  className={`panel rounded-2xl bg-white p-3.5 dark:bg-raised ${s.left === 0 ? 'opacity-70' : ''}`}
+                  data-installment={s.no}
+                >
+                  <div className="mb-2 flex items-baseline justify-between gap-2">
+                    <span className="text-[15px] font-bold">
+                      Installment {s.no} of {plan.installments} · {billMonth(s.bill)} bill
+                    </span>
+                    <span
+                      className={`text-[13px] font-semibold ${overdue ? 'text-negative' : 'text-muted'}`}
+                    >
+                      {s.left === 0
+                        ? 'Paid'
+                        : `${overdue ? 'Overdue · ' : ''}${dayLabel(s.due, today)}`}
+                    </span>
+                  </div>
+                  {!shared && (
+                    <span className="text-[13px] text-muted num">
+                      {formatMoney(plan.amountPerInstallment, cur)}
+                    </span>
+                  )}
+                  {shared &&
+                    s.shares.map(x => (
+                      <ShareRow
+                        key={x.seq}
+                        plan={plan}
+                        no={s.no}
+                        sliceLeft={s.left}
+                        share={x}
+                        currency={cur}
+                      />
+                    ))}
                 </div>
-                {!shared && (
-                  <span className="text-[13px] text-muted num">
-                    {formatMoney(plan.amountPerInstallment, cur)}
-                  </span>
-                )}
-                {shared &&
-                  s.shares.map(x => (
-                    <ShareRow
-                      key={x.seq}
-                      plan={plan}
-                      no={s.no}
-                      sliceLeft={s.left}
-                      share={x}
-                      currency={cur}
-                    />
-                  ))}
-              </div>
-            );
-          })}
+              );
+            })}
         </div>
         <Block>
           <Button
@@ -133,11 +159,28 @@ export function PlanSheet({
       </Sheet>
       <ConfirmSheet
         open={Boolean(moving)}
-        message={moving ?? ''}
-        confirmLabel="Move to next bill"
+        message={moving?.words ?? ''}
+        confirmLabel="MOVE"
         onCancel={() => setMoving(null)}
         onConfirm={move}
-      />
+      >
+        {moving && (
+          <div className="c-msg text-center">
+            <p className="num text-[30px] font-extrabold tracking-[0.04em]">
+              {moving.from} → {moving.to}
+            </p>
+            <p className="mt-1">
+              {moving.left === 1 ? 'The installment left moves' : `All ${moving.left} left move`}{' '}
+              one bill on
+            </p>
+            {moving.interest.map(i => (
+              <p key={i.on} className="mt-1">
+                +{formatMoney(i.amount, cur)} interest back in {i.on}
+              </p>
+            ))}
+          </div>
+        )}
+      </ConfirmSheet>
       <ConfirmSheet
         open={confirm}
         message={`Remove ${plan.name}? Payments you marked stay in your activity.`}

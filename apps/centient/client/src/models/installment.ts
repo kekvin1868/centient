@@ -43,22 +43,25 @@ export const installmentApi = {
 };
 
 /**
- * What "Move to next bill" does, for its confirm sheet: every installment rides one bill later, and interest
- * already posted for a bill that now comes later is taken off until that bill closes (the daily job adds it back).
+ * What "Move to next bill" does, for its confirm box, as a picture: the next installment's bill → the one after
+ * (every installment left moves one bill on), and interest already posted that comes off now and is added again
+ * when its new bill closes (the daily job). `words` is the same in one line, for screen readers.
  */
-export function moveWords(
-  plan: Pick<Plan, 'firstBill' | 'installments'>,
+export function moveView(
+  plan: Pick<Plan, 'firstBill' | 'installments' | 'paidCount' | 'next'>,
   interest: { no: number; amount: number }[],
-  money: (n: number) => string,
 ) {
-  const on = (no: number) => billMonth(sliceBill(plan, no));
-  const last = plan.installments;
-  const moves =
-    last === 1
-      ? `It moves from the ${on(1)} bill to the ${on(2)} bill.`
-      : `Installment 1 moves from the ${on(1)} bill to the ${on(2)} bill, and so on up to installment ${last}: ${on(last)} to ${on(last + 1)}.`;
-  const taken = interest.length
-    ? ` Interest already logged (${interest.map(i => `${money(i.amount)} on installment ${i.no}`).join(', ')}) comes off for now and is added again when its new bill closes.`
-    : '';
-  return `Every installment moves one bill later. ${moves}${taken} Only do this if the bank started the plan a bill later.`;
+  const on = (no: number) => billMonth(sliceBill(plan, no)).toUpperCase();
+  const no = plan.next?.no ?? 1;
+  const left = plan.installments - plan.paidCount;
+  const view = {
+    from: on(no),
+    to: on(no + 1),
+    left,
+    interest: interest.map(i => ({ amount: i.amount, on: on(i.no + 1) })),
+  };
+  return {
+    ...view,
+    words: `${view.from} to ${view.to}: ${left === 1 ? 'the installment left moves' : `all ${left} left move`} one bill on`,
+  };
 }
