@@ -9,6 +9,7 @@ import {
   dueWords,
   interestSources,
   minimumState,
+  paidExtra,
   nextBillName,
   statementGap,
   statementOf,
@@ -36,6 +37,7 @@ describe('due dates on screen', () => {
       before: null,
       interestFrom: { month: null, plans: [] },
       statement: null,
+      unpaidBills: 1,
       lines: { carry: 0, spent: 0, slices: [], interest: [] },
     };
     const list = {
@@ -72,6 +74,7 @@ describe('due dates on screen', () => {
       before: null,
       interestFrom: { month: null, plans: [] },
       statement: null,
+      unpaidBills: 1,
       lines: { carry: 0, spent: 0, slices: [], interest: [] },
     };
     const idr = (id: string) => id !== 'usd';
@@ -115,6 +118,7 @@ describe('due dates on screen', () => {
       before: '2026-10',
       interestFrom: { month: '2026-10', plans: [{ id: 'p1', name: 'TV' }] },
       statement: null,
+      unpaidBills: 1,
       lines: {
         carry: 500_000,
         spent: 700_000,
@@ -144,14 +148,15 @@ describe('due dates on screen', () => {
     expect(billLines(card).map(l => l.label)).toEqual([
       'Unpaid from Oct',
       'Spending',
-      'TV 2/6',
+      'TV · installment 2 of 6',
       'Interest · on unpaid Oct',
       'Interest · TV installment 2',
     ]);
-    expect(interestSources(card).map(s => [s.label, s.from])).toEqual([
-      ['On unpaid Oct', { month: '2026-10' }],
-      ['TV', { planId: 'p1' }],
-    ]);
+    // Oct's interest is already typed on this bill: only the plan is still offered.
+    expect(interestSources(card).map(s => [s.label, s.from])).toEqual([['TV', { planId: 'p1' }]]);
+    expect(
+      interestSources({ ...card, lines: { ...card.lines, interest: [] } }).map(s => s.label),
+    ).toEqual(['On unpaid Oct', 'TV']);
     expect(interestSources({ ...card, interestFrom: { month: null, plans: [] } })).toEqual([]);
   });
 
@@ -175,6 +180,7 @@ describe("the bank's statement", () => {
     before: null,
     interestFrom: { month: null, plans: [] },
     statement: { total: 1_250_000, minimum: 125_000 },
+    unpaidBills: 1,
     lines: { carry: 0, spent: 1_250_000, slices: [], interest: [] },
   };
 
@@ -214,5 +220,61 @@ describe("the bank's statement", () => {
     expect(minimumState({ ...card, paidSince: 100_000 }, { total: 1, minimum: null })).toBeNull();
     expect(nextBillName(card)).toBe('Dec');
     expect(nextBillName({ ...card, cutOff: '2026-12-20' })).toBe('Jan');
+  });
+});
+
+describe('interest already typed, and paying more than the bill', () => {
+  const card = {
+    accountId: 'bca',
+    cutOff: '2026-11-10',
+    dueOn: '2026-11-25',
+    bill: 1_350_000,
+    left: 0,
+    paidSince: 1_400_000,
+    spentSince: 0,
+    before: '2026-10',
+    interestFrom: { month: '2026-10', plans: [{ id: 'p1', name: 'TV' }] },
+    statement: null,
+    unpaidBills: 0,
+    lines: {
+      carry: 1_000_000,
+      spent: 300_000,
+      slices: [],
+      interest: [
+        {
+          entryId: 'e1',
+          planId: null,
+          planName: null,
+          no: null,
+          from: '2026-10',
+          day: '2026-11-10',
+          amount: 50_000,
+        },
+      ],
+    },
+  };
+
+  it('offers only sources with no typed line on this bill (a posted plan line does not count)', () => {
+    expect(interestSources(card).map(s => s.key)).toEqual(['p:p1']);
+    const posted = {
+      entryId: 'e2',
+      planId: 'p1',
+      planName: 'TV',
+      no: 1,
+      from: null,
+      day: '2026-11-10',
+      amount: 9,
+    };
+    expect(
+      interestSources({
+        ...card,
+        lines: { ...card.lines, interest: [...card.lines.interest, posted] },
+      }).map(s => s.key),
+    ).toEqual(['p:p1']);
+  });
+
+  it('paid extra is what went in beyond the bill', () => {
+    expect(paidExtra(card)).toBe(50_000);
+    expect(paidExtra({ ...card, paidSince: 400_000 })).toBe(0);
   });
 });

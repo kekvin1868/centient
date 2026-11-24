@@ -71,7 +71,11 @@ export function dueWords(due: string, today: string): string {
 /** One line of a card bill, in the bank's order. */
 export type BillLine = {
   key: string;
+  /** What kind of line: the tag on the receipt. */
+  kind: 'carry' | 'credit' | 'spent' | 'slice' | 'interest';
+  /** The whole line in words (its accessible name), and the part after the tag. */
   label: string;
+  detail: string;
   amount: number;
   paid?: boolean;
   /** Tapping it opens this plan (an installment) or this entry (interest). */
@@ -82,42 +86,80 @@ export type BillLine = {
 /** A card bill's lines: unpaid (or paid extra) from the bill before, spending, each plan's slice, interest. */
 export function billLines(card: CardStatement): BillLine[] {
   const { carry, spent, slices, interest } = card.lines;
-  const before = card.before ? billMonth(card.before) : 'last bill';
-  return [
-    ...(carry > 0 ? [{ key: 'carry', label: `Unpaid from ${before}`, amount: carry }] : []),
-    ...(carry < 0 ? [{ key: 'carry', label: `Paid extra on ${before}`, amount: carry }] : []),
-    ...(spent ? [{ key: 'spent', label: 'Spending', amount: spent }] : []),
-    ...slices.map(s => ({
+  const before = card.before ? billMonth(card.before) : 'last';
+  const lines: BillLine[] = [];
+  if (carry > 0)
+    lines.push({
+      key: 'carry',
+      kind: 'carry',
+      label: `Unpaid from ${before}`,
+      detail: `from the ${before} bill`,
+      amount: carry,
+    });
+  if (carry < 0)
+    lines.push({
+      key: 'carry',
+      kind: 'credit',
+      label: `Paid extra on ${before}`,
+      detail: `paid extra on the ${before} bill`,
+      amount: carry,
+    });
+  if (spent)
+    lines.push({
+      key: 'spent',
+      kind: 'spent',
+      label: 'Spending',
+      detail: 'on the card',
+      amount: spent,
+    });
+  for (const s of slices)
+    lines.push({
       key: `slice:${s.planId}:${s.no}`,
-      label: `${s.name} ${s.no}/${s.of}`,
+      kind: 'slice',
+      label: `${s.name} · installment ${s.no} of ${s.of}`,
+      detail: `${s.name} · ${s.no} of ${s.of}`,
       amount: s.amount,
       paid: s.paid,
       planId: s.planId,
-    })),
-    ...interest.map(i => ({
+    });
+  for (const i of interest) {
+    const detail = i.from
+      ? `on unpaid ${billMonth(i.from)}`
+      : `${i.planName ?? 'plan'}${i.no ? ` installment ${i.no}` : ''}`;
+    lines.push({
       key: `interest:${i.entryId}`,
-      label: i.from
-        ? `Interest · on unpaid ${billMonth(i.from)}`
-        : `Interest${i.planName ? ` · ${i.planName}${i.no ? ` installment ${i.no}` : ''}` : ''}`,
+      kind: 'interest',
+      label: `Interest · ${detail}`,
+      detail,
       amount: i.amount,
       entryId: i.entryId,
-    })),
-  ];
+    });
+  }
+  return lines;
 }
 
 /** A choice for "Charged on" in Log interest. */
 export type InterestSource = { key: string; label: string; from: Interest['from'] };
 
-/** Where the server lets this bill's interest come from (`interestFrom`), as choices. */
+/**
+ * Where the server lets this bill's interest come from (`interestFrom`), as choices: only the ones with no
+ * hand-typed line on this bill yet (one per source per bill; the server refuses a second, INTEREST_LOGGED).
+ */
 export function interestSources(card: CardStatement): InterestSource[] {
   const { month, plans } = card.interestFrom;
+  const typed = card.lines.interest;
   return [
-    ...(month
+    ...(month && !typed.some(l => l.from === month)
       ? [{ key: `m:${month}`, label: `On unpaid ${billMonth(month)}`, from: { month } }]
       : []),
-    ...plans.map(p => ({ key: `p:${p.id}`, label: p.name, from: { planId: p.id } })),
+    ...plans
+      .filter(p => !typed.some(l => l.planId === p.id && l.no === null))
+      .map(p => ({ key: `p:${p.id}`, label: p.name, from: { planId: p.id } })),
   ];
 }
+
+/** Paid more than the bill (a line removed after paying it): that much counts toward the next bill. */
+export const paidExtra = (card: CardStatement) => Math.max(0, card.paidSince - card.bill);
 
 /**
  * Home's "After card bills": your money less what is left to pay of each printed card bill and what was spent on

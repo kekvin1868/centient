@@ -123,6 +123,11 @@ export function createRecurringService({
         /** Paid into the card since the last closing: what "I paid it" and transfers in added up to. */
         paidSince: r.paidSince,
         spentSince: r.spentSince,
+        /**
+         * How many bills in a row are not paid off: 1 = only the last one, 2 = the one before carried over too…
+         * (0 once the last is paid). Home's scroll ages with it.
+         */
+        unpaidBills: r.left === 0 ? 0 : unpaidRun(r.bills),
         /** The bill before the last one: what "Unpaid from <month>" and "Log interest · on unpaid" name. */
         before: r.bills.length > 1 ? r.bills.at(-2)!.month : null,
         /** Where "Log interest" may say the interest came from (src/domain/cardBill.ts `interestSources`). */
@@ -293,6 +298,16 @@ export function createRecurringService({
           'BILL_CLOSED',
           'That bill closed since. Log the interest from the new statement',
         );
+      // One hand-typed line per source per bill: typing the statement's interest again must not add it twice.
+      const from = i.from;
+      const twice = card.bill.interest.some(l =>
+        'month' in from ? l.from === from.month : l.planId === from.planId && l.no === null,
+      );
+      if (twice)
+        throw new DomainError(
+          'INTEREST_LOGGED',
+          'That interest is already on this bill. Tap its line to change it',
+        );
       let label: string;
       if ('month' in i.from) {
         if (i.from.month !== card.interestFrom.month)
@@ -359,6 +374,13 @@ export function createRecurringService({
       await repos.recurring.hide(ws, merchant.trim().toLowerCase());
     },
   };
+}
+
+/** Bills in a row, back from the last, that something carried over into (the last one counts as one). */
+function unpaidRun(bills: { carry: number }[]) {
+  let n = 1;
+  for (let i = bills.length - 1; i > 0 && bills[i].carry > 0; i--) n++;
+  return n;
 }
 
 /** "Dec 2026" for a bill month (YYYY-MM): the statement's own words. */

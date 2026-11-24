@@ -385,6 +385,7 @@ describe('card statement', () => {
       before: null,
       interestFrom: { month: null, plans: [] },
       statement: null,
+      unpaidBills: 1,
       lines: { carry: 0, spent: 1_000_000, slices: [], interest: [] },
     });
     await t.svc().ledger.record([
@@ -516,6 +517,56 @@ describe('card statement', () => {
     // The next closing prints a new bill, with no statement yet.
     t.clock.now = at('2026-12-21');
     expect(await bill()).toMatchObject({ cutOff: '2026-12-20', statement: null });
+  });
+
+  it('takes one hand-typed interest per source per bill', async () => {
+    const t = await workspace('2026-11-25');
+    const card = await t.svc().accounts.create({
+      name: 'BCA Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
+    await t.spend('2026-10-10', 500_000, 'tokopedia', card.id); // Oct bill, never paid
+    const log = () =>
+      t.svc().recurring.logInterest(card.id, { amount: 50_000, from: { month: '2026-10' } });
+    const first = await log();
+    // Typed again from the statement sheet: refused, the bill keeps one line.
+    await expect(log()).rejects.toMatchObject({ code: 'INTEREST_LOGGED' });
+    expect((await t.svc().recurring.list()).cards[0].lines.interest).toHaveLength(1);
+    // Deleted (the bank waived it): it can be typed again.
+    await t.svc().ledger.remove(first);
+    await log();
+    expect((await t.svc().recurring.list()).cards[0].lines.interest).toHaveLength(1);
+  });
+
+  it('counts the bills in a row left unpaid, for the scroll on Home', async () => {
+    const t = await workspace('2026-10-25');
+    const card = await t.svc().accounts.create({
+      name: 'BCA Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
+    await t.spend('2026-10-10', 500_000, 'tokopedia', card.id);
+    const unpaid = async () => (await t.svc().recurring.list()).cards[0].unpaidBills;
+    expect(await unpaid()).toBe(1); // Oct's bill, just printed
+    t.clock.now = at('2026-11-25');
+    expect(await unpaid()).toBe(2); // Oct carried into Nov
+    t.clock.now = at('2026-12-25');
+    expect(await unpaid()).toBe(3);
+    await t.svc().ledger.record([
+      {
+        type: 'TRANSFER',
+        fromAccountId: t.bca,
+        toAccountId: card.id,
+        amount: 500_000,
+        date: '2026-12-25',
+      },
+    ]);
+    expect(await unpaid()).toBe(0); // paid off
   });
 
   it("logs no interest on a card's first bill: nothing was unpaid before it", async () => {
