@@ -138,6 +138,13 @@ test('a plan added on Money: its slice is on the bill, its whole price only on t
   await expect(plan.locator('[data-installment]')).toHaveCount(6);
   await page.keyboard.press('Escape');
   await expect(plan).toBeHidden();
+  // The installment's line on the bill opens the same plan.
+  await billBox()
+    .getByRole('button', { name: /^Phone 1\/6/ })
+    .tap();
+  await expect(plan.locator('[data-installment]')).toHaveCount(6);
+  await page.keyboard.press('Escape');
+  await expect(plan).toBeHidden();
 });
 
 test('deleting the purchase takes its plan with it', async () => {

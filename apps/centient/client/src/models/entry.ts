@@ -107,6 +107,8 @@ export const entryApi = {
     await checkEntry(command);
     return outbox.create(command, undefined, { accountId, closedOn, from: source.from });
   },
+  /** One entry as the server has it (a bill line opens its entry). */
+  get: (id: string) => call(client.api.entries[':id'].$get({ param: { id } })),
   /** Several entries written atomically, straight to the server (the first run, the Inbox): needs signal. */
   record: (json: Record_) => call(client.api.transactions.$post({ json })),
   /** `entry`: the entry as the screen shows it. `paybacks`: what to do with Paid backs a shrunk bill has no room for. */

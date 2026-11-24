@@ -87,6 +87,15 @@ test('the bill lists its lines; interest is logged from the statement with where
   await expect(lines()).toContainText('BillRp845.000');
   const bill = await app.bill(card.id);
   expect(bill.lines.interest).toMatchObject([{ from: bill.before, amount: 45_000 }]);
+
+  // A wrong interest line is fixed from the bill: tapping it opens its entry.
+  await lines()
+    .getByRole('button', { name: /^Interest · on unpaid/ })
+    .tap();
+  const entry = page.getByRole('dialog', { name: 'Edit' });
+  await expect(entry.getByLabel('Amount')).toHaveValue('45.000');
+  await page.keyboard.press('Escape');
+  await expect(entry).toBeHidden();
 });
 
 test('paying part of the bill shows it paid and leaves the rest; Home shows money after card bills', async () => {

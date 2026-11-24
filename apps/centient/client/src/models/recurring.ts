@@ -67,7 +67,15 @@ export function dueWords(due: string, today: string): string {
 }
 
 /** One line of a card bill, in the bank's order. */
-export type BillLine = { key: string; label: string; amount: number; paid?: boolean };
+export type BillLine = {
+  key: string;
+  label: string;
+  amount: number;
+  paid?: boolean;
+  /** Tapping it opens this plan (an installment) or this entry (interest). */
+  planId?: string;
+  entryId?: string;
+};
 
 /** A card bill's lines: unpaid (or paid extra) from the bill before, spending, each plan's slice, interest. */
 export function billLines(card: CardStatement): BillLine[] {
@@ -82,6 +90,7 @@ export function billLines(card: CardStatement): BillLine[] {
       label: `${s.name} ${s.no}/${s.of}`,
       amount: s.amount,
       paid: s.paid,
+      planId: s.planId,
     })),
     ...interest.map(i => ({
       key: `interest:${i.entryId}`,
@@ -89,6 +98,7 @@ export function billLines(card: CardStatement): BillLine[] {
         ? `Interest · on unpaid ${billMonth(i.from)}`
         : `Interest${i.planName ? ` · ${i.planName}${i.no ? ` installment ${i.no}` : ''}` : ''}`,
       amount: i.amount,
+      entryId: i.entryId,
     })),
   ];
 }

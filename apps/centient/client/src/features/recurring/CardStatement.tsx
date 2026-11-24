@@ -2,32 +2,35 @@
 // from the bill before, spending, each plan's slice, interest), what was paid since and what is left by when,
 // and what was spent since (that goes on the next bill). "I paid it" logs a transfer into the card, any amount
 // (a short payment carries over). "Log interest" types the bank's interest from the statement, tagged by where
-// it came from. A card made before limits and bill days were required gets a key that opens its settings.
+// it came from. An installment line opens its plan, an interest line its entry (to fix or delete it). A card made
+// before limits and bill days were required gets a key that opens its settings.
 import { useQuery } from '@tanstack/react-query';
 import { cardSetUp } from '../../../../src/domain/recurring';
 import { Button } from 'konsta/react';
 import { useState } from 'react';
 import { EditAccountSheet } from '../accounts/EditAccountSheet';
+import type { Entry } from '../entries/EntryList';
+import { EntrySheet } from '../entries/EntrySheet';
+import { PlanSheet } from '../installments/PlanSheet';
+import { usePlans } from '../installments/plans';
+import { attempt } from '../../lib/run';
+import { entryApi } from '../../models/entry';
 import { formatMoney } from '../../lib/format';
 import { catalog } from '../../lib/state';
 import { billLines, dueWords, interestSources, recurringQueries } from '../../models/recurring';
-import type { Account } from '../../models/workspace';
+import type { Account } from '../../../../src/repos/accounts';
 import { dateText } from '../../ui/Fields';
 import { LogInterestSheet } from './LogInterestSheet';
 import { PayCardSheet } from './PayCardSheet';
 
-export function CardStatement({
-  account,
-}: {
-  account: Pick<
-    Account,
-    'id' | 'name' | 'kind' | 'currency_code' | 'statement_day' | 'due_day' | 'credit_limit'
-  >;
-}) {
+export function CardStatement({ account }: { account: Account }) {
   const { data } = useQuery(recurringQueries.list());
   const [paying, setPaying] = useState(false);
   const [logging, setLogging] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [entry, setEntry] = useState<Entry | null>(null);
+  const [planId, setPlanId] = useState<string | null>(null);
+  const plans = usePlans(account.id);
   const setUp = cardSetUp(account);
   const card = data?.cards.find(c => c.accountId === account.id);
   const money = (n: number) => formatMoney(n, account.currency_code);
@@ -64,20 +67,47 @@ export function CardStatement({
                 : `Left to pay of the bill closed on ${dateText(card.cutOff)}.${card.dueOn ? ` ${dueWords(card.dueOn, data.today)}.` : ''}`}
             </p>
             <ul className="panel mt-3 bg-white px-3.5 py-1 dark:bg-raised" aria-label="Bill lines">
-              {billLines(card).map(l => (
-                <li
-                  key={l.key}
-                  className="flex items-baseline justify-between gap-3 border-b border-edge py-2 text-[15px] last:border-b-0"
-                >
-                  <span className="min-w-0 truncate">
-                    {l.label}
-                    {l.paid && (
-                      <span className="ml-1.5 text-[12px] font-bold text-primary">PAID</span>
+              {billLines(card).map(l => {
+                const body = (
+                  <>
+                    <span className="min-w-0 truncate">
+                      {l.label}
+                      {l.paid && (
+                        <span className="ml-1.5 text-[12px] font-bold text-primary">PAID</span>
+                      )}
+                    </span>
+                    <span className="num shrink-0 font-semibold">
+                      {money(l.amount)}
+                      {(l.planId || l.entryId) && (
+                        <span aria-hidden="true" className="ml-1 text-muted">
+                          ›
+                        </span>
+                      )}
+                    </span>
+                  </>
+                );
+                const row = 'flex items-baseline justify-between gap-3 py-2 text-[15px]';
+                const open = l.planId
+                  ? () => setPlanId(l.planId!)
+                  : l.entryId
+                    ? () => attempt(async () => setEntry(await entryApi.get(l.entryId!)))
+                    : null;
+                return (
+                  <li key={l.key} className="border-b border-edge last:border-b-0">
+                    {open ? (
+                      <button
+                        type="button"
+                        className={`${row} w-full text-left active:opacity-60`}
+                        onClick={open}
+                      >
+                        {body}
+                      </button>
+                    ) : (
+                      <div className={row}>{body}</div>
                     )}
-                  </span>
-                  <span className="num shrink-0 font-semibold">{money(l.amount)}</span>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
               <li className="flex items-baseline justify-between gap-3 py-2 text-[15px] font-bold">
                 <span>Bill</span>
                 <span className="num">{money(card.bill)}</span>
@@ -112,6 +142,16 @@ export function CardStatement({
                 onClose={() => setPaying(false)}
               />
             )}
+            <EntrySheet
+              key={`entry:${entry?.id ?? 'none'}`}
+              entry={entry}
+              onClose={() => setEntry(null)}
+            />
+            <PlanSheet
+              plan={plans?.find(p => p.id === planId) ?? null}
+              account={account}
+              onClose={() => setPlanId(null)}
+            />
             {logging && (
               <LogInterestSheet
                 card={account}
