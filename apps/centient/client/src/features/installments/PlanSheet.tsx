@@ -7,7 +7,7 @@ import { useState } from 'react';
 import type { Account } from '../../../../src/repos/accounts';
 import { dayLabel, formatMoney } from '../../lib/format';
 import { me } from '../../lib/state';
-import { billMonth } from '../../models/recurring';
+import { billMonth } from '../../models/dates';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
@@ -28,19 +28,6 @@ export function PlanSheet({
   const today = me.value?.today ?? '';
   const cur = account.currency_code;
   const shared = plan.parties.length > 1;
-  const slot = (no: number, seq: number) => ({ id: plan.id, no, seq });
-  const pay = async (no: number, seq: number) => {
-    if (await persist(() => installmentApi.pay(slot(no, seq)))) showToast('Marked paid');
-  };
-  const undo = async (no: number, seq: number) => {
-    if (await persist(() => installmentApi.unpay(slot(no, seq)))) showToast('Marked unpaid');
-  };
-  const attach = async (no: number, seq: number, file: File) => {
-    if (await persist(() => installmentApi.attachProof(slot(no, seq), file)))
-      showToast('Proof attached');
-  };
-  const unattach = (no: number, seq: number) =>
-    persist(() => installmentApi.removeProof(slot(no, seq)));
   const move = async () => {
     if (await persist(() => installmentApi.nextBill(plan.id))) showToast('Moved to the next bill');
   };
@@ -107,106 +94,17 @@ export function PlanSheet({
                     {formatMoney(plan.amountPerInstallment, cur)}
                   </span>
                 )}
-                {(shared ? s.shares : []).map(x => {
-                  const who = plan.parties.find(p => p.seq === x.seq)!;
-                  const whose = who.seq === 0 ? 'your' : `${who.name}'s`;
-                  return (
-                    <div
+                {shared &&
+                  s.shares.map(x => (
+                    <ShareRow
                       key={x.seq}
-                      className="border-t border-edge py-2 first-of-type:border-t-0"
-                      data-party={who.name}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span
-                          className="grid size-8 shrink-0 place-items-center rounded-full bg-raised-2 text-[13px] font-bold"
-                          aria-hidden="true"
-                        >
-                          {who.name.slice(0, 1)}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-[15px] font-semibold">
-                            {who.name}
-                          </span>
-                          <span className="block text-[13px] text-muted num">
-                            {formatMoney(x.amount, cur)}
-                          </span>
-                        </span>
-                        {who.seq === 0 ? (
-                          <span className="text-[13px] font-semibold text-muted">
-                            {s.left === 0 ? 'Paid' : 'On the card bill'}
-                          </span>
-                        ) : x.paid ? (
-                          <>
-                            <span className="flex items-center gap-1 text-[13px] font-bold text-primary">
-                              <CheckCircle size={18} weight="fill" aria-hidden="true" />
-                              Paid
-                            </span>
-                            <Button
-                              clear
-                              inline
-                              small
-                              onClick={() => undo(s.no, x.seq)}
-                              aria-label={`Mark ${whose} share of installment ${s.no} unpaid`}
-                            >
-                              Undo
-                            </Button>
-                          </>
-                        ) : (
-                          <Button
-                            small
-                            rounded
-                            inline
-                            onClick={() => pay(s.no, x.seq)}
-                            aria-label={`Mark ${whose} share of installment ${s.no} paid`}
-                          >
-                            Mark paid
-                          </Button>
-                        )}
-                      </div>
-                      {shared && x.paid && (
-                        <div className="mt-1.5 pl-[42px]">
-                          {x.paid.proof ? (
-                            <span className="flex items-center gap-1.5 text-[13px]">
-                              <Paperclip size={14} weight="bold" aria-hidden="true" />
-                              <a
-                                className="min-w-0 truncate font-semibold text-primary underline-offset-2 hover:underline"
-                                href={`/api/files/${x.paid.proof.id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                {x.paid.proof.filename}
-                              </a>
-                              <button
-                                type="button"
-                                className="grid size-7 place-items-center rounded-full active:opacity-60"
-                                onClick={() => unattach(s.no, x.seq)}
-                                aria-label="Remove proof"
-                              >
-                                <X size={14} weight="bold" />
-                              </button>
-                            </span>
-                          ) : (
-                            <label className="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-semibold text-primary active:opacity-70">
-                              <Paperclip size={14} weight="bold" aria-hidden="true" />
-                              Attach proof (optional)
-                              <input
-                                type="file"
-                                accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/gif,application/pdf"
-                                className="sr-only"
-                                aria-label={`Attach proof for ${who.name}, installment ${s.no}`}
-                                onChange={e => {
-                                  const f = e.target.files?.[0];
-                                  if (f) attach(s.no, x.seq, f);
-                                  e.target.value = '';
-                                }}
-                              />
-                            </label>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                      plan={plan}
+                      no={s.no}
+                      sliceLeft={s.left}
+                      share={x}
+                      currency={cur}
+                    />
+                  ))}
               </div>
             );
           })}
@@ -232,5 +130,127 @@ export function PlanSheet({
         onConfirm={remove}
       />
     </>
+  );
+}
+
+type Share = Plan['schedule'][number]['shares'][number];
+
+/**
+ * One person's share of one slice. Yours rides the card bill (no key); another person's gets Mark paid / Undo
+ * (a transfer from their tab) and an optional proof.
+ */
+function ShareRow({
+  plan,
+  no,
+  sliceLeft,
+  share: x,
+  currency: cur,
+}: {
+  plan: Plan;
+  no: number;
+  sliceLeft: number;
+  share: Share;
+  currency: string;
+}) {
+  const who = plan.parties.find(p => p.seq === x.seq)!;
+  const whose = who.seq === 0 ? 'your' : `${who.name}'s`;
+  const slot = { id: plan.id, no, seq: x.seq };
+  const pay = async () => {
+    if (await persist(() => installmentApi.pay(slot))) showToast('Marked paid');
+  };
+  const undo = async () => {
+    if (await persist(() => installmentApi.unpay(slot))) showToast('Marked unpaid');
+  };
+  const attach = async (file: File) => {
+    if (await persist(() => installmentApi.attachProof(slot, file))) showToast('Proof attached');
+  };
+  const unattach = () => persist(() => installmentApi.removeProof(slot));
+  return (
+    <div className="border-t border-edge py-2 first-of-type:border-t-0" data-party={who.name}>
+      <div className="flex items-center gap-2.5">
+        <span
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-raised-2 text-[13px] font-bold"
+          aria-hidden="true"
+        >
+          {who.name.slice(0, 1)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[15px] font-semibold">{who.name}</span>
+          <span className="block text-[13px] text-muted num">{formatMoney(x.amount, cur)}</span>
+        </span>
+        {who.seq === 0 ? (
+          <span className="text-[13px] font-semibold text-muted">
+            {sliceLeft === 0 ? 'Paid' : 'On the card bill'}
+          </span>
+        ) : x.paid ? (
+          <>
+            <span className="flex items-center gap-1 text-[13px] font-bold text-primary">
+              <CheckCircle size={18} weight="fill" aria-hidden="true" />
+              Paid
+            </span>
+            <Button
+              clear
+              inline
+              small
+              onClick={undo}
+              aria-label={`Mark ${whose} share of installment ${no} unpaid`}
+            >
+              Undo
+            </Button>
+          </>
+        ) : (
+          <Button
+            small
+            rounded
+            inline
+            onClick={pay}
+            aria-label={`Mark ${whose} share of installment ${no} paid`}
+          >
+            Mark paid
+          </Button>
+        )}
+      </div>
+      {x.paid && (
+        <div className="mt-1.5 pl-[42px]">
+          {x.paid.proof ? (
+            <span className="flex items-center gap-1.5 text-[13px]">
+              <Paperclip size={14} weight="bold" aria-hidden="true" />
+              <a
+                className="min-w-0 truncate font-semibold text-primary underline-offset-2 hover:underline"
+                href={`/api/files/${x.paid.proof.id}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {x.paid.proof.filename}
+              </a>
+              <button
+                type="button"
+                className="grid size-7 place-items-center rounded-full active:opacity-60"
+                onClick={unattach}
+                aria-label="Remove proof"
+              >
+                <X size={14} weight="bold" />
+              </button>
+            </span>
+          ) : (
+            <label className="inline-flex cursor-pointer items-center gap-1.5 text-[13px] font-semibold text-primary active:opacity-70">
+              <Paperclip size={14} weight="bold" aria-hidden="true" />
+              Attach proof (optional)
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/heic,image/heif,image/gif,application/pdf"
+                className="sr-only"
+                aria-label={`Attach proof for ${who.name}, installment ${no}`}
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) attach(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

@@ -5,17 +5,17 @@
 // person's share is still marked paid on its own (a transfer from their IOU account into the card) until
 // friends on plans move to per-slice tabs; deleting that entry un-pays the share.
 import type { ServiceDeps } from '../../context';
-import type { Repos } from '../../middleware/init';
+import { billPlan, loadCardBills } from '../../lib/cardBills';
 import type { Command } from '../../lib/schemas';
 import {
-  cardBills,
   closingOf,
   firstBillFor,
   interestDue,
+  paidSlices,
   principalOf,
   priceLeft,
+  shareOut,
   sliceBill,
-  type BillPlan,
 } from '../../domain/cardBill';
 import { jakartaToday, toOccurredAt } from '../../domain/cycle';
 import { DomainError } from '../../domain/ledger';
@@ -49,73 +49,30 @@ export type NewPlan = {
 
 export type PlanView = ReturnType<typeof view>;
 
-/** A plan as the bill math sees it. */
-export const billPlan = (p: PlanRow): BillPlan => ({
-  id: p.id,
-  name: p.name,
-  count: p.installments,
-  each: p.amount_per_installment,
-  price: p.price,
-  boughtOn: p.bought_on,
-  firstBill: p.first_bill,
-  paidBefore: p.paid_before,
-});
+/**
+ * A new plan's numbers checked: the price (left out = no interest: the installments added up), at least one slice
+ * unpaid, every share above zero and adding up to the installment, someone paying, each person once.
+ */
+function checkedPrice(i: NewPlan) {
+  const total = i.amountPerInstallment * i.installments;
+  const price = i.price ?? total;
+  if (price <= 0 || price > total)
+    throw new DomainError('PLAN_PRICE', 'The price is more than the installments add up to');
+  if (i.paidCount < 0 || i.paidCount >= i.installments)
+    throw new DomainError('PAID_COUNT', 'At least one installment must still be unpaid');
+  if (i.myShare < 0 || i.others.some(o => o.share <= 0))
+    throw new DomainError('INVALID_SHARE', 'Every share must be more than zero');
+  if (i.myShare + i.others.reduce((s, o) => s + o.share, 0) !== i.amountPerInstallment)
+    throw new DomainError('SHARES_DONT_ADD_UP', 'The shares must add up to the installment amount');
+  if (!i.myShare && !i.others.length) throw new DomainError('NO_PARTIES', 'Someone has to pay');
+  const names = i.others.map(o => o.name.trim().toLowerCase());
+  if (new Set(names).size !== names.length)
+    throw new DomainError('DUPLICATE_PARTY', 'Each person once');
+  return price;
+}
 
 const cardDays = (a: Pick<Account, 'statement_day' | 'due_day'> | undefined) =>
   a?.statement_day ? { closes: a.statement_day, payBy: a.due_day } : null;
-
-/**
- * Every set-up card's bills by `today` (src/domain/cardBill.ts), by account id: what the Bills page, the card's
- * statement and each plan's progress read. Plans of every card, posted interest and hand-typed interest in.
- */
-export async function loadCardBills(repos: Repos, ws: string, accounts: Account[], today: string) {
-  const [days, { plans }, posted, typed] = await Promise.all([
-    repos.recurring.cardDays(ws),
-    repos.installments.listPlans(ws),
-    repos.installments.interest(ws),
-    repos.installments.handInterest(ws),
-  ]);
-  const interest = [
-    ...posted.flatMap(i =>
-      i.account_id !== null && i.day !== null && i.amount !== null
-        ? [
-            {
-              accountId: i.account_id,
-              entryId: i.entry_id,
-              planId: i.plan_id,
-              no: i.slice_no,
-              from: null,
-              day: i.day,
-              amount: i.amount,
-            },
-          ]
-        : [],
-    ),
-    ...typed.map(i => ({
-      accountId: i.account_id,
-      entryId: i.entry_id,
-      planId: i.plan_id,
-      no: null,
-      from: i.from_month,
-      day: i.day,
-      amount: i.amount,
-    })),
-  ];
-  return new Map(
-    accounts
-      .filter(a => isCard(a.kind) && a.statement_day && !a.archived_at)
-      .map(a => [
-        a.id,
-        cardBills(
-          { closes: a.statement_day!, payBy: a.due_day },
-          days.filter(d => d.account_id === a.id),
-          plans.filter(p => p.account_id === a.id).map(billPlan),
-          interest.filter(i => i.accountId === a.id).map(({ accountId: _, ...i }) => i),
-          today,
-        ),
-      ]),
-  );
-}
 
 export function createInstallmentsService({
   ws,
@@ -125,28 +82,25 @@ export function createInstallmentsService({
   ledger,
 }: ServiceDeps & { ledger: LedgerService }) {
   async function list(accountId?: string) {
-    const [{ plans, parties, payments }, c] = await Promise.all([
-      repos.installments.listPlans(ws, accountId),
-      catalog.load(),
-    ]);
+    const c = await catalog.load();
     const today = jakartaToday(now());
-    // Which slices the card bills paid: "planId:no".
-    const bills = await loadCardBills(repos, ws, c.accounts, today);
-    const paid = new Set(
-      [...bills.values()].flatMap(r =>
-        r.bills.flatMap(b => b.slices.filter(s => s.paid).map(s => `${s.planId}:${s.no}`)),
-      ),
-    );
-    return plans.map(p =>
-      view(
-        p,
-        parties,
-        payments,
-        today,
-        cardDays(c.accounts.find(a => a.id === p.account_id)),
-        paid,
-      ),
-    );
+    const {
+      bills,
+      plans: { plans, parties, payments },
+    } = await loadCardBills(repos, ws, c.accounts, today);
+    const paid = new Set([...bills.values()].flatMap(paidSlices));
+    return plans
+      .filter(p => !accountId || p.account_id === accountId)
+      .map(p =>
+        view(
+          p,
+          parties,
+          payments,
+          today,
+          cardDays(c.accounts.find(a => a.id === p.account_id)),
+          paid,
+        ),
+      );
   }
 
   async function planOf(planId: string) {
@@ -177,23 +131,7 @@ export function createInstallmentsService({
       const days = cardDays(account);
       if (!days)
         throw new DomainError('CARD_SETUP', `Set ${account.name}'s limit and bill days first`);
-      const price = i.price ?? i.amountPerInstallment * i.installments;
-      if (price <= 0 || price > i.amountPerInstallment * i.installments)
-        throw new DomainError('PLAN_PRICE', 'The price is more than the installments add up to');
-      if (i.paidCount < 0 || i.paidCount >= i.installments)
-        throw new DomainError('PAID_COUNT', 'At least one installment must still be unpaid');
-      if (i.myShare < 0 || i.others.some(o => o.share <= 0))
-        throw new DomainError('INVALID_SHARE', 'Every share must be more than zero');
-      if (i.myShare + i.others.reduce((s, o) => s + o.share, 0) !== i.amountPerInstallment) {
-        throw new DomainError(
-          'SHARES_DONT_ADD_UP',
-          'The shares must add up to the installment amount',
-        );
-      }
-      if (!i.myShare && !i.others.length) throw new DomainError('NO_PARTIES', 'Someone has to pay');
-      const names = i.others.map(o => o.name.trim().toLowerCase());
-      if (new Set(names).size !== names.length)
-        throw new DomainError('DUPLICATE_PARTY', 'Each person once');
+      const price = checkedPrice(i);
 
       // Each other person owes through an IOU account: the one given, one with their name, or a new one.
       const ious: { name: string; id: string; share: number }[] = [];
@@ -217,8 +155,7 @@ export function createInstallmentsService({
       // rounding. Without interest that is each share × the installments left.
       const owed = priceLeft({ price, count: i.installments, paidBefore: i.paidCount });
       const shares = [...(i.myShare ? [i.myShare] : []), ...ious.map(o => o.share)];
-      const parts = shares.map(x => Math.round((x * owed) / i.amountPerInstallment));
-      parts[parts.length - 1] += owed - parts.reduce((a, b) => a + b, 0);
+      const parts = shareOut(owed, shares);
       const myPart = i.myShare ? parts[0] : 0;
       const theirs = parts.slice(i.myShare ? 1 : 0);
       // Your part, told whole: "Rp703.332 over 3 installments · Rp234.444 a month in budgets".
@@ -250,12 +187,7 @@ export function createInstallmentsService({
           }),
         );
       } else if (ious.length) {
-        const adj = c.categories.find(x => x.name === 'Balance adjustment' && x.kind === 'INCOME');
-        if (!adj)
-          throw new DomainError(
-            'NO_ADJUSTMENT_CATEGORY',
-            'Create a "Balance adjustment" income category first',
-          );
+        const adj = c.adjustment();
         for (const o of ious)
           cmds.push({
             type: 'INCOME',
@@ -466,12 +398,7 @@ export function createInstallmentsService({
         repos.installments.interest(ws),
         catalog.load(),
       ]);
-      const fees = c.categoryByName('Fees & Interests');
-      if (!fees)
-        throw new DomainError(
-          'NO_FEES_CATEGORY',
-          'Create a "Fees & Interests" expense category first',
-        );
+      const fees = c.fees();
       let n = 0;
       for (const row of plans) {
         const days = cardDays(c.accounts.find(a => a.id === row.account_id));

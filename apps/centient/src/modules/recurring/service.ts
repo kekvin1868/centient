@@ -1,12 +1,12 @@
 // Recurring bill use cases: subscriptions and other bills that leave on a date, what they add up to, a credit
 // card's statement, and monthly payments found in past entries.
 import type { ServiceDeps } from '../../context';
+import { loadCardBills } from '../../lib/cardBills';
 import { addDays, addMonths, jakartaToday, realDay } from '../../domain/cycle';
 import { daysBetween } from '../../domain/forecast';
 import { DomainError } from '../../domain/ledger';
-import { costOf, dueDates, isCard, looksMonthly, statementOf } from '../../domain/recurring';
+import { costOf, dueDates, hasBills, isCard, looksMonthly } from '../../domain/recurring';
 import type { Recurring } from '../../repos/recurring';
-import { loadCardBills } from '../installments/service';
 import type { LedgerService } from '../ledger/service';
 import { advance, scheduleOf } from './advance';
 
@@ -103,10 +103,10 @@ export function createRecurringService({
         });
       }
 
-      const [bills, { plans }] = await Promise.all([
-        loadCardBills(repos, ws, c.accounts, day),
-        repos.installments.listPlans(ws),
-      ]);
+      const {
+        bills,
+        plans: { plans },
+      } = await loadCardBills(repos, ws, c.accounts, day);
       const planName = (id: string | null) => plans.find(p => p.id === id)?.name ?? null;
       const cards = [...bills].map(([accountId, r]) => ({
         accountId,
@@ -119,6 +119,8 @@ export function createRecurringService({
         spentSince: r.spentSince,
         /** The bill before the last one: what "Unpaid from <month>" and "Log interest · on unpaid" name. */
         before: r.bills.length > 1 ? r.bills.at(-2)!.month : null,
+        /** Where "Log interest" may say the interest came from (src/domain/cardBill.ts `interestSources`). */
+        interestFrom: r.interestFrom,
         /** The last bill's lines: carry-over, regular spending, each plan's slice, interest. */
         lines: {
           carry: r.bill.carry,
@@ -251,8 +253,8 @@ export function createRecurringService({
     /**
      * "Log interest" on a card bill: interest the bank charged, typed from the statement, as an expense on the
      * card in Fees & Interests dated on the last closing day (so it lands on the bill just printed), tagged by
-     * where it came from: the unpaid part of an older bill (`month`) or a plan of this card. Never on a card's
-     * first bill: nothing was unpaid before it.
+     * where it came from: only what the statement offers (`interestSources`: the bill before's unpaid part, a
+     * plan with a slice unpaid; nothing on a card's first bill).
      */
     async logInterest(
       accountId: string,
@@ -260,26 +262,24 @@ export function createRecurringService({
     ) {
       const c = await catalog.load();
       const a = c.account(accountId).row;
-      if (!isCard(a.kind) || !a.statement_day)
+      if (!hasBills(a))
         throw new DomainError('CARD_SETUP', `Set ${a.name}'s limit and bill days first`);
-      const fees = c.categoryByName('Fees & Interests');
-      if (!fees)
-        throw new DomainError(
-          'NO_FEES_CATEGORY',
-          'Create a "Fees & Interests" expense category first',
-        );
-      const { cutOff } = statementOf(a.statement_day, a.due_day, today());
+      const fees = c.fees();
+      const card = (await loadCardBills(repos, ws, c.accounts, today())).bills.get(accountId);
+      if (!card) throw new DomainError('CARD_SETUP', `${a.name} is hidden`);
       let label: string;
       if ('month' in i.from) {
-        if (!/^\d{4}-\d{2}$/.test(i.from.month) || i.from.month >= cutOff.slice(0, 7))
-          throw new DomainError('INTEREST_SOURCE', 'Pick a bill before the last one');
+        if (i.from.month !== card.interestFrom.month)
+          throw new DomainError(
+            'INTEREST_SOURCE',
+            'Only the unpaid part of the bill before the last one',
+          );
         label = `on unpaid ${monthName(i.from.month)}`;
       } else {
         const planId = i.from.planId;
-        const plan = (await repos.installments.listPlans(ws, accountId)).plans.find(
-          p => p.id === planId,
-        );
-        if (!plan) throw new DomainError('INTEREST_SOURCE', 'That plan is not on this card');
+        const plan = card.interestFrom.plans.find(p => p.id === planId);
+        if (!plan)
+          throw new DomainError('INTEREST_SOURCE', 'That plan is not on this card or is paid off');
         label = plan.name;
       }
       const entries = await ledger.prepare([
@@ -288,7 +288,7 @@ export function createRecurringService({
           accountId,
           categoryId: fees.id,
           amount: i.amount,
-          date: cutOff,
+          date: card.bill.closesOn,
           note: `Interest · ${label}`,
         },
       ]);

@@ -4,83 +4,34 @@
 // (a short payment carries over). "Log interest" types the bank's interest from the statement, tagged by where
 // it came from. A card made before limits and bill days were required gets a key that opens its settings.
 import { useQuery } from '@tanstack/react-query';
+import { cardSetUp } from '../../../../src/domain/recurring';
 import { Button } from 'konsta/react';
 import { useState } from 'react';
 import { EditAccountSheet } from '../accounts/EditAccountSheet';
-import { usePlans } from '../installments/plans';
 import { formatMoney } from '../../lib/format';
 import { catalog } from '../../lib/state';
-import {
-  billMonth,
-  dueWords,
-  recurringQueries,
-  type CardStatement as Card,
-} from '../../models/recurring';
+import { billLines, dueWords, interestSources, recurringQueries } from '../../models/recurring';
 import type { Account } from '../../models/workspace';
 import { dateText } from '../../ui/Fields';
-import { LogInterestSheet, type InterestSource } from './LogInterestSheet';
+import { LogInterestSheet } from './LogInterestSheet';
 import { PayCardSheet } from './PayCardSheet';
-
-type Line = { key: string; label: string; amount: number; paid?: boolean };
-
-/** The bill's lines, in the bank's order. */
-function linesOf(card: Card): Line[] {
-  const { carry, spent, slices, interest } = card.lines;
-  const before = card.before ? billMonth(card.before) : 'last bill';
-  return [
-    ...(carry > 0 ? [{ key: 'carry', label: `Unpaid from ${before}`, amount: carry }] : []),
-    ...(carry < 0 ? [{ key: 'carry', label: `Paid extra on ${before}`, amount: carry }] : []),
-    ...(spent ? [{ key: 'spent', label: 'Spending', amount: spent }] : []),
-    ...slices.map(s => ({
-      key: `slice:${s.planId}:${s.no}`,
-      label: `${s.name} ${s.no}/${s.of}`,
-      amount: s.amount,
-      paid: s.paid,
-    })),
-    ...interest.map(i => ({
-      key: `interest:${i.entryId}`,
-      label: i.from
-        ? `Interest · on unpaid ${billMonth(i.from)}`
-        : `Interest${i.planName ? ` · ${i.planName}${i.no ? ` slice ${i.no}` : ''}` : ''}`,
-      amount: i.amount,
-    })),
-  ];
-}
 
 export function CardStatement({
   account,
 }: {
   account: Pick<
     Account,
-    'id' | 'name' | 'currency_code' | 'statement_day' | 'due_day' | 'credit_limit'
+    'id' | 'name' | 'kind' | 'currency_code' | 'statement_day' | 'due_day' | 'credit_limit'
   >;
 }) {
   const { data } = useQuery(recurringQueries.list());
-  const plans = usePlans(account.id);
   const [paying, setPaying] = useState(false);
   const [logging, setLogging] = useState(false);
   const [editing, setEditing] = useState(false);
-  const setUp = Boolean(account.statement_day && account.due_day && account.credit_limit);
+  const setUp = cardSetUp(account);
   const card = data?.cards.find(c => c.accountId === account.id);
   const money = (n: number) => formatMoney(n, account.currency_code);
-  // Interest can come from what was left unpaid of the bill before, or a plan with a slice still unpaid. Never
-  // on a card's first bill: nothing was unpaid before it.
-  const sources: InterestSource[] = card?.before
-    ? [
-        ...(card.lines.carry > 0
-          ? [
-              {
-                key: `m:${card.before}`,
-                label: `On unpaid ${billMonth(card.before)}`,
-                from: { month: card.before },
-              },
-            ]
-          : []),
-        ...(plans ?? [])
-          .filter(p => p.next)
-          .map(p => ({ key: `p:${p.id}`, label: p.name, from: { planId: p.id } })),
-      ]
-    : [];
+  const sources = card ? interestSources(card) : [];
 
   return (
     <section className="mt-5" aria-label="Card bill">
@@ -113,7 +64,7 @@ export function CardStatement({
                 : `Left to pay of the bill closed on ${dateText(card.cutOff)}.${card.dueOn ? ` ${dueWords(card.dueOn, data.today)}.` : ''}`}
             </p>
             <ul className="panel mt-3 bg-white px-3.5 py-1 dark:bg-raised" aria-label="Bill lines">
-              {linesOf(card).map(l => (
+              {billLines(card).map(l => (
                 <li
                   key={l.key}
                   className="flex items-baseline justify-between gap-3 border-b border-edge py-2 text-[15px] last:border-b-0"

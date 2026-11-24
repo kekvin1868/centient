@@ -81,6 +81,14 @@ export const interestOf = (p: Pick<BillPlan, 'each' | 'price' | 'count'>, no: nu
 export const priceLeft = (p: Pick<BillPlan, 'price' | 'count' | 'paidBefore'>) =>
   p.price - Math.floor((p.price * p.paidBefore) / p.count);
 
+/** `total` shared out in proportion to `shares` (whole numbers); the last share takes the rounding. */
+export function shareOut(total: number, shares: number[]) {
+  const whole = shares.reduce((a, b) => a + b, 0);
+  const parts = shares.map(x => Math.round((x * total) / whole));
+  parts[parts.length - 1] += total - parts.reduce((a, b) => a + b, 0);
+  return parts;
+}
+
 /** The bill slice `no` rides on. */
 export const sliceBill = (p: Pick<BillPlan, 'firstBill'>, no: number) =>
   nextMonth(p.firstBill, no - 1);
@@ -177,6 +185,34 @@ export function cardBills(
     paidSince,
     left: Math.max(0, bill.total - paidSince),
     spentSince: regular(since),
+  };
+}
+
+export type CardBills = ReturnType<typeof cardBills>;
+
+/** The slices a card's bills paid, as "planId:no". */
+export const paidSlices = (r: CardBills) =>
+  r.bills.flatMap(b => b.slices.filter(s => s.paid).map(s => `${s.planId}:${s.no}`));
+
+/**
+ * Where interest typed from the last bill's statement may come from: the unpaid part of the bill before (only
+ * when some of it carried over), or a plan of this card with a slice still unpaid. Nothing on a card's first
+ * bill: nothing was unpaid before it. The card statement offers these; "Log interest" refuses anything else.
+ */
+export function interestSources(
+  r: CardBills,
+  plans: BillPlan[],
+): { month: Month | null; plans: { id: string; name: string }[] } {
+  if (r.bills.length < 2) return { month: null, plans: [] };
+  const paid = new Set(paidSlices(r));
+  const open = (p: BillPlan) => {
+    for (let no = p.paidBefore + 1; no <= p.count; no++)
+      if (!paid.has(`${p.id}:${no}`)) return true;
+    return false;
+  };
+  return {
+    month: r.bill.carry > 0 ? r.bills.at(-2)!.month : null,
+    plans: plans.filter(open).map(p => ({ id: p.id, name: p.name })),
   };
 }
 

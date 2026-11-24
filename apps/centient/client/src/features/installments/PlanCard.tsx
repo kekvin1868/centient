@@ -2,7 +2,7 @@
 import { ClockCountdown } from '@phosphor-icons/react';
 import type { Plan } from '../../models/installment';
 import { formatMoney } from '../../lib/format';
-import { billMonth } from '../../models/recurring';
+import { billMonth } from '../../models/dates';
 
 export function PlanCard({
   plan: p,

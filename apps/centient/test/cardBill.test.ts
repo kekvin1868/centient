@@ -8,6 +8,7 @@ import {
   firstBillFor,
   interestDue,
   principalOf,
+  shareOut,
   type BillPlan,
   type CardDay,
 } from '../src/domain/cardBill';
@@ -164,5 +165,12 @@ describe('bill dates', () => {
   it('slices add up to the price exactly', () => {
     const parts = [1, 2, 3].map(no => principalOf(1_000_001, 3, no));
     expect(parts.reduce((s, x) => s + x, 0)).toBe(1_000_001);
+  });
+});
+
+describe('shareOut', () => {
+  it('shares a price like the installment, the last share taking the rounding', () => {
+    expect(shareOut(1_000_000, [2, 1])).toEqual([666_667, 333_333]);
+    expect(shareOut(100, [1, 1, 1])).toEqual([33, 33, 34]);
   });
 });

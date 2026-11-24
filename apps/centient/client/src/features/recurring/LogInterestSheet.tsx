@@ -3,7 +3,7 @@
 // that just closed.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { recurringApi } from '../../models/recurring';
+import { recurringApi, type InterestSource } from '../../models/recurring';
 import { persist } from '../../models/query';
 import type { Account } from '../../models/workspace';
 import { AmountField } from '../../ui/AmountField';
@@ -11,12 +11,6 @@ import { dateText, PickerRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
-
-export type InterestSource = {
-  key: string;
-  label: string;
-  from: { month: string } | { planId: string };
-};
 
 export function LogInterestSheet({
   card,

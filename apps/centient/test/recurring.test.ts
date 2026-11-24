@@ -383,6 +383,7 @@ describe('card statement', () => {
       paidSince: 0,
       spentSince: 150_000,
       before: null,
+      interestFrom: { month: null, plans: [] },
       lines: { carry: 0, spent: 1_000_000, slices: [], interest: [] },
     });
     await t.svc().ledger.record([
@@ -422,6 +423,11 @@ describe('card statement', () => {
     const log = (from: { month: string } | { planId: string }, amount: number) =>
       t.svc().recurring.logInterest(card.id, { amount, from });
 
+    // Offered: Oct (carried over) and the plan (slices unpaid). The server refuses anything else.
+    expect((await bill()).interestFrom).toEqual({
+      month: '2026-10',
+      plans: [{ id: plan.id, name: 'Phone' }],
+    });
     const unpaid = await log({ month: '2026-10' }, 45_000);
     await log({ planId: plan.id }, 10_000);
     const b = await bill();
@@ -441,10 +447,30 @@ describe('card statement', () => {
     expect(rows.results[0].occurred_at.slice(0, 10)).toBe('2026-11-20');
 
     await expect(log({ month: '2026-11' }, 1)).rejects.toThrow('before the last one');
+    await expect(log({ month: '2000-01' }, 1)).rejects.toThrow('before the last one');
     await expect(log({ planId: 'nope' }, 1)).rejects.toThrow('not on this card');
     // The bank waived it: deleting the entry drops the line.
     await t.svc().ledger.remove(unpaid);
     expect((await bill()).lines.interest.map(i => i.amount)).toEqual([10_000]);
+  });
+
+  it("logs no interest on a card's first bill: nothing was unpaid before it", async () => {
+    const t = await workspace('2026-11-25');
+    const card = await t.svc().accounts.create({
+      name: 'New Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 5_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
+    await t.spend('2026-11-10', 200_000, 'grab', card.id);
+    expect((await t.svc().recurring.list()).cards[0].interestFrom).toEqual({
+      month: null,
+      plans: [],
+    });
+    await expect(
+      t.svc().recurring.logInterest(card.id, { amount: 1, from: { month: '2026-10' } }),
+    ).rejects.toThrow('before the last one');
   });
 });
 
