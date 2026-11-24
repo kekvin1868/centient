@@ -1,9 +1,11 @@
 // Under a lifted credit card / pay later account: its one bill, the way the bank prints it. The lines (unpaid
 // from the bill before, spending, each plan's slice, interest), what was paid since and what is left by when,
 // and what was spent since (that goes on the next bill). "I paid it" logs a transfer into the card, any amount
-// (a short payment carries over). "Log interest" types the bank's interest from the statement, tagged by where
-// it came from. An installment line opens its plan, an interest line its entry (to fix or delete it). A card made
-// before limits and bill days were required gets a key that opens its settings.
+// (a short payment carries over; Full / Minimum once the minimum is typed). "Enter statement" types what the bank's
+// statement says (total, minimum, interest); the bill then shows whether it matches, and if not, what to do: the
+// bank asks more = log the missing spending or the interest; the app has more = check its lines. An installment
+// line opens its plan, an interest line its entry (to fix or delete it). A card made before limits and bill days
+// were required gets a key that opens its settings.
 import { useQuery } from '@tanstack/react-query';
 import { cardSetUp } from '../../../../src/domain/recurring';
 import { Button } from 'konsta/react';
@@ -17,10 +19,23 @@ import { attempt } from '../../lib/run';
 import { entryApi } from '../../models/entry';
 import { formatMoney } from '../../lib/format';
 import { catalog } from '../../lib/state';
-import { billLines, dueWords, interestSources, recurringQueries } from '../../models/recurring';
+import {
+  billLines,
+  dueWords,
+  interestSources,
+  minimumState,
+  nextBillName,
+  recurringQueries,
+  statementGap,
+  statementOf,
+} from '../../models/recurring';
+import { outboxItems } from '../../models/outbox';
+import { blankForm, toCommand, type LogItem } from '../entries/form';
+import { LogSheet } from '../entries/LogSheet';
+import { showToast } from '../../ui/Toast';
 import type { Account } from '../../../../src/repos/accounts';
 import { dateText } from '../../ui/Fields';
-import { LogInterestSheet } from './LogInterestSheet';
+import { StatementSheet } from './StatementSheet';
 import { PayCardSheet } from './PayCardSheet';
 
 export function CardStatement({ account }: { account: Account }) {
@@ -35,6 +50,32 @@ export function CardStatement({ account }: { account: Account }) {
   const card = data?.cards.find(c => c.accountId === account.id);
   const money = (n: number) => formatMoney(n, account.currency_code);
   const sources = card ? interestSources(card) : [];
+  const statement = card ? statementOf(card, outboxItems.value) : null;
+  const gap = card && statement ? statementGap(card, statement.total) : null;
+  const min = card ? minimumState(card, statement) : null;
+  const [missing, setMissing] = useState<LogItem | null>(null);
+  // "Log missing spending": a new expense on this card for the gap, dated on the bill's closing day (on this bill).
+  const logMissing = () =>
+    card &&
+    gap &&
+    setMissing({
+      key: `missing:${card.cutOff}`,
+      text: '',
+      form: { ...blankForm(card.cutOff), accountId: account.id, amount: gap },
+      candidates: [],
+      askAmount: false,
+      askCharged: false,
+      rawMerchant: '',
+      suggestedMerchant: '',
+    });
+  const saveMissing = (i: LogItem) =>
+    attempt(async () => {
+      const r = toCommand(i.form);
+      if ('error' in r) throw new Error(r.error);
+      await entryApi.logAll([r.command, ...(r.extra ?? [])].map(command => ({ command })));
+      setMissing(null);
+      showToast('Logged');
+    });
 
   return (
     <section className="mt-5" aria-label="Card bill">
@@ -66,6 +107,18 @@ export function CardStatement({ account }: { account: Account }) {
                 ? `Nothing left to pay of the bill closed on ${dateText(card.cutOff)}.`
                 : `Left to pay of the bill closed on ${dateText(card.cutOff)}.${card.dueOn ? ` ${dueWords(card.dueOn, data.today)}.` : ''}`}
             </p>
+            {min?.kind === 'minimum' && (
+              <p className="mt-1 text-[15px]" role="status">
+                Minimum paid ✓ · {money(min.carries)} carries to the {nextBillName(card)} bill · the
+                bank will likely charge interest on it
+              </p>
+            )}
+            {min?.kind === 'below' && (
+              <p className="mt-1 text-[15px] text-negative" role="status">
+                Below minimum ⚠ {money(min.short)} short of {money(statement!.minimum!)} · late fee
+                likely
+              </p>
+            )}
             <ul className="panel mt-3 bg-white px-3.5 py-1 dark:bg-raised" aria-label="Bill lines">
               {billLines(card).map(l => {
                 const body = (
@@ -118,7 +171,52 @@ export function CardStatement({ account }: { account: Account }) {
                   <span className="num">−{money(card.paidSince)}</span>
                 </li>
               )}
+              {statement && (
+                <li className="flex items-baseline justify-between gap-3 border-t border-edge py-2 text-[15px] text-muted">
+                  <span>
+                    Statement says
+                    {statement.minimum !== null && ` · minimum ${money(statement.minimum)}`}
+                  </span>
+                  <span className="num">{money(statement.total)}</span>
+                </li>
+              )}
             </ul>
+            {gap === 0 && (
+              <p className="mt-2 text-[15px] font-semibold text-primary" role="status">
+                Matches statement ✓
+              </p>
+            )}
+            {gap !== null && gap > 0 && (
+              <div className="mt-2" role="status" aria-label="Statement gap">
+                <p className="text-[15px] font-semibold text-negative">
+                  ⚠ {money(gap)} on the statement is not in the app
+                </p>
+                <p className="text-[13px] text-muted">
+                  Something not logged yet: a spend, the interest, or a fee.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <Button rounded tonal small onClick={logMissing}>
+                    Log missing spending
+                  </Button>
+                  {sources.length > 0 && (
+                    <Button rounded tonal small onClick={() => setLogging(true)}>
+                      Log interest
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+            {gap !== null && gap < 0 && (
+              <div className="mt-2" role="status" aria-label="Statement gap">
+                <p className="text-[15px] font-semibold text-negative">
+                  ⚠ The app has {money(-gap)} more than the statement
+                </p>
+                <p className="text-[13px] text-muted">
+                  Check the lines above: a wrong amount, a refund not logged yet, or a spend the
+                  bank puts on the next bill.
+                </p>
+              </div>
+            )}
             {card.spentSince > 0 && (
               <p className="mt-2 text-[15px] text-muted">
                 {money(card.spentSince)} spent since then goes on the next bill.
@@ -129,15 +227,16 @@ export function CardStatement({ account }: { account: Account }) {
                 I paid it
               </Button>
             )}
-            {sources.length > 0 && (
-              <Button large rounded tonal className="mt-2" onClick={() => setLogging(true)}>
-                Log interest
-              </Button>
-            )}
+            <Button large rounded tonal className="mt-2" onClick={() => setLogging(true)}>
+              {statement ? 'Edit statement' : 'Enter statement'}
+            </Button>
             {paying && (
               <PayCardSheet
                 card={account}
                 left={card.left}
+                minimum={
+                  statement?.minimum ? Math.max(0, statement.minimum - card.paidSince) : null
+                }
                 today={data.today}
                 onClose={() => setPaying(false)}
               />
@@ -153,13 +252,20 @@ export function CardStatement({ account }: { account: Account }) {
               onClose={() => setPlanId(null)}
             />
             {logging && (
-              <LogInterestSheet
-                card={account}
-                closedOn={card.cutOff}
+              <StatementSheet
+                account={account}
+                card={card}
+                statement={statement}
                 sources={sources}
                 onClose={() => setLogging(false)}
               />
             )}
+            <LogSheet
+              key={missing?.key ?? 'none'}
+              item={missing}
+              onClose={() => setMissing(null)}
+              onSave={saveMissing}
+            />
           </>
         )
       )}

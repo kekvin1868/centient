@@ -8,6 +8,10 @@ import {
   dueByDay,
   dueWords,
   interestSources,
+  minimumState,
+  nextBillName,
+  statementGap,
+  statementOf,
 } from './recurring';
 import { bill } from './recurring.fixture';
 
@@ -31,6 +35,7 @@ describe('due dates on screen', () => {
       spentSince: 0,
       before: null,
       interestFrom: { month: null, plans: [] },
+      statement: null,
       lines: { carry: 0, spent: 0, slices: [], interest: [] },
     };
     const list = {
@@ -66,6 +71,7 @@ describe('due dates on screen', () => {
       spentSince: 300_000,
       before: null,
       interestFrom: { month: null, plans: [] },
+      statement: null,
       lines: { carry: 0, spent: 0, slices: [], interest: [] },
     };
     const idr = (id: string) => id !== 'usd';
@@ -108,6 +114,7 @@ describe('due dates on screen', () => {
       spentSince: 0,
       before: '2026-10',
       interestFrom: { month: '2026-10', plans: [{ id: 'p1', name: 'TV' }] },
+      statement: null,
       lines: {
         carry: 500_000,
         spent: 700_000,
@@ -153,5 +160,59 @@ describe('due dates on screen', () => {
     expect(byDay.get('2026-11-20')?.map(b => b.name)).toEqual(['Netflix', 'Spotify']);
     expect(byDay.get('2026-12-20')?.map(b => b.name)).toEqual(['Netflix']);
     expect(byDay.get('2026-11-21')).toBeUndefined();
+  });
+});
+
+describe("the bank's statement", () => {
+  const card = {
+    accountId: 'bca',
+    cutOff: '2026-11-20',
+    dueOn: '2026-12-05',
+    bill: 1_250_000,
+    left: 1_250_000,
+    paidSince: 0,
+    spentSince: 0,
+    before: null,
+    interestFrom: { month: null, plans: [] },
+    statement: { total: 1_250_000, minimum: 125_000 },
+    lines: { carry: 0, spent: 1_250_000, slices: [], interest: [] },
+  };
+
+  it('a statement typed but not sent yet is the one shown; a refused one is not', () => {
+    const item = (state: 'waiting' | 'refused') =>
+      ({
+        key: state,
+        op: 'statement',
+        entryId: 'statement:bca:2026-11-20',
+        statement: { accountId: 'bca', closedOn: '2026-11-20', total: 1_300_000, minimum: null },
+        at: 1,
+        state,
+      }) as const;
+    expect(statementOf(card, [])).toEqual({ total: 1_250_000, minimum: 125_000 });
+    expect(statementOf(card, [item('waiting')])).toEqual({ total: 1_300_000, minimum: null });
+    expect(statementOf(card, [item('refused')])).toEqual(card.statement);
+  });
+
+  it('the gap: bank higher, app higher, or matching once typed interest is counted', () => {
+    expect(statementGap({ ...card, bill: 1_200_000 }, 1_250_000)).toBe(50_000);
+    expect(statementGap({ ...card, bill: 1_300_000 }, 1_250_000)).toBe(-50_000);
+    expect(statementGap({ ...card, bill: 1_200_000 }, 1_250_000, 50_000)).toBe(0);
+  });
+
+  it('payments against the minimum, and where the rest carries', () => {
+    const st = card.statement;
+    expect(minimumState(card, st)).toBeNull(); // nothing paid yet
+    expect(minimumState({ ...card, paidSince: 125_000, left: 1_125_000 }, st)).toEqual({
+      kind: 'minimum',
+      carries: 1_125_000,
+    });
+    expect(minimumState({ ...card, paidSince: 100_000, left: 1_150_000 }, st)).toEqual({
+      kind: 'below',
+      short: 25_000,
+    });
+    expect(minimumState({ ...card, paidSince: 1_250_000, left: 0 }, st)).toBeNull(); // paid in full
+    expect(minimumState({ ...card, paidSince: 100_000 }, { total: 1, minimum: null })).toBeNull();
+    expect(nextBillName(card)).toBe('Dec');
+    expect(nextBillName({ ...card, cutOff: '2026-12-20' })).toBe('Jan');
   });
 });

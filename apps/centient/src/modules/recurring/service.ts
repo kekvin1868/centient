@@ -103,10 +103,16 @@ export function createRecurringService({
         });
       }
 
-      const {
-        bills,
-        plans: { plans },
-      } = await loadCardBills(repos, ws, c.accounts, day);
+      const [
+        {
+          bills,
+          plans: { plans },
+        },
+        statements,
+      ] = await Promise.all([
+        loadCardBills(repos, ws, c.accounts, day),
+        repos.recurring.statements(ws),
+      ]);
       const planName = (id: string | null) => plans.find(p => p.id === id)?.name ?? null;
       const cards = [...bills].map(([accountId, r]) => ({
         accountId,
@@ -121,6 +127,13 @@ export function createRecurringService({
         before: r.bills.length > 1 ? r.bills.at(-2)!.month : null,
         /** Where "Log interest" may say the interest came from (src/domain/cardBill.ts `interestSources`). */
         interestFrom: r.interestFrom,
+        /** What the bank's statement for the last bill says ("Enter statement"), typed in; null until it is. */
+        statement: (() => {
+          const st = statements.find(
+            x => x.account_id === accountId && x.closed_on === r.bill.closesOn,
+          );
+          return st ? { total: st.total, minimum: st.minimum } : null;
+        })(),
         /** The last bill's lines: carry-over, regular spending, each plan's slice, interest. */
         lines: {
           carry: r.bill.carry,
@@ -309,6 +322,37 @@ export function createRecurringService({
       const { ids, stmts } = repos.entries.insertStatements(ws, entries);
       await repos.batch([...stmts, repos.installments.handInterestInsert(ws, ids[0], i.from)]);
       return ids[0];
+    },
+
+    /**
+     * "Enter statement": the total (and minimum, when printed) on the bank's statement for the bill closed on
+     * `closedOn`. Sent from the phone's outbox; once that bill is no longer the last one printed it is refused
+     * (BILL_CLOSED), never saved for another. Typing it again replaces it.
+     */
+    async setStatement(
+      accountId: string,
+      i: { closedOn: string; total: number; minimum?: number | null },
+    ) {
+      const c = await catalog.load();
+      const a = c.account(accountId).row;
+      if (!hasBills(a))
+        throw new DomainError('CARD_SETUP', `Set ${a.name}'s limit and bill days first`);
+      const card = (await loadCardBills(repos, ws, c.accounts, today())).bills.get(accountId);
+      if (!card) throw new DomainError('CARD_SETUP', `${a.name} is hidden`);
+      if (i.closedOn !== card.bill.closesOn)
+        throw new DomainError(
+          'BILL_CLOSED',
+          'That bill closed since. Enter the new statement instead',
+        );
+      const minimum = i.minimum ?? null;
+      if (minimum !== null && minimum > i.total)
+        throw new DomainError('MINIMUM_OVER_TOTAL', 'The minimum is more than the total');
+      await repos.recurring.setStatement(ws, {
+        accountId,
+        closedOn: i.closedOn,
+        total: i.total,
+        minimum,
+      });
     },
 
     async hide(merchant: string) {

@@ -42,6 +42,8 @@ export type Overlay = {
   count: number;
   /** Refused or clashed: they wait for the owner. */
   problems: number;
+  /** Card statements the server refused ("Enter statement"): listed under Not sent, with their reason. */
+  statements: OutboxItem[];
 };
 
 export const STAND_IN = 'waiting:';
@@ -213,12 +215,23 @@ export function overlay(items: OutboxItem[], cat: Catalog): Overlay {
     spending: [],
     count: 0,
     problems: 0,
+    statements: [],
   };
   if (!cat.accounts.length) return out;
   const isTab = tabTest(cat);
 
   const byEntry = new Map<string, OutboxItem[]>();
-  for (const i of items) byEntry.set(i.entryId, [...(byEntry.get(i.entryId) ?? []), i]);
+  for (const i of items) {
+    // A card statement is not an entry: it moves no money, it only waits (or was refused).
+    if (i.op === 'statement') {
+      if (i.state === 'refused' || i.state === 'clash') {
+        out.problems++;
+        out.statements.push(i);
+      } else if (i.state !== 'sent') out.count++;
+      continue;
+    }
+    byEntry.set(i.entryId, [...(byEntry.get(i.entryId) ?? []), i]);
+  }
 
   for (const [entryId, own] of byEntry) {
     const saved = own[0].saved;

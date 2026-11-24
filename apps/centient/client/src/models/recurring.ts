@@ -5,6 +5,8 @@ import { queryOptions } from '@tanstack/react-query';
 import { call, client, type Req, type Res } from './api';
 import { paidTicket } from '../../../src/domain/tickets';
 import { billMonth, daysBetween } from './dates';
+import { sliceBill } from '../../../src/domain/cardBill';
+import type { OutboxItem } from './outbox';
 
 type List = Res<typeof client.api.recurring.$get>;
 /** One bill with its due dates for the next 12 months (`dues`, none while paused). */
@@ -163,4 +165,44 @@ export function dueByDay(items: Recurring[]): Map<string, Recurring[]> {
   for (const item of items)
     for (const day of item.dues) out.set(day, [...(out.get(day) ?? []), item]);
   return out;
+}
+
+// ---- The bank's statement ("Enter statement") ----
+
+export type Statement = { total: number; minimum: number | null };
+
+/**
+ * What the statement says for this bill: one still waiting in the outbox (typed, not sent yet) over the server's.
+ * A refused one is not shown here (it is under Not sent).
+ */
+export function statementOf(card: CardStatement, items: OutboxItem[]): Statement | null {
+  const mine = items.findLast(
+    i =>
+      i.op === 'statement' &&
+      i.entryId === `statement:${card.accountId}:${card.cutOff}` &&
+      (i.state === 'waiting' || i.state === 'sending'),
+  );
+  return mine ? { total: mine.statement!.total, minimum: mine.statement!.minimum } : card.statement;
+}
+
+/**
+ * The statement's total against the app's bill (plus interest typed but not logged yet): `gap` > 0 = the bank asks
+ * more (something is not in the app), < 0 = the app has more, 0 = they match.
+ */
+export const statementGap = (card: CardStatement, total: number, typedInterest = 0) =>
+  total - (card.bill + typedInterest);
+
+/** The month after the bill's: where what is left of it carries to. */
+export const nextBillName = (card: CardStatement) =>
+  billMonth(sliceBill({ firstBill: card.cutOff.slice(0, 7) }, 2));
+
+/**
+ * How the payments so far stand against the statement's minimum (none without one, or once paid in full):
+ * paid at least the minimum, or something paid but under it.
+ */
+export function minimumState(card: CardStatement, st: Statement | null) {
+  if (!st?.minimum || card.left === 0 || card.paidSince === 0) return null;
+  return card.paidSince >= st.minimum
+    ? ({ kind: 'minimum', carries: card.left } as const)
+    : ({ kind: 'below', short: st.minimum - card.paidSince } as const);
 }

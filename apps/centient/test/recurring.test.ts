@@ -384,6 +384,7 @@ describe('card statement', () => {
       spentSince: 150_000,
       before: null,
       interestFrom: { month: null, plans: [] },
+      statement: null,
       lines: { carry: 0, spent: 1_000_000, slices: [], interest: [] },
     });
     await t.svc().ledger.record([
@@ -484,6 +485,37 @@ describe('card statement', () => {
     // Typed for the Oct bill, arriving after Nov closed: refused, never put on Nov's.
     await expect(send('phone-2', '2026-10-20')).rejects.toMatchObject({ code: 'BILL_CLOSED' });
     expect(await interest()).toHaveLength(0);
+  });
+
+  it('keeps what the statement says for the last bill, until the next one closes', async () => {
+    const t = await workspace('2026-11-25');
+    const card = await t.svc().accounts.create({
+      name: 'BCA Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
+    await t.spend('2026-11-10', 1_200_000, 'tokopedia', card.id);
+    const bill = async () => (await t.svc().recurring.list()).cards[0];
+    const set = (closedOn: string, total: number, minimum?: number | null) =>
+      t.svc().recurring.setStatement(card.id, { closedOn, total, minimum });
+
+    expect(await bill()).toMatchObject({ cutOff: '2026-11-20', bill: 1_200_000, statement: null });
+    await set('2026-11-20', 1_250_000, 125_000);
+    expect((await bill()).statement).toEqual({ total: 1_250_000, minimum: 125_000 });
+    // Typed again: replaced, the minimum left out this time.
+    await set('2026-11-20', 1_200_000);
+    expect((await bill()).statement).toEqual({ total: 1_200_000, minimum: null });
+
+    await expect(set('2026-11-20', 100, 200)).rejects.toMatchObject({
+      code: 'MINIMUM_OVER_TOTAL',
+    });
+    // Typed for October's bill: that one is closed, nothing is saved for November's.
+    await expect(set('2026-10-20', 1)).rejects.toMatchObject({ code: 'BILL_CLOSED' });
+    // The next closing prints a new bill, with no statement yet.
+    t.clock.now = at('2026-12-21');
+    expect(await bill()).toMatchObject({ cutOff: '2026-12-20', statement: null });
   });
 
   it("logs no interest on a card's first bill: nothing was unpaid before it", async () => {

@@ -148,6 +148,7 @@ describe('the list', () => {
       spentSince: 0,
       before: null,
       interestFrom: { month: null, plans: [] },
+      statement: null,
       lines: { carry: 0, spent: 0, slices: [], interest: [] },
     };
     const others = otherDues(

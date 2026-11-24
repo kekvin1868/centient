@@ -11,6 +11,7 @@ import { FoundList } from '../features/recurring/FoundList';
 import { MonthHero } from '../features/recurring/MonthHero';
 import { OtherLine, otherName } from '../features/recurring/OtherLine';
 import { CardStatement } from '../features/recurring/CardStatement';
+import { outboxItems } from '../models/outbox';
 import { PayCardSheet } from '../features/recurring/PayCardSheet';
 import { Sheet } from '../ui/Sheet';
 import { RecurringSheet } from '../features/recurring/RecurringSheet';
@@ -30,7 +31,7 @@ import {
   type BillGroup,
   type OtherDue,
 } from '../models/billRun';
-import { recurringQueries, type Recurring } from '../models/recurring';
+import { recurringQueries, statementOf, type Recurring } from '../models/recurring';
 import type { Prefill } from '../models/recurringForm';
 import { WinButton } from '../ui/WinButton';
 
@@ -109,6 +110,11 @@ export function Bills() {
         <PayCardSheet
           card={card}
           left={paying.amount}
+          minimum={(() => {
+            const c = data?.cards.find(x => x.accountId === paying.accountId);
+            const st = c && statementOf(c, outboxItems.value);
+            return c && st?.minimum ? Math.max(0, st.minimum - c.paidSince) : null;
+          })()}
           today={today}
           onClose={() => setPaying(null)}
         />

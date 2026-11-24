@@ -69,6 +69,22 @@ export const recurringRoutes = new Hono<AppEnv>()
       ),
   )
 
+  // "Enter statement" on a card bill: the bank's total and minimum, for the bill closed on `closedOn`.
+  .put(
+    '/cards/:accountId/statement',
+    json(
+      z.object({
+        closedOn: day,
+        total: z.number().int().min(0),
+        minimum: z.number().int().min(0).nullish(),
+      }),
+    ),
+    async c => {
+      await c.var.services.recurring.setStatement(c.req.param('accountId'), c.req.valid('json'));
+      return c.json({ ok: true });
+    },
+  )
+
   .post('/:id/paid', json(z.object({ date: day.optional(), amount: money.optional() })), async c =>
     c.json({
       entryId: await c.var.services.recurring.paid(c.req.param('id'), c.req.valid('json')),

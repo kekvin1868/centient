@@ -20,6 +20,7 @@ export const NOTHING: Overlay = {
   spending: [],
   count: 0,
   problems: 0,
+  statements: [],
 };
 
 const lib = signal<typeof import('./waiting') | null>(null);

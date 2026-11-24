@@ -1,7 +1,9 @@
 // "I paid it" on a card bill: which account paid, how much and when; saves a transfer into the card. The day can be
 // moved back (paid yesterday, logged today, around closing day) but not ahead: a bill shows paid only once it is.
+// With the statement's minimum typed, Full / Minimum fill the amount (any amount can still be typed).
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
+import { formatMoney } from '../../lib/format';
 import { everyday } from '../../lib/state';
 import { entryApi } from '../../models/entry';
 import { attempt } from '../../lib/run';
@@ -15,12 +17,15 @@ import { showToast } from '../../ui/Toast';
 export function PayCardSheet({
   card,
   left,
+  minimum = null,
   today,
   onClose,
 }: {
   card: Pick<Account, 'id' | 'name' | 'currency_code'>;
   /** What is left of the bill: the amount offered. */
   left: number;
+  /** What is still needed to reach the statement's minimum, when one was typed. */
+  minimum?: number | null;
   today: string;
   onClose: () => void;
 }) {
@@ -62,6 +67,25 @@ export function PayCardSheet({
           options={sources.map(a => ({ value: a.id, label: a.name }))}
           onChange={setFrom}
         />
+        {minimum !== null && minimum > 0 && minimum < left && (
+          <li className="flex gap-2 px-4 py-2" role="group" aria-label="How much">
+            {[
+              { label: 'Full', value: left },
+              { label: 'Minimum', value: minimum },
+            ].map(o => (
+              <Button
+                key={o.label}
+                small
+                rounded
+                tonal={amount !== o.value}
+                onClick={() => setAmount(o.value)}
+                aria-pressed={amount === o.value}
+              >
+                {o.label} {formatMoney(o.value, card.currency_code)}
+              </Button>
+            ))}
+          </li>
+        )}
         <AmountField value={amount} currency={card.currency_code} onChange={setAmount} />
         <DateRow label="Paid on" value={date} onChange={setDate} />
       </Group>

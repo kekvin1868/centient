@@ -74,17 +74,31 @@ test('the bill lists its lines; interest is logged from the statement with where
   await expect(lines()).toContainText('BillRp800.000');
   await expect(billBox()).toContainText('Rp150.000 spent since then goes on the next bill.');
 
-  await billBox().getByRole('button', { name: 'Log interest' }).tap();
-  const sheet = page.getByRole('dialog', { name: 'Log interest' });
-  await sheet.getByLabel('Amount').fill('45000');
-  await expect(sheet.getByRole('button', { name: 'Pick where it came from' })).toBeDisabled();
+  // The statement, typed in the paper's order: total, minimum, interest. The gap shows while typing.
+  await billBox().getByRole('button', { name: 'Enter statement' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Enter statement' });
+  await sheet.getByLabel('Total').fill('845000');
+  await expect(sheet.getByRole('status', { name: 'Statement check' })).toContainText(
+    'The statement asks Rp45.000 more than the app has',
+  );
+  await sheet.getByLabel('Minimum payment (optional)').fill('84500');
+  await sheet.getByLabel('Interest (optional)').fill('45000');
+  await expect(
+    sheet.getByRole('button', { name: 'Pick where the interest came from' }),
+  ).toBeDisabled();
   await sheet.getByRole('combobox', { name: 'Charged on' }).selectOption({
     label: (await sheet.getByRole('option', { name: /^On unpaid/ }).textContent())!,
   });
-  await sheet.getByRole('button', { name: 'Log interest' }).tap();
+  await expect(sheet.getByRole('status', { name: 'Statement check' })).toContainText(
+    'Matches the app',
+  );
+  await sheet.getByRole('button', { name: 'Save statement' }).tap();
   await expect(sheet).toBeHidden();
   await expect(lines()).toContainText(/Interest · on unpaid \w{3}Rp45\.000/);
   await expect(lines()).toContainText('BillRp845.000');
+  await expect(lines()).toContainText('Statement says · minimum Rp84.500Rp845.000');
+  await expect(billBox()).toContainText('Matches statement ✓');
+  await expect(billBox().getByRole('button', { name: 'Edit statement' })).toBeVisible();
   const bill = await app.bill(card.id);
   expect(bill.lines.interest).toMatchObject([{ from: bill.before, amount: 45_000 }]);
 
@@ -103,11 +117,17 @@ test('paying part of the bill shows it paid and leaves the rest; Home shows mone
   const pay = page.getByRole('dialog', { name: 'Pay Pay Card' });
   await pay.getByLabel('Paid from').selectOption({ label: 'BCA' });
   await expect(pay.getByLabel('Amount')).toHaveValue('845.000');
+  // The statement's minimum is offered next to the full amount.
+  await pay.getByRole('button', { name: 'Minimum Rp84.500' }).tap();
+  await expect(pay.getByLabel('Amount')).toHaveValue('84.500');
   await pay.getByLabel('Amount').fill('345000');
   await pay.getByRole('button', { name: 'Log the payment' }).tap();
   await expect(pay).toBeHidden();
   await expect(lines()).toContainText('Paid since−Rp345.000');
   await expect(billBox()).toContainText('Rp500.000');
+  await expect(billBox()).toContainText(
+    /Minimum paid ✓ · Rp500\.000 carries to the \w{3} bill · the bank will likely charge interest on it/,
+  );
   const bill = await app.bill(card.id);
   expect(bill).toMatchObject({ left: 500_000, spentSince: 150_000 });
 
@@ -142,4 +162,27 @@ test('paying part of the bill shows it paid and leaves the rest; Home shows mone
   await expect(why).toContainText(`= After card bills${rp(money - 650_000)}`);
   await page.keyboard.press('Escape');
   await expect(why).toBeHidden();
+});
+
+test('a statement that asks more than the app: the missing spend is logged from the bill', async () => {
+  await app.tab('Money').tap();
+  await app.pick('Pay Card');
+  await billBox().getByRole('button', { name: 'Edit statement' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Enter statement' });
+  await expect(sheet.getByLabel('Total')).toHaveValue('845.000'); // what was typed before
+  await sheet.getByLabel('Total').fill('900000');
+  await sheet.getByRole('button', { name: 'Save statement' }).tap();
+  await expect(sheet).toBeHidden();
+
+  const gap = billBox().getByRole('status', { name: 'Statement gap' });
+  await expect(gap).toContainText('Rp55.000 on the statement is not in the app');
+  await gap.getByRole('button', { name: 'Log missing spending' }).tap();
+  const entry = page.getByRole('dialog', { name: 'New entry' });
+  await expect(entry.getByLabel('Amount')).toHaveValue('55.000');
+  await entry.getByRole('combobox', { name: 'Category' }).selectOption({ label: 'Food & Drink' });
+  await entry.getByRole('button', { name: 'Log it' }).tap();
+  await expect(entry).toBeHidden();
+  // On this bill (dated on its closing day), so the bill now matches.
+  await expect(lines()).toContainText('BillRp900.000');
+  await expect(billBox()).toContainText('Matches statement ✓');
 });
