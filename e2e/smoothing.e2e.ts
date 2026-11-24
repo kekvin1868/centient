@@ -115,10 +115,9 @@ test('first run: the night menu sets starting balances, then Home', async () => 
 test('only the ten broad spending categories are offered', async () => {
   await page.getByRole('button', { name: 'Add without typing' }).tap();
   const sheet = page.getByRole('dialog', { name: 'New entry' });
-  const options = await sheet
-    .getByRole('combobox', { name: 'Category' })
-    .locator('option')
-    .allTextContents();
+  const category = sheet.getByRole('combobox', { name: 'Category' });
+  await expect(category).toBeVisible(); // the sheet is downloaded on first use
+  const options = await category.locator('option').allTextContents();
   expect(options.slice(1)).toEqual([
     'Education',
     'Family & Giving',
@@ -404,7 +403,9 @@ test('a plan only you pay has no pay key and no proof of payment', async () => {
   await pick('Kredivo');
   await page.getByRole('button', { name: /Shoes, 0 of 2 paid/ }).tap();
   const plan = page.getByRole('dialog', { name: 'Shoes' });
-  await expect(plan.locator('[data-installment="1"]')).toContainText(/Slice 1 · \w{3} bill/);
+  await expect(plan.locator('[data-installment="1"]')).toContainText(
+    /Installment 1 of 2 · \w{3} bill/,
+  );
   await expect(plan.getByRole('button', { name: /Mark .* paid/ })).toHaveCount(0);
   await expect(plan.getByText(/Attach proof/)).toHaveCount(0);
 });
