@@ -10,7 +10,7 @@ const slot = (p: Payment) => ({ id: p.id, no: String(p.no), seq: String(p.seq) }
 
 export const installmentQueries = {
   all: () => ['installments'] as const,
-  /** Every account's plans (Home's "due soon"), or one account's. */
+  /** Every account's plans, or one account's. */
   list: (accountId?: string) =>
     queryOptions({
       queryKey: [...installmentQueries.all(), 'list', accountId ?? 'all'],
@@ -29,11 +29,9 @@ export const installmentApi = {
   /** "Move to next bill": every installment moves one card bill on. */
   nextBill: (id: string) => call(plan['next-bill'].$post({ param: { id } })),
   remove: (id: string) => call(plan.$delete({ param: { id } })),
-  /** Marks a share paid; your own share (seq 0) is paid from `fromAccountId`. */
-  pay: (p: Payment, fromAccountId?: string) =>
-    call(
-      plan.payments.$post({ param: { id: p.id }, json: { no: p.no, seq: p.seq, fromAccountId } }),
-    ),
+  /** Marks another person's share paid (from their tab); your own share is paid with the card bill. */
+  pay: (p: Payment) =>
+    call(plan.payments.$post({ param: { id: p.id }, json: { no: p.no, seq: p.seq } })),
   unpay: (p: Payment) => call(plan.payments[':no'][':seq'].$delete({ param: slot(p) })),
   attachProof: (p: Payment, file: File) =>
     call(plan.payments[':no'][':seq'].proof.$post({ param: slot(p), form: { file } })),

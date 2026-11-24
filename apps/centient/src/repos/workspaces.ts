@@ -1,4 +1,5 @@
 // Users and workspaces, including the first sign-in seed.
+import { ADJUSTMENT_CATEGORY, FEES_CATEGORY, OPENING_CATEGORY } from '../domain/ledger';
 import { accountInserts } from './accounts';
 import { uid } from './sql';
 
@@ -9,7 +10,7 @@ export type Workspace = {
   onboarded_at: string | null;
 };
 
-// Few and broad on purpose: each one should be obvious to pick. "Fees & Interests" is looked up by name for transfer fees and plan interest.
+// Few and broad on purpose: each one should be obvious to pick. Fees & Interests (`FEES_CATEGORY`) is looked up by name.
 const SEED_EXPENSE = [
   'Food & Drink',
   'Transport',
@@ -19,7 +20,7 @@ const SEED_EXPENSE = [
   'Fun',
   'Education',
   'Family & Giving',
-  'Fees & Interests',
+  FEES_CATEGORY,
   'Other',
 ];
 // "Balance adjustment" holds uncategorised balance corrections (signed), so it is not a spending category.
@@ -27,8 +28,8 @@ const SEED_INCOME = [
   'Salary',
   'Angpao & THR',
   'Interest & cashback',
-  'Opening balance',
-  'Balance adjustment',
+  OPENING_CATEGORY,
+  ADJUSTMENT_CATEGORY,
   'Other income',
 ];
 

@@ -1,6 +1,13 @@
 // How due dates read on screen (pure; no network).
 import { describe, expect, it } from 'vitest';
-import { comingUp, dueByDay, dueWords } from './recurring';
+import {
+  afterCardBills,
+  billLines,
+  comingUp,
+  dueByDay,
+  dueWords,
+  interestSources,
+} from './recurring';
 import { bill } from './recurring.fixture';
 
 describe('due dates on screen', () => {
@@ -19,7 +26,10 @@ describe('due dates on screen', () => {
       dueOn: '2026-11-15',
       bill: 1_000_000,
       left: 600_000,
+      paidSince: 400_000,
       spentSince: 0,
+      before: null,
+      interestFrom: { month: null, plans: [] },
       lines: { carry: 0, spent: 0, slices: [], interest: [] },
     };
     const list = {
@@ -42,6 +52,87 @@ describe('due dates on screen', () => {
       'card:card',
       'recurring:soon',
     ]);
+  });
+
+  it('takes card bills left to pay and card spending since off your money', () => {
+    const card = {
+      accountId: 'bca',
+      cutOff: '2026-11-20',
+      dueOn: '2026-12-05',
+      bill: 1_500_000,
+      left: 1_000_000,
+      paidSince: 500_000,
+      spentSince: 300_000,
+      before: null,
+      interestFrom: { month: null, plans: [] },
+      lines: { carry: 0, spent: 0, slices: [], interest: [] },
+    };
+    const idr = (id: string) => id !== 'usd';
+    expect(
+      afterCardBills(
+        10_000_000,
+        [
+          card,
+          { ...card, accountId: 'paid', left: 0, spentSince: 0 },
+          { ...card, accountId: 'refund', left: 0, spentSince: -50_000 },
+          { ...card, accountId: 'usd' },
+        ],
+        idr,
+      ),
+    ).toBe(8_700_000);
+    // No card owes anything: no line.
+    expect(afterCardBills(10_000_000, [{ ...card, left: 0, spentSince: 0 }], idr)).toBeNull();
+  });
+
+  it("reads a card bill's lines in the bank's order, and the interest sources the server allows", () => {
+    const card = {
+      accountId: 'bca',
+      cutOff: '2026-11-20',
+      dueOn: '2026-12-05',
+      bill: 1_355_000,
+      left: 1_355_000,
+      paidSince: 0,
+      spentSince: 0,
+      before: '2026-10',
+      interestFrom: { month: '2026-10', plans: [{ id: 'p1', name: 'TV' }] },
+      lines: {
+        carry: 500_000,
+        spent: 700_000,
+        slices: [{ planId: 'p1', name: 'TV', no: 2, of: 6, amount: 100_000, paid: false }],
+        interest: [
+          {
+            entryId: 'e1',
+            planId: null,
+            no: null,
+            from: '2026-10',
+            day: '2026-11-20',
+            amount: 45_000,
+            planName: null,
+          },
+          {
+            entryId: 'e2',
+            planId: 'p1',
+            no: 2,
+            from: null,
+            day: '2026-11-20',
+            amount: 10_000,
+            planName: 'TV',
+          },
+        ],
+      },
+    };
+    expect(billLines(card).map(l => l.label)).toEqual([
+      'Unpaid from Oct',
+      'Spending',
+      'TV 2/6',
+      'Interest · on unpaid Oct',
+      'Interest · TV slice 2',
+    ]);
+    expect(interestSources(card).map(s => [s.label, s.from])).toEqual([
+      ['On unpaid Oct', { month: '2026-10' }],
+      ['TV', { planId: 'p1' }],
+    ]);
+    expect(interestSources({ ...card, interestFrom: { month: null, plans: [] } })).toEqual([]);
   });
 
   it('groups bills by the day they fall due', () => {

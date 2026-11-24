@@ -5,18 +5,6 @@
 // picked one again keeps it). With `pickOnSettle` (Money), turning also picks the card it settles on.
 // The "All" card (id null) is the joker. Cards are dealt in and float; on a pointer device one tilts toward it.
 import {
-  Bank,
-  Cardholder,
-  Cards,
-  ClockCountdown,
-  CreditCard,
-  CurrencyBtc,
-  DeviceMobile,
-  Handshake,
-  Money,
-  type Icon,
-} from '@phosphor-icons/react';
-import {
   animate,
   useMotionValue,
   useMotionValueEvent,
@@ -35,6 +23,7 @@ import {
 import { formatMoney, shortMoney } from '../../lib/format';
 import { buzz, reducedMotion, useDragGuard } from '../../lib/motion';
 import { NameSticker } from '../../ui/NameSticker';
+import { ICON } from './kindIcons';
 
 type HandCard = {
   id: string | null;
@@ -49,17 +38,6 @@ type HandCard = {
   stickers?: string[];
 };
 
-export const ICON: Record<string, Icon> = {
-  BANK: Bank,
-  DEBIT_CARD: Cardholder,
-  EWALLET: DeviceMobile,
-  CASH: Money,
-  CREDIT_CARD: CreditCard,
-  PAYLATER: ClockCountdown,
-  EXCHANGE: CurrencyBtc,
-  IOU: Handshake,
-  ALL: Cards,
-};
 // Short type names that fit the card's band.
 const KIND: Record<string, string> = {
   BANK: 'Bank',
@@ -239,7 +217,7 @@ function Card({
   onTap: () => void;
   onFocus: () => void;
 }) {
-  const I = ICON[c.kind] ?? Cards;
+  const I = ICON[c.kind] ?? ICON.ALL;
   const tilt = (e: PointerEvent<HTMLElement>) => {
     if (e.pointerType !== 'mouse') return;
     const r = e.currentTarget.getBoundingClientRect();

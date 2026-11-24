@@ -11,7 +11,7 @@ import { usePrices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 import { HpBar } from '../../ui/HpBar';
 import { isCard } from '../../../../src/domain/recurring';
-import { overBy, shownBalance } from './TotalBalance';
+import { limitOf, overBy, shownBalance } from '../../models/account';
 import { UpdateBalanceSheet } from './UpdateBalanceSheet';
 import { isStandIn, me } from '../../lib/state';
 import { accountApi } from '../../models/account';
@@ -43,7 +43,7 @@ export function PickedAccount({
   const main = pockets.find(p => p.id === a?.default_envelope_id);
   const split = Boolean(main && pockets.some(p => p !== main && p.balance));
   // A card / pay later with a limit: the hero is what is left of it; what is owed goes under it.
-  const capped = a && isCard(a.kind) && a.credit_limit ? a.credit_limit : null;
+  const capped = a && limitOf(a);
   const free = capped ? shownBalance(a!) : split ? main!.balance : (a?.balance ?? 0);
   const over = a ? overBy(a) : 0;
   const iou = a?.kind === 'IOU';

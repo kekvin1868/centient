@@ -4,7 +4,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { call, client, type Req, type Res } from './api';
 import { paidTicket } from '../../../src/domain/tickets';
-import { daysBetween } from './dates';
+import { billMonth, daysBetween } from './dates';
 
 type List = Res<typeof client.api.recurring.$get>;
 /** One bill with its due dates for the next 12 months (`dues`, none while paused). */
@@ -17,6 +17,7 @@ export type FoundPayment = Res<typeof client.api.recurring.found.$get>['found'][
 export type RecurringBody = Req<typeof client.api.recurring.$post>['json'];
 type Patch = Req<(typeof client.api.recurring)[':id']['$patch']>['json'];
 type Paid = Req<(typeof client.api.recurring)[':id']['paid']['$post']>['json'];
+type Interest = Req<(typeof client.api.recurring.cards)[':accountId']['interest']['$post']>['json'];
 const one = client.api.recurring[':id'];
 
 export const recurringQueries = {
@@ -51,6 +52,9 @@ export const recurringApi = {
   /** Undoes a payment: deletes the expense that paid a bill, and the server moves the bill back to that date. */
   unpay: (entryId: string) =>
     call(client.api.entries[':id'].$delete({ param: { id: entryId }, query: {} })),
+  /** "Log interest" on a card bill: the bank's interest from the statement, tagged by where it came from. */
+  logInterest: (accountId: string, json: Interest) =>
+    call(client.api.recurring.cards[':accountId'].interest.$post({ param: { accountId }, json })),
   /** "Not a subscription": this merchant is no longer offered under "Found in your entries". */
   hide: (merchant: string) => call(client.api.recurring.found.hide.$post({ json: { merchant } })),
 };
@@ -63,6 +67,62 @@ export function dueWords(due: string, today: string): string {
   if (days === 0) return 'Due today';
   if (days === 1) return 'Due tomorrow';
   return days > 0 ? `Due in ${days} days` : `${-days} day${days === -1 ? '' : 's'} late`;
+}
+
+/** One line of a card bill, in the bank's order. */
+export type BillLine = { key: string; label: string; amount: number; paid?: boolean };
+
+/** A card bill's lines: unpaid (or paid extra) from the bill before, spending, each plan's slice, interest. */
+export function billLines(card: CardStatement): BillLine[] {
+  const { carry, spent, slices, interest } = card.lines;
+  const before = card.before ? billMonth(card.before) : 'last bill';
+  return [
+    ...(carry > 0 ? [{ key: 'carry', label: `Unpaid from ${before}`, amount: carry }] : []),
+    ...(carry < 0 ? [{ key: 'carry', label: `Paid extra on ${before}`, amount: carry }] : []),
+    ...(spent ? [{ key: 'spent', label: 'Spending', amount: spent }] : []),
+    ...slices.map(s => ({
+      key: `slice:${s.planId}:${s.no}`,
+      label: `${s.name} ${s.no}/${s.of}`,
+      amount: s.amount,
+      paid: s.paid,
+    })),
+    ...interest.map(i => ({
+      key: `interest:${i.entryId}`,
+      label: i.from
+        ? `Interest · on unpaid ${billMonth(i.from)}`
+        : `Interest${i.planName ? ` · ${i.planName}${i.no ? ` slice ${i.no}` : ''}` : ''}`,
+      amount: i.amount,
+    })),
+  ];
+}
+
+/** A choice for "Charged on" in Log interest. */
+export type InterestSource = { key: string; label: string; from: Interest['from'] };
+
+/** Where the server lets this bill's interest come from (`interestFrom`), as choices. */
+export function interestSources(card: CardStatement): InterestSource[] {
+  const { month, plans } = card.interestFrom;
+  return [
+    ...(month
+      ? [{ key: `m:${month}`, label: `On unpaid ${billMonth(month)}`, from: { month } }]
+      : []),
+    ...plans.map(p => ({ key: `p:${p.id}`, label: p.name, from: { planId: p.id } })),
+  ];
+}
+
+/**
+ * Home's "After card bills": your money less what is left to pay of each printed card bill and what was spent on
+ * the cards since they closed (it is on the next bill). Future slices are left out. Only the cards in `currency`.
+ */
+export function afterCardBills(
+  money: number,
+  cards: CardStatement[],
+  inCurrency: (accountId: string) => boolean,
+) {
+  const owed = cards
+    .filter(c => inCurrency(c.accountId))
+    .reduce((s, c) => s + c.left + Math.max(0, c.spentSince), 0);
+  return owed ? money - owed : null;
 }
 
 /** One line of Home's "Coming up": a bill, or a card's statement with money left to pay. */

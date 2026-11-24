@@ -4,13 +4,12 @@ import type { ReactNode } from 'react';
 import { formatMoney } from '../../lib/format';
 import { catalog, nameOf } from '../../lib/state';
 import { paidLate, rowsOf, type BillRow } from '../../models/billRun';
-import { daysBetween } from '../../models/dates';
+import { dayWords, daysBetween } from '../../models/dates';
 import { persist } from '../../models/query';
 import { dueWords, recurringApi, recurringQueries, type Recurring } from '../../models/recurring';
 import { repeatWords } from '../../models/recurringForm';
 import { BigMoney } from '../../ui/BigMoney';
 import { showToast } from '../../ui/Toast';
-import { dayWords } from './BillLine';
 
 const heading = 'mx-4 mb-1.5 mt-5 text-[13px] uppercase tracking-[0.06em]';
 const panel = 'panel mx-4 bg-white dark:bg-raised';

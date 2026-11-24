@@ -1,16 +1,8 @@
-// Installment plans (credit cards and pay later, `isCard`): loading them, and which are due soon.
+// Installment plans (credit cards and pay later, `isCard`): loading them. What is due is the card's bill.
 import { useQuery } from '@tanstack/react-query';
-import { installmentQueries, type Plan } from '../../models/installment';
+import { installmentQueries } from '../../models/installment';
 
-/** Plans of every account (for Home's "due soon"), or of one account; null while loading. */
+/** Plans of every account, or of one account; null while loading. */
 export function usePlans(accountId?: string) {
   return useQuery(installmentQueries.list(accountId)).data ?? null;
-}
-
-/** The plans with something due within 3 days (or overdue), soonest first. */
-export function dueSoon(plans: Plan[], today: string) {
-  const soon = new Date(Date.parse(`${today}T00:00:00Z`) + 3 * 864e5).toISOString().slice(0, 10);
-  return plans
-    .filter(p => p.next && p.next.due <= soon)
-    .sort((a, b) => a.next!.due.localeCompare(b.next!.due));
 }

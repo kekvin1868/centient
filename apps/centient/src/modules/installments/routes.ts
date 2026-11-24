@@ -48,8 +48,7 @@ export const installmentsRoutes = new Hono<AppEnv>()
     json(
       z.object({
         no: z.number().int().min(1),
-        seq: z.number().int().min(0),
-        fromAccountId: id.optional(),
+        seq: z.number().int().min(1),
         date: day.optional(),
       }),
     ),

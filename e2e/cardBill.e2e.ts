@@ -228,6 +228,8 @@ test('paying part of the bill leaves the rest to pay', async () => {
   await pay.getByRole('button', { name: 'Log the payment' }).tap();
   await expect(pay).toBeHidden();
   await expect(billBox()).toContainText('Rp600.000');
-  await expect(billBox()).toContainText('Left of Rp1.000.000');
+  await expect(billBox().getByRole('list', { name: 'Bill lines' })).toContainText(
+    'BillRp1.000.000',
+  );
   expect((await cardBill(await accountId('Shopee Card'))).left).toBe(600_000);
 });

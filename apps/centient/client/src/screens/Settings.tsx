@@ -12,6 +12,7 @@ import { Page, type Back } from '../layouts/Page';
 import { categoryEmoji } from '../lib/labels';
 import { active, catalog } from '../lib/state';
 import { Group, Row } from '../ui/List';
+import { BOOKKEEPING_CATEGORIES } from '../../../src/domain/categories';
 
 export function Settings({ back }: { back: Back }) {
   const [category, setCategory] = useState<Category | null>(null);
@@ -22,7 +23,7 @@ export function Settings({ back }: { back: Back }) {
     <Page title="Settings" back={back}>
       <Group label="Categories">
         {active(cat.categories)
-          .filter(c => !['Balance adjustment', 'Opening balance'].includes(c.name))
+          .filter(c => !BOOKKEEPING_CATEGORIES.includes(c.name))
           .map(c => (
             <Row
               key={c.id}

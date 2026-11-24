@@ -181,7 +181,7 @@ test("a bill's own page: history, edit, pause, and back to the list", async () =
   await expect(page.getByRole('heading', { level: 1, name: 'Bills' })).toBeVisible();
 });
 
-test("a card's bill and an installment sit on the Bills page, tagged; the card is paid from there", async () => {
+test("a card's bill sits on the Bills page, tagged, its plan inside it; the card is paid from there", async () => {
   const card = await send('post', '/accounts', {
     name: 'BCA Card',
     kind: 'CREDIT_CARD',
@@ -213,8 +213,8 @@ test("a card's bill and an installment sit on the Bills page, tagged; the card i
     categoryId: fun.id,
   });
 
-  // Bills: both are listed with a tag and their own key, and marked hollow on the calendar; the month's
-  // count stays bills only.
+  // Bills: the card bill is listed with a tag and its own key, and marked hollow on the calendar; the plan has
+  // no row of its own (its slices ride the card's bill); the month's count stays bills only.
   await page.goto('/');
   await tab('Bills').tap();
   const bills = page.getByRole('main');
@@ -223,14 +223,8 @@ test("a card's bill and an installment sit on the Bills page, tagged; the card i
   await expect(cardRow).toContainText('CARD');
   await expect(cardRow).toContainText('Rp700.000');
   await expect(cardRow).toContainText('not in the bar');
-  const planRow = bills.getByRole('listitem').filter({ hasText: 'Phone · 1 of 3' });
-  await expect(planRow).toContainText('PLAN');
-  await expect(planRow).toContainText(/Due in \d+ days · not in the bar/);
-  await expect(bills.getByText('card bill / installment')).toBeVisible();
-  await planRow.getByRole('button', { name: 'Pay Phone · 1 of 3' }).tap();
-  await expect(sheet('Phone')).toContainText('0 of 3 paid');
-  await page.keyboard.press('Escape');
-  await expect(sheet('Phone')).toHaveCount(0);
+  await expect(bills.getByRole('listitem').filter({ hasText: 'Phone' })).toHaveCount(0);
+  await expect(bills.getByText('card bill', { exact: true })).toBeVisible();
 
   await cardRow.getByRole('button', { name: 'Pay BCA Card bill' }).tap();
   const pay = sheet('Pay BCA Card');
@@ -247,7 +241,8 @@ test("a card's bill and an installment sit on the Bills page, tagged; the card i
   await hand.focus();
   await hand.press('Enter');
   const bill = page.getByRole('region', { name: 'Card bill' });
-  await expect(bill).toContainText('Nothing left to pay of the Rp700.000');
+  await expect(bill).toContainText('Nothing left to pay of the bill closed on');
+  await expect(bill.getByRole('list', { name: 'Bill lines' })).toContainText('SpendingRp700.000');
   await expect(bill).toContainText('Rp150.000 spent since then goes on the next bill.');
 });
 

@@ -2,17 +2,21 @@
 import type { ServiceDeps } from '../../context';
 import type { Patch } from '../../lib/schemas';
 import { jakartaToday, toOccurredAt } from '../../domain/cycle';
-import { isCard, statementOf } from '../../domain/recurring';
+import { cardSetUp, hasBills, isCard, statementOf } from '../../domain/recurring';
 import {
   assertBalanced,
   DomainError,
   expense,
   income,
+  OPENING_CATEGORY,
   type NewTransaction,
 } from '../../domain/ledger';
 import type { Account } from '../../repos/accounts';
 
 export type AccountsService = ReturnType<typeof createAccountsService>;
+
+const cardSetupError = () =>
+  new DomainError('CARD_SETUP', 'A card or pay later needs its limit, closing day and pay-by day');
 
 export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) {
   const stamp = () => new Date(now()).toISOString();
@@ -24,15 +28,10 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
    */
   const openingTxs = async (account: Account, amount: number, billed = 0) => {
     const c = await catalog.load();
-    const cat = c.categoryByName('Opening balance');
-    if (!cat)
-      throw new DomainError(
-        'NO_OPENING_CATEGORY',
-        'Create an "Opening balance" income category first',
-      );
+    const cat = c.opening();
     if (!Number.isSafeInteger(billed) || billed < 0 || (billed > 0 && -amount < billed))
       throw new DomainError('BILLED_TOO_MUCH', 'The last bill can be at most what is used');
-    if (billed > 0 && !(isCard(account.kind) && account.statement_day))
+    if (billed > 0 && !hasBills(account))
       throw new DomainError('NOT_A_CARD', 'Only a card or pay later has a bill');
     const today = jakartaToday(now());
     const parts: [string, number][] = [];
@@ -47,10 +46,28 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
         categoryId: cat.id,
         amount: part,
         signed: true,
-        note: 'Opening balance',
+        note: OPENING_CATEGORY,
       }),
     );
   };
+
+  /**
+   * A friend's tab stays a tab. A card's balance is what is used of its limit and a bank's is money in it, so an
+   * account with entries or extra pockets can't switch between the two.
+   */
+  async function assertKindCanChange(row: Account, kind: string) {
+    if ((row.kind === 'IOU') !== (kind === 'IOU'))
+      throw new DomainError('KIND_LOCKED', '"Friends owe you" accounts keep their type');
+    if (isCard(row.kind) === isCard(kind)) return;
+    const pockets = (await repos.envelopes.list(ws)).filter(
+      e => e.account_id === row.id && e.id !== row.default_envelope_id && !e.archived_at,
+    );
+    if (pockets.length || (await repos.entries.hasTransactions(ws, row.id)))
+      throw new DomainError(
+        'CARD_KIND_LOCKED',
+        'This account already has entries or pockets. Add a new account instead.',
+      );
+  }
 
   return {
     /** Creates an account with its Main pocket; an opening balance (negative for card / pay later debt) goes into Main. */
@@ -68,11 +85,16 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
     }): Promise<Account> {
       const card = isCard(i.kind);
       // Without these the card has no bill and its limit reads as debt (owner test 2026-11-21).
-      if (card && !(i.creditLimit && i.statementDay && i.dueDay))
-        throw new DomainError(
-          'CARD_SETUP',
-          'A card or pay later needs its limit, closing day and pay-by day',
-        );
+      if (
+        card &&
+        !cardSetUp({
+          kind: i.kind,
+          credit_limit: i.creditLimit ?? null,
+          statement_day: i.statementDay ?? null,
+          due_day: i.dueDay ?? null,
+        })
+      )
+        throw cardSetupError();
       const account = await repos.accounts.create(ws, {
         name: i.name.trim(),
         kind: i.kind,
@@ -126,15 +148,12 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
               ? expense({ ...correction, categoryId: cat.id, amount: -diff })
               : income({ ...correction, categoryId: cat.id, amount: diff });
         } else {
-          const cat = c.categories.find(
-            x => x.name === 'Balance adjustment' && x.kind === 'INCOME',
-          );
-          if (!cat)
-            throw new DomainError(
-              'NO_ADJUSTMENT_CATEGORY',
-              'Create a "Balance adjustment" income category first',
-            );
-          tx = income({ ...correction, categoryId: cat.id, amount: diff, signed: true });
+          tx = income({
+            ...correction,
+            categoryId: c.adjustment().id,
+            amount: diff,
+            signed: true,
+          });
         }
         assertBalanced(tx, x => c.accountOf(x));
         await repos.entries.insert(ws, [{ kind: 'CORRECTION', command: null, txs: [tx] }]);
@@ -152,34 +171,16 @@ export function createAccountsService({ ws, now, repos, catalog }: ServiceDeps) 
       if (typeof rest.provider === 'string')
         rest.provider = rest.provider.trim().toUpperCase() || null;
       const row = (await repos.accounts.list(ws)).find(a => a.id === id);
-      if (row && typeof rest.kind === 'string') {
-        if ((row.kind === 'IOU') !== (rest.kind === 'IOU'))
-          throw new DomainError('KIND_LOCKED', '"Friends owe you" accounts keep their type');
-        // A card's balance is what is used of its limit, a bank's is money in it: neither carries over, nor do pockets.
-        if (
-          isCard(row.kind) !== isCard(rest.kind) &&
-          ((await repos.entries.hasTransactions(ws, id)) ||
-            (await repos.envelopes.list(ws)).some(
-              e => e.account_id === id && e.id !== row.default_envelope_id && !e.archived_at,
-            ))
-        )
-          throw new DomainError(
-            'CARD_KIND_LOCKED',
-            'This account already has entries or pockets. Add a new account instead.',
-          );
-      }
+      if (row && typeof rest.kind === 'string') await assertKindCanChange(row, rest.kind);
       // Touching a card's type, limit or days must leave all three set (a rename or hide of an old card still goes).
-      const next = { ...row, ...rest };
+      const next = { ...row, ...rest } as Account;
       if (
         row &&
-        isCard(String(next.kind)) &&
+        isCard(next.kind) &&
         ['kind', 'credit_limit', 'statement_day', 'due_day'].some(k => k in rest) &&
-        !(next.credit_limit && next.statement_day && next.due_day)
+        !cardSetUp(next)
       )
-        throw new DomainError(
-          'CARD_SETUP',
-          'A card or pay later needs its limit, closing day and pay-by day',
-        );
+        throw cardSetupError();
       const currency = typeof rest.currency_code === 'string' ? rest.currency_code : null;
       if (currency && (await repos.entries.hasTransactions(ws, id)))
         throw new DomainError(

@@ -4,7 +4,7 @@ import { formatMoney } from '../../lib/format';
 import type { MonthRun } from '../../models/billRun';
 import { BigMoney } from '../../ui/BigMoney';
 import { HpBar } from '../../ui/HpBar';
-import { dayWords } from './BillLine';
+import { dayWords } from '../../models/dates';
 
 const chip = 'border border-edge px-1.5 text-[12px]';
 
@@ -15,7 +15,7 @@ export function MonthHero({
 }: {
   run: MonthRun;
   today: string;
-  /** Card bills and installments due this month: shown on the page, not counted here. */
+  /** Card bills due this month: shown on the page, not counted here. */
   outside: number;
 }) {
   const month = dayWords(today, { month: 'long', year: 'numeric' });
