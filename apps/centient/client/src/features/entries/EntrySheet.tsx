@@ -1,6 +1,5 @@
-// Open an entry: edit it (your own entries; the sheet only saves) or see a system entry's details.
-// deleteWithUndo (used by the row's swipe action) hides it at once and offers Undo for 5 s; the delete is
-// queued only when the Undo window ends.
+// Open an entry: edit it (your own entries; the sheet only saves) or see a system entry's details. Loaded when an
+// entry is opened, not for the first paint (the row's swipe delete is ./deleteWithUndo).
 // Saves go through the outbox (models/outbox), so they work with no signal. An entry the server refused opens
 // with its reason, Send again and Discard; one changed somewhere else opens ClashSheet.
 import { Block, Button } from 'konsta/react';
@@ -23,25 +22,6 @@ import { TiedSheet } from './TiedSheet';
 import { entryApi, type PaybackMode } from '../../models/entry';
 import { outbox } from '../../models/outbox';
 import { leavesPaybacksOver } from '../../models/useWaiting';
-
-/** `paybacks`: a bill with Paid backs tied, as answered in TiedSheet. */
-export function deleteWithUndo(entry: Entry, paybacks?: PaybackMode) {
-  const hide = (on: boolean) => {
-    const next = new Set(hiddenEntries.value);
-    if (on) next.add(entry.id);
-    else next.delete(entry.id);
-    hiddenEntries.value = next;
-  };
-  hide(true);
-  showToast('Deleted', {
-    action: { label: 'Undo', run: () => hide(false) },
-    onExpire: () => {
-      // From here the outbox hides it (and brings it back, marked, if the server refuses).
-      entryApi.remove(entry, paybacks);
-      hide(false);
-    },
-  });
-}
 
 /** Render with key={entry id}: the form is set up once per opened entry. */
 export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: () => void }) {

@@ -21,9 +21,8 @@ import { syncedIds } from '../../models/outbox';
 import { PixelSign, type Sign } from '../../ui/PixelSign';
 import { KeyChip } from '../../ui/KeyChip';
 import { BillPeople } from './BillPeople';
-import { deleteWithUndo } from './EntrySheet';
-import { TiedSheet } from './TiedSheet';
-import { IconSheet } from './IconSheet';
+import { deleteWithUndo } from './deleteWithUndo';
+import { lazySheet } from '../../ui/lazySheet';
 import { Group } from '../../ui/List';
 
 /** `pocket`: set in a goal's log, where a row shows what moved in or out of that pocket and its balance after. */
@@ -37,6 +36,17 @@ export type Entry = EntryView & {
 };
 
 /** The word on a row that is not on the server yet; none for one that just went through. */
+// Sheets a row's actions open: downloaded when first opened, not with Home's first paint.
+const TiedSheet = lazySheet(() => import('./TiedSheet').then(m => m.TiedSheet));
+const IconSheet = lazySheet(() =>
+  import('./IconSheet').then(
+    m =>
+      function OpenIcon(p: { open: boolean; entry: Entry | null; onClose: () => void }) {
+        return <m.IconSheet entry={p.entry} onClose={p.onClose} />;
+      },
+  ),
+);
+
 const WAIT_WORD: Record<WaitingMark['state'], string> = {
   waiting: 'waiting',
   sending: 'sending',
@@ -148,6 +158,7 @@ export function EntryList({
       />
       <IconSheet
         key={`icon:${iconFor?.id ?? 'none'}`}
+        open={Boolean(iconFor)}
         entry={iconFor}
         onClose={() => setIconFor(null)}
       />

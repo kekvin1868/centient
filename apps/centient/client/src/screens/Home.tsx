@@ -5,7 +5,6 @@ import { AccountChip } from '../features/accounts/AccountChip';
 import { ReturnDue } from '../features/accounts/ReturnDue';
 import { Headline } from '../features/budgets/Headline';
 import type { Entry } from '../features/entries/EntryList';
-import { EntrySheet } from '../features/entries/EntrySheet';
 import { LogBox } from '../features/entries/LogBox';
 import { NotSent } from '../features/entries/NotSent';
 import { Recent } from '../features/entries/Recent';
@@ -23,6 +22,14 @@ const AccountPicker = lazySheet(() =>
 );
 const AllActivity = lazySheet(() =>
   import('../features/entries/AllActivity').then(m => m.AllActivity),
+);
+const EntrySheet = lazySheet(() =>
+  import('../features/entries/EntrySheet').then(
+    m =>
+      function OpenEntry(p: { open: boolean; entry: Entry | null; onClose: () => void }) {
+        return <m.EntrySheet entry={p.entry} onClose={p.onClose} />;
+      },
+  ),
 );
 
 export function Home({ onGoMoney, onGoBills }: { onGoMoney: () => void; onGoBills: () => void }) {
@@ -49,7 +56,12 @@ export function Home({ onGoMoney, onGoBills }: { onGoMoney: () => void; onGoBill
       <AccountPicker open={picking} onClose={() => setPicking(false)} />
       <Inbox open={inbox} onClose={() => setInbox(false)} />
       <AllActivity open={all} onClose={() => setAll(false)} onOpen={setOpen} />
-      <EntrySheet key={`entry:${open?.id ?? 'none'}`} entry={open} onClose={() => setOpen(null)} />
+      <EntrySheet
+        key={`entry:${open?.id ?? 'none'}`}
+        open={Boolean(open)}
+        entry={open}
+        onClose={() => setOpen(null)}
+      />
     </Page>
   );
 }
