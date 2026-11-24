@@ -2,6 +2,8 @@
 // pockets). A pocket (envelope) belongs to one account, so for every account, SUM(its entries) =
 // SUM(allocations to its pockets): an account's balance is always the sum of its pockets.
 
+export * from './categories';
+
 export class DomainError extends Error {
   constructor(
     public code: string,
