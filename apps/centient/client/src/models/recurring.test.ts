@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   afterCardBills,
+  cardWithWaiting,
   cardsOwed,
   billLines,
   comingUp,
@@ -276,5 +277,50 @@ describe('interest already typed, and paying more than the bill', () => {
   it('paid extra is what went in beyond the bill', () => {
     expect(paidExtra(card)).toBe(50_000);
     expect(paidExtra({ ...card, paidSince: 400_000 })).toBe(0);
+  });
+});
+
+describe('changes waiting on the phone count on the card bill', () => {
+  // The owner's case: the app has 1.350k, the statement 1.400k; 50k logged offline on the closing day.
+  const card = {
+    accountId: 'bca',
+    cutOff: '2026-11-10',
+    dueOn: '2026-11-25',
+    bill: 1_350_000,
+    left: 1_350_000,
+    paidSince: 0,
+    spentSince: 0,
+    before: null,
+    interestFrom: { month: null, plans: [] },
+    statement: { total: 1_400_000, minimum: null },
+    unpaidBills: 1,
+    lines: { carry: 0, spent: 1_350_000, slices: [], interest: [] },
+  };
+  const move = (day: string, amount: number, accountId = 'bca') => ({ accountId, day, amount });
+
+  it('a spend on or before closing is on this bill, so the gap closes and nothing is logged twice', () => {
+    const shown = cardWithWaiting(card, [move('2026-11-10', -50_000)]);
+    expect(shown).toMatchObject({ bill: 1_400_000, left: 1_400_000 });
+    expect(statementGap(shown, 1_400_000)).toBe(0);
+    expect(billLines(shown).at(-1)).toMatchObject({ kind: 'waiting', amount: 50_000 });
+  });
+
+  it('after closing: a payment is paid since (left drops), a spend is spent since', () => {
+    const shown = cardWithWaiting(card, [
+      move('2026-11-12', 1_000_000),
+      move('2026-11-12', -30_000),
+    ]);
+    expect(shown).toMatchObject({
+      bill: 1_350_000,
+      paidSince: 1_000_000,
+      left: 350_000,
+      spentSince: 30_000,
+    });
+    expect(billLines(shown).some(l => l.kind === 'waiting')).toBe(false);
+  });
+
+  it('other accounts and no moves leave the card as it is', () => {
+    expect(cardWithWaiting(card, [move('2026-11-10', -50_000, 'cash')])).toBe(card);
+    expect(cardWithWaiting(card, [])).toBe(card);
   });
 });

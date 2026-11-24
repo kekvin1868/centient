@@ -4,9 +4,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { ACCOUNT_KINDS, formatMoney } from '../../lib/format';
 import { selectedAccount } from '../../lib/state';
-import { budgetsWithWaiting, useBalances, useOverlaySince } from '../../models/useWaiting';
+import {
+  budgetsWithWaiting,
+  useBalances,
+  useOverlaySince,
+  useRecurring,
+} from '../../models/useWaiting';
 import { budgetQueries } from '../../models/budget';
-import { afterCardBills, cardsOwed, recurringQueries } from '../../models/recurring';
+import { afterCardBills, cardsOwed } from '../../models/recurring';
 import { lazySheet } from '../../ui/lazySheet';
 import { useState } from 'react';
 import { usePrices, type Prices } from '../../models/price';
@@ -69,7 +74,7 @@ export function Headline({ onGoMoney }: { onGoMoney: () => void }) {
   const { data: budgets, dataUpdatedAt } = useQuery(budgetQueries.status());
   const overlay = useOverlaySince(dataUpdatedAt);
   const prices = usePrices();
-  const { data: bills } = useQuery(recurringQueries.list());
+  const { data: bills } = useRecurring();
   const head = bal ? headOf(sel, bal, prices) : null;
   const [explain, setExplain] = useState(false);
   const inCurrency = (id: string) =>

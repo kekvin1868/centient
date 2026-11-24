@@ -1,9 +1,9 @@
 // Home's reminder: bills due within a week (or late) and card bills not paid off yet, one line each; tap to
 // go to the Bills tab. A card bill is an old scroll that ages with the bills left unpaid (BillScroll).
-import { useQuery } from '@tanstack/react-query';
 import { formatMoney } from '../../lib/format';
 import { catalog, nameOf } from '../../lib/state';
-import { comingUp, dueWords, recurringQueries, type Upcoming } from '../../models/recurring';
+import { comingUp, dueWords, type Upcoming } from '../../models/recurring';
+import { useRecurring } from '../../models/useWaiting';
 import { lazy, Suspense } from 'react';
 
 // The scroll (and its motion) is downloaded right after Home's first paint; a blank slot of its height holds the
@@ -13,7 +13,7 @@ const BillScroll = lazy(() => import('./BillScroll').then(m => ({ default: m.Bil
 const SHOWN = 3;
 
 export function ComingUp({ onOpen }: { onOpen: () => void }) {
-  const { data } = useQuery(recurringQueries.list());
+  const { data } = useRecurring();
   const due = data ? comingUp(data) : [];
   if (!data || !due.length) return null;
   const accounts = catalog.value.accounts;

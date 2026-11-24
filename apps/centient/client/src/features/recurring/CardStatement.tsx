@@ -6,7 +6,7 @@
 // bank asks more = log the missing spending or the interest; the app has more = check its lines. An installment
 // line opens its plan, an interest line its entry (to fix or delete it). A card made before limits and bill days
 // were required gets a key that opens its settings.
-import { useQuery } from '@tanstack/react-query';
+import { useRecurring } from '../../models/useWaiting';
 import { cardSetUp } from '../../../../src/domain/recurring';
 import { Button } from 'konsta/react';
 import { useState, type ReactNode } from 'react';
@@ -26,7 +26,6 @@ import {
   minimumState,
   nextBillName,
   paidExtra,
-  recurringQueries,
   type BillLine,
   statementGap,
   statementOf,
@@ -49,6 +48,7 @@ const LINE_TAG: Record<BillLine['kind'], { word: string; tone: TagTone }> = {
   spent: { word: 'spent', tone: 'plain' },
   slice: { word: 'installment', tone: 'miku' },
   interest: { word: 'interest', tone: 'pink' },
+  waiting: { word: 'waiting', tone: 'plain' },
 };
 
 /** The rubber stamp on the receipt: how the bill stands. */
@@ -89,7 +89,7 @@ function Callout({
 }
 
 export function CardStatement({ account }: { account: Account }) {
-  const { data } = useQuery(recurringQueries.list());
+  const { data } = useRecurring();
   const [paying, setPaying] = useState(false);
   const [logging, setLogging] = useState(false);
   const [editing, setEditing] = useState(false);

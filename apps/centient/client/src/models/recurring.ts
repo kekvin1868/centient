@@ -12,7 +12,9 @@ type List = Res<typeof client.api.recurring.$get>;
 /** One bill with its due dates for the next 12 months (`dues`, none while paused). */
 export type Recurring = List['items'][number];
 /** A credit card's or pay later's last statement: what was billed, what is left to pay, what was spent since. */
-export type CardStatement = List['cards'][number];
+export type CardStatement = List['cards'][number] & {
+  lines: { waiting?: number };
+};
 /** A merchant paid about monthly that is not a bill yet ("Found in your entries"). */
 export type FoundPayment = Res<typeof client.api.recurring.found.$get>['found'][number];
 /** The body of a new bill (an edit takes any part of it). */
@@ -72,7 +74,7 @@ export function dueWords(due: string, today: string): string {
 export type BillLine = {
   key: string;
   /** What kind of line: the tag on the receipt. */
-  kind: 'carry' | 'credit' | 'spent' | 'slice' | 'interest';
+  kind: 'carry' | 'credit' | 'spent' | 'slice' | 'interest' | 'waiting';
   /** The whole line in words (its accessible name), and the part after the tag. */
   label: string;
   detail: string;
@@ -82,6 +84,37 @@ export type BillLine = {
   planId?: string;
   entryId?: string;
 };
+
+/**
+ * The card's bill with changes still waiting on the phone counted in (useRecurring): on or before the closing day
+ * they are on this bill (a payment then lowers it, as on the server); after it a payment is paid since and a spend
+ * is spent since. ponytail: a waiting installment purchase counts as plain spending until it is sent.
+ */
+export function cardWithWaiting(
+  card: CardStatement,
+  moves: { accountId: string; day: string; amount: number }[],
+): CardStatement {
+  let onBill = 0;
+  let paid = 0;
+  let spent = 0;
+  for (const m of moves) {
+    if (m.accountId !== card.accountId || !m.amount) continue;
+    if (m.day <= card.cutOff) onBill -= m.amount;
+    else if (m.amount > 0) paid += m.amount;
+    else spent -= m.amount;
+  }
+  if (!onBill && !paid && !spent) return card;
+  const bill = card.bill + onBill;
+  const paidSince = card.paidSince + paid;
+  return {
+    ...card,
+    bill,
+    paidSince,
+    left: Math.max(0, bill - paidSince),
+    spentSince: card.spentSince + spent,
+    lines: { ...card.lines, waiting: (card.lines.waiting ?? 0) + onBill },
+  };
+}
 
 /** A card bill's lines: unpaid (or paid extra) from the bill before, spending, each plan's slice, interest. */
 export function billLines(card: CardStatement): BillLine[] {
@@ -135,6 +168,14 @@ export function billLines(card: CardStatement): BillLine[] {
       entryId: i.entryId,
     });
   }
+  if (card.lines.waiting)
+    lines.push({
+      key: 'waiting',
+      kind: 'waiting',
+      label: 'Waiting to send',
+      detail: 'not sent yet',
+      amount: card.lines.waiting,
+    });
   return lines;
 }
 

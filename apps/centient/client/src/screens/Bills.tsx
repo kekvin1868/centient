@@ -32,6 +32,7 @@ import {
   type OtherDue,
 } from '../models/billRun';
 import { recurringQueries, statementOf, type Recurring } from '../models/recurring';
+import { useRecurring } from '../models/useWaiting';
 import type { Prefill } from '../models/recurringForm';
 import { WinButton } from '../ui/WinButton';
 
@@ -42,7 +43,7 @@ const heading = 'mx-4 mb-1.5 mt-5 text-[13px] uppercase tracking-[0.06em]';
 const list = 'panel mx-4 bg-white dark:bg-raised';
 
 export function Bills() {
-  const { data } = useQuery(recurringQueries.list());
+  const { data } = useRecurring();
   const [editing, setEditing] = useState<Editing | null>(null);
   /** The card bill whose pay dialog is open. */
   const [paying, setPaying] = useState<OtherDue | null>(null);
