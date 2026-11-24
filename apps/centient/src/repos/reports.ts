@@ -2,6 +2,10 @@
 // a fee is its own EXPENSE); income = INCOME allocations outside "Opening balance" and "Balance adjustment".
 // The currency is the pocket's (allocations), dates are the Jakarta day of `occurred_at`, periods are [from, to).
 import { all } from './sql';
+import { BOOKKEEPING_CATEGORIES } from '../domain/ledger';
+
+/** Opening balances and corrections are bookkeeping, not income (constants, so safe inline). */
+const BOOKKEEPING_SQL = BOOKKEEPING_CATEGORIES.map(n => `'${n}'`).join(', ');
 
 const COUNTED = `t.workspace_id = ? AND t.deleted_at IS NULL AND substr(t.occurred_at, 1, 10) >= ? AND substr(t.occurred_at, 1, 10) < ?`;
 
@@ -24,7 +28,7 @@ export function reportsRepo(db: D1Database) {
         COUNT(DISTINCT t.id) AS entries
       FROM transactions t JOIN allocations a ON a.transaction_id = t.id JOIN envelopes e ON e.id = a.envelope_id
         JOIN categories c ON c.id = t.category_id
-      WHERE ${COUNTED} AND (t.type = 'EXPENSE' OR (t.type = 'INCOME' AND c.name NOT IN ('Opening balance', 'Balance adjustment')))
+      WHERE ${COUNTED} AND (t.type = 'EXPENSE' OR (t.type = 'INCOME' AND c.name NOT IN (${BOOKKEEPING_SQL})))
       GROUP BY e.currency_code`,
         ws,
         from,

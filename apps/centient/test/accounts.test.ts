@@ -211,4 +211,52 @@ describe('a card opening: what is used, split between the last bill and since', 
       svc(ws).pockets.create({ accountId: a.id, name: 'Trip', kind: 'SAVINGS' }),
     ).rejects.toMatchObject({ code: 'CARD_POCKETS' });
   });
+
+  it('an edit keeps a card set up: no card without its limit and days', async () => {
+    const ws = await ensure('card-edit@test');
+    const a = await svc(ws).accounts.create({ name: 'BCA Card', ...card });
+    await expect(svc(ws).accounts.update(a.id, { statement_day: null })).rejects.toMatchObject({
+      code: 'CARD_SETUP',
+    });
+    const bank = await svc(ws).accounts.create({ name: 'Jago', kind: 'BANK' });
+    await expect(
+      svc(ws).accounts.update(bank.id, { kind: 'PAYLATER', credit_limit: 1_000_000 }),
+    ).rejects.toMatchObject({ code: 'CARD_SETUP' });
+    await svc(ws).accounts.update(bank.id, {
+      kind: 'PAYLATER',
+      credit_limit: 1_000_000,
+      statement_day: 20,
+      due_day: 5,
+    });
+    // A card from before slice 1 (no days) can still be renamed or hidden.
+    await w.db.prepare('UPDATE accounts SET statement_day = NULL WHERE id = ?').bind(a.id).run();
+    await svc(ws).accounts.update(a.id, { name: 'Old BCA', archived: true });
+  });
+
+  it('bank ⇄ card only while the account has no entries and no pockets', async () => {
+    const ws = await ensure('card-kind@test');
+    const days = { credit_limit: 5_000_000, statement_day: 20, due_day: 5 };
+    const used = await svc(ws).accounts.create({
+      name: 'BCA',
+      kind: 'BANK',
+      openingBalance: 5_000,
+    });
+    await expect(
+      svc(ws).accounts.update(used.id, { kind: 'CREDIT_CARD', ...days }),
+    ).rejects.toMatchObject({ code: 'CARD_KIND_LOCKED' });
+    const pocketed = await svc(ws).accounts.create({ name: 'Jago', kind: 'BANK' });
+    await svc(ws).pockets.create({ accountId: pocketed.id, name: 'Rent', kind: 'SPENDING' });
+    await expect(
+      svc(ws).accounts.update(pocketed.id, { kind: 'CREDIT_CARD', ...days }),
+    ).rejects.toMatchObject({ code: 'CARD_KIND_LOCKED' });
+    const owed = await svc(ws).accounts.create({ name: 'Kredivo', ...card, kind: 'PAYLATER' });
+    await svc(ws).accounts.reconcile(owed.id, { actual: -100_000 });
+    await expect(svc(ws).accounts.update(owed.id, { kind: 'BANK' })).rejects.toMatchObject({
+      code: 'CARD_KIND_LOCKED',
+    });
+    // Within the same side, and on an empty account, the type still changes.
+    await svc(ws).accounts.update(used.id, { kind: 'EWALLET' });
+    const empty = await svc(ws).accounts.create({ name: 'Blu', kind: 'BANK' });
+    await svc(ws).accounts.update(empty.id, { kind: 'CREDIT_CARD', ...days });
+  });
 });

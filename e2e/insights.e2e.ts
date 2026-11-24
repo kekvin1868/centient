@@ -190,7 +190,10 @@ test('T4.32, T4.35, T4.39 previous periods, the arrows, the year view and the al
 
 test('T3.33 the ? on Insights opens the budget words; closing hands focus back', async () => {
   const help = page.getByRole('button', { name: 'What the budget words mean' });
-  await help.tap();
+  // Opened by keyboard: focus going back matters to keyboard users (Safari doesn't focus a tapped button, so a tap
+  // leaves nothing to hand back to).
+  await help.focus();
+  await help.press('Enter');
   const guide = page.getByRole('dialog', { name: 'Insights Glossary' });
   for (const word of ['On track', 'Likely over', 'Over'])
     await expect(guide.getByText(word, { exact: true })).toBeVisible();

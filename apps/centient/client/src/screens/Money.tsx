@@ -5,7 +5,8 @@ import { BlockTitle } from 'konsta/react';
 import { useEffect, useState } from 'react';
 import { AccountHand } from '../features/accounts/AccountHand';
 import { PickedAccount } from '../features/accounts/PickedAccount';
-import { shownBalance, TotalBalance } from '../features/accounts/TotalBalance';
+import { TotalBalance } from '../features/accounts/TotalBalance';
+import { overBy, shownBalance } from '../models/account';
 import { Budgets } from '../features/budgets/Budgets';
 import { PaidBackSheet } from '../features/entries/PaidBackSheet';
 import { InstallmentsSection } from '../features/installments/InstallmentsSection';
@@ -61,6 +62,7 @@ export function Money({ onShowAccount }: { onShowAccount: () => void }) {
             name: x.name,
             kind: x.kind,
             balance: shownBalance(x),
+            over: overBy(x),
             currency: x.currency_code,
             note: v !== null ? `≈ ${formatMoney(v)}` : undefined,
             stickers: stickersOf(catalog.value.accounts.find(c => c.id === x.id)),

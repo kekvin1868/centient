@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { catalog } from '../lib/state';
 import { accountQueries, type Balances } from './account';
+import { cardWithWaiting, recurringQueries } from './recurring';
 import type { Budget, BudgetCycle } from './budget';
 import type { EntryFilter } from './entry';
 import { outboxItems, type SavedEntry } from './outbox';
@@ -20,6 +21,8 @@ export const NOTHING: Overlay = {
   spending: [],
   count: 0,
   problems: 0,
+  statements: [],
+  moves: [],
 };
 
 const lib = signal<typeof import('./waiting') | null>(null);
@@ -195,4 +198,21 @@ export function budgetsWithWaiting(budgets: Budget[], cycle: BudgetCycle, o: Ove
       safePerDay: left > 0 ? Math.max(0, Math.floor(remaining / left)) : b.safePerDay,
     };
   });
+}
+
+/**
+ * Bills and card bills (GET /api/recurring), with waiting money moves counted on each card's bill: offline, a
+ * spend or payment on a card shows on its bill at once, so "Log missing spending" or "I paid it" is not done twice.
+ */
+export function useRecurring() {
+  const q = useQuery(recurringQueries.list());
+  const moves = waiting.value.moves;
+  const data = useMemo<typeof q.data>(
+    () =>
+      q.data && moves.length
+        ? { ...q.data, cards: q.data.cards.map(c => cardWithWaiting(c, moves)) }
+        : q.data,
+    [q.data, moves],
+  );
+  return { ...q, data };
 }

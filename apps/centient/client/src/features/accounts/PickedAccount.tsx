@@ -11,7 +11,7 @@ import { usePrices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 import { HpBar } from '../../ui/HpBar';
 import { isCard } from '../../../../src/domain/recurring';
-import { shownBalance } from './TotalBalance';
+import { limitOf, overBy, shownBalance } from '../../models/account';
 import { UpdateBalanceSheet } from './UpdateBalanceSheet';
 import { isStandIn, me } from '../../lib/state';
 import { accountApi } from '../../models/account';
@@ -43,8 +43,9 @@ export function PickedAccount({
   const main = pockets.find(p => p.id === a?.default_envelope_id);
   const split = Boolean(main && pockets.some(p => p !== main && p.balance));
   // A card / pay later with a limit: the hero is what is left of it; what is owed goes under it.
-  const capped = a && isCard(a.kind) && a.credit_limit ? a.credit_limit : null;
+  const capped = a && limitOf(a);
   const free = capped ? shownBalance(a!) : split ? main!.balance : (a?.balance ?? 0);
+  const over = a ? overBy(a) : 0;
   const iou = a?.kind === 'IOU';
   const iouBelow = iou && free < 0;
   const [keeping, setKeeping] = useState(false);
@@ -76,7 +77,7 @@ export function PickedAccount({
               minor={iouBelow ? -free : free}
               currency={a.currency_code}
               max={40}
-              className={`mt-2 ${free < 0 && !iouBelow ? 'text-negative' : ''}`}
+              className={`mt-2 ${(free < 0 && !iouBelow) || over ? 'text-negative' : ''}`}
             />
             {split && !capped && (
               <div className="num mt-2 text-[14px] font-semibold text-muted">
@@ -86,7 +87,15 @@ export function PickedAccount({
             {capped && (
               // The card's own limit, once: left to spend above, a bar in the card's colour, what is used of it.
               <div className={`rarity-${a.kind} mt-1`}>
-                <div className="text-[14px] font-semibold text-muted">left to spend</div>
+                <div className="text-[14px] font-semibold text-muted">
+                  left to spend
+                  {over > 0 && (
+                    <span className="text-negative">
+                      {' '}
+                      · Over by <span className="num">{formatMoney(over, a.currency_code)}</span>
+                    </span>
+                  )}
+                </div>
                 <div className="mt-2">
                   <HpBar
                     value={Math.max(0, free)}

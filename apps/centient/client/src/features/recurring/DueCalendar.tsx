@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import type { BillRow, OtherDue } from '../../models/billRun';
 import { monthGrid, plusMonths } from '../../ui/DatePicker';
-import { dayWords } from './BillLine';
+import { dayWords } from '../../models/dates';
 
 const DOW = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTHS_AHEAD = 11;

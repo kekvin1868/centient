@@ -1,0 +1,33 @@
+# Only on a PR labelled `ci` (adding the label runs it; then every push to that PR), or by hand from the Actions
+# tab (Run workflow). Otherwise check locally before a PR: `npm run check`, the same steps.
+# Format, types, lint and unit tests. The e2e suite (Playwright) runs locally only, on the files a change touches
+# (`npx playwright test e2e/<file>`), or all of it with `npm run e2e`: installing the browsers here took ~18 minutes.
+name: CI
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+  workflow_dispatch:
+jobs:
+  check:
+    # Adding some other label to a `ci` PR doesn't run it again.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (contains(github.event.pull_request.labels.*.name, 'ci') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'ci'))
+    # On the job, so a skipped run (no label) never cancels a real one.
+    concurrency:
+      group: ci-${{ github.ref }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test

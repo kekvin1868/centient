@@ -14,7 +14,11 @@ test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
   await page.goto('/');
 });
-test.afterAll(async () => page.close());
+test.afterAll(async () => {
+  // Reset so the next project (another browser) starts from a fresh first run too.
+  await page.request.post('/api/workspace/reset');
+  await page.close();
+});
 
 const api = (path: string, init?: { method?: string; data?: unknown }) =>
   page.request.fetch(`/api${path}`, { method: init?.method ?? 'GET', data: init?.data });
@@ -111,10 +115,9 @@ test('first run: the night menu sets starting balances, then Home', async () => 
 test('only the ten broad spending categories are offered', async () => {
   await page.getByRole('button', { name: 'Add without typing' }).tap();
   const sheet = page.getByRole('dialog', { name: 'New entry' });
-  const options = await sheet
-    .getByRole('combobox', { name: 'Category' })
-    .locator('option')
-    .allTextContents();
+  const category = sheet.getByRole('combobox', { name: 'Category' });
+  await expect(category).toBeVisible(); // the sheet is downloaded on first use
+  const options = await category.locator('option').allTextContents();
   expect(options.slice(1)).toEqual([
     'Education',
     'Family & Giving',
@@ -292,8 +295,8 @@ test('pockets live inside an account: add one, move money in, the account balanc
   await page.keyboard.press('Enter');
   const move = page.getByRole('dialog', { name: 'Add money to Rent' });
   // It opens once the actions sheet is gone, so the focus handed back doesn't land behind it.
-  await page.waitForTimeout(500); // the actions sheet's exit is over by now
-  expect(await move.evaluate(d => d.contains(document.activeElement))).toBe(true);
+  await expect(page.getByRole('dialog', { name: /^Rent/ })).toBeHidden();
+  await expect.poll(() => move.evaluate(d => d.contains(document.activeElement))).toBe(true);
   await move.getByRole('textbox', { name: 'Amount' }).fill('(1000000+500000');
   await expect(move.getByRole('button', { name: 'Check the amount' })).toBeDisabled();
   await move.getByRole('textbox', { name: 'Amount' }).fill('(1000000+500000)*2/2'); // a sum, worked out
@@ -400,7 +403,9 @@ test('a plan only you pay has no pay key and no proof of payment', async () => {
   await pick('Kredivo');
   await page.getByRole('button', { name: /Shoes, 0 of 2 paid/ }).tap();
   const plan = page.getByRole('dialog', { name: 'Shoes' });
-  await expect(plan.locator('[data-installment="1"]')).toContainText(/Slice 1 · \w{3} bill/);
+  await expect(plan.getByRole('region', { name: 'Next installment' })).toContainText(
+    /NEXT\s*[A-Z]{3} bill\s*Rp200\.000/,
+  );
   await expect(plan.getByRole('button', { name: /Mark .* paid/ })).toHaveCount(0);
   await expect(plan.getByText(/Attach proof/)).toHaveCount(0);
 });
@@ -439,6 +444,26 @@ test('an entry gets its own emoji, remembered for its merchant', async () => {
 test('swiping a row left unlocks edit and delete; deleting can be undone, then goes', async () => {
   const row = page.locator('.entry-row', { hasText: 'Arcade' });
   await row.scrollIntoViewIfNeeded();
+  // A slow phone: press, slide 40px, let go and the click all land before the next frame. Still a drag, not a tap
+  // (CI's WebKit once opened the entry it swiped). Sent as a second finger, which motion ignores: a drag it saw
+  // start after its release stayed stuck and the real swipe below never moved the row.
+  await row.getByRole('button', { name: /^Arcade/ }).evaluate(el => {
+    const r = el.getBoundingClientRect();
+    const at = (x: number, buttons: number) => ({
+      bubbles: true,
+      pointerId: 2,
+      pointerType: 'touch',
+      isPrimary: false,
+      clientX: x,
+      clientY: r.y + r.height / 2,
+      buttons,
+    });
+    el.dispatchEvent(new PointerEvent('pointerdown', at(r.right - 20, 1)));
+    el.dispatchEvent(new PointerEvent('pointermove', at(r.right - 60, 1)));
+    el.dispatchEvent(new PointerEvent('pointerup', at(r.right - 60, 0)));
+    el.dispatchEvent(new MouseEvent('click', at(r.right - 60, 0)));
+  });
+  await expect(page.getByRole('dialog', { name: 'Edit' })).toHaveCount(0);
   const box = (await row.boundingBox())!;
   await page.mouse.move(box.x + box.width - 20, box.y + box.height / 2);
   await page.mouse.down();
@@ -458,7 +483,8 @@ test('swiping a row left unlocks edit and delete; deleting can be undone, then g
     .click();
   const edit = page.getByRole('dialog', { name: 'Edit' });
   await expect(edit.getByRole('button', { name: 'Save' })).toBeVisible();
-  await expect(edit.getByRole('button', { name: 'Delete' })).toHaveCount(0);
+  // The sheet deletes too (as the swipe does), below Save.
+  await expect(edit.getByRole('button', { name: 'Delete' })).toBeVisible();
 });
 
 test('pockets are a list; Move money goes to another account too; patterns differ', async () => {
@@ -634,8 +660,9 @@ test('a short person: I cover the rest from another account, or they pay the res
   await expect(who.getByText('You cover Rp15.000')).toBeVisible();
   await sheet.getByRole('button', { name: 'Log it' }).tap();
   await expect(sheet).toBeHidden();
+  // The cover is its own entry, saved after the bill: wait for it rather than read once.
+  await expect.poll(() => balance('Dailies')).toBe(daily0 - 15_000);
   expect(await balance('Main Account')).toBe(main0 - 85_000);
-  expect(await balance('Dailies')).toBe(daily0 - 15_000);
   expect(await balance('Andi')).toBe(10_000);
   const covering = (
     (await (await api('/entries?limit=10')).json()).items as {
@@ -655,8 +682,8 @@ test('a short person: I cover the rest from another account, or they pay the res
   await who.getByRole('combobox', { name: 'They paid into' }).selectOption({ label: 'Dailies' });
   await sheet.getByRole('button', { name: 'Log it' }).tap();
   await expect(sheet).toBeHidden();
+  await expect.poll(() => balance('Dailies')).toBe(daily0 + 10_000);
   expect(await balance('Main Account')).toBe(main0 - 100_000);
-  expect(await balance('Dailies')).toBe(daily0 + 10_000);
   expect(await balance('Andi')).toBe(15_000);
   await api(`/accounts/${await accountId('Andi')}`, { method: 'DELETE' });
   expect(await balance('Dailies')).toBe(daily0); // the entry went with the tab, and its payment with it
@@ -748,7 +775,10 @@ test('budgets are grouped per currency, and the ? beside the heading explains th
   expect(Math.abs(title.y + title.height / 2 - (button.y + button.height / 2))).toBeLessThan(8); // same row
   expect(button.x).toBeGreaterThan(title.x + title.width); // title left, button right
   expect(page.viewportSize()!.width - (button.x + button.width)).toBeLessThan(40); // at the far right
-  await help.tap();
+  // Opened by keyboard: focus going back matters to keyboard users (Safari doesn't focus a tapped button, so a tap
+  // leaves nothing to hand back to).
+  await help.focus();
+  await help.press('Enter');
   const guide = page.getByRole('dialog', { name: 'Insights Glossary' });
   for (const word of ['On track', 'Likely over', 'Over'])
     await expect(guide.getByText(word, { exact: true })).toBeVisible();

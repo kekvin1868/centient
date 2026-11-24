@@ -1,6 +1,8 @@
 // Entries (what the user logged): the lists on Home and in All activity, 20 or 50 at a time with Load more.
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
+import { FEES_CATEGORY } from '../../../src/domain/categories';
 import type { Command } from '../../../src/lib/schemas';
+import { catalog } from '../lib/state';
 import { call, client, type Req, type Res } from './api';
 import { outbox, type Learn, type SavedEntry } from './outbox';
 import { checkEntry } from './useWaiting';
@@ -80,6 +82,33 @@ export const entryApi = {
     for (const x of list) await checkEntry(x.command);
     return list.map(x => outbox.create(x.command, x.learn));
   },
+  /**
+   * "Log interest" on a card bill, through the outbox like any entry: the bank's interest from the statement, on
+   * the bill closed on `closedOn`, tagged by where it came from. Shows at once as a Fees & Interests expense.
+   */
+  async logInterest(
+    accountId: string,
+    closedOn: string,
+    amount: number,
+    source: { label: string; from: { month: string } | { planId: string } },
+  ) {
+    const fees = catalog.value.categories.find(
+      c => c.name === FEES_CATEGORY && c.kind === 'EXPENSE',
+    );
+    if (!fees) throw new Error(`Create a "${FEES_CATEGORY}" expense category first`);
+    const command: Command = {
+      type: 'EXPENSE',
+      accountId,
+      categoryId: fees.id,
+      amount,
+      date: closedOn,
+      note: `Interest · ${source.label}`,
+    };
+    await checkEntry(command);
+    return outbox.create(command, undefined, { accountId, closedOn, from: source.from });
+  },
+  /** One entry as the server has it (a bill line opens its entry). */
+  get: (id: string) => call(client.api.entries[':id'].$get({ param: { id } })),
   /** Several entries written atomically, straight to the server (the first run, the Inbox): needs signal. */
   record: (json: Record_) => call(client.api.transactions.$post({ json })),
   /** `entry`: the entry as the screen shows it. `paybacks`: what to do with Paid backs a shrunk bill has no room for. */

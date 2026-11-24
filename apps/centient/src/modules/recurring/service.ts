@@ -1,12 +1,12 @@
 // Recurring bill use cases: subscriptions and other bills that leave on a date, what they add up to, a credit
 // card's statement, and monthly payments found in past entries.
 import type { ServiceDeps } from '../../context';
+import { loadCardBills } from '../../lib/cardBills';
 import { addDays, addMonths, jakartaToday, realDay } from '../../domain/cycle';
 import { daysBetween } from '../../domain/forecast';
 import { DomainError } from '../../domain/ledger';
-import { costOf, dueDates, isCard, looksMonthly, statementOf } from '../../domain/recurring';
+import { costOf, dueDates, hasBills, isCard, looksMonthly } from '../../domain/recurring';
 import type { Recurring } from '../../repos/recurring';
-import { loadCardBills } from '../installments/service';
 import type { LedgerService } from '../ledger/service';
 import { advance, scheduleOf } from './advance';
 
@@ -103,9 +103,15 @@ export function createRecurringService({
         });
       }
 
-      const [bills, { plans }] = await Promise.all([
+      const [
+        {
+          bills,
+          plans: { plans },
+        },
+        statements,
+      ] = await Promise.all([
         loadCardBills(repos, ws, c.accounts, day),
-        repos.installments.listPlans(ws),
+        repos.recurring.statements(ws),
       ]);
       const planName = (id: string | null) => plans.find(p => p.id === id)?.name ?? null;
       const cards = [...bills].map(([accountId, r]) => ({
@@ -117,8 +123,22 @@ export function createRecurringService({
         /** Paid into the card since the last closing: what "I paid it" and transfers in added up to. */
         paidSince: r.paidSince,
         spentSince: r.spentSince,
+        /**
+         * How many bills in a row are not paid off: 1 = only the last one, 2 = the one before carried over too…
+         * (0 once the last is paid). Home's scroll ages with it.
+         */
+        unpaidBills: r.left === 0 ? 0 : unpaidRun(r.bills),
         /** The bill before the last one: what "Unpaid from <month>" and "Log interest · on unpaid" name. */
         before: r.bills.length > 1 ? r.bills.at(-2)!.month : null,
+        /** Where "Log interest" may say the interest came from (src/domain/cardBill.ts `interestSources`). */
+        interestFrom: r.interestFrom,
+        /** What the bank's statement for the last bill says ("Enter statement"), typed in; null until it is. */
+        statement: (() => {
+          const st = statements.find(
+            x => x.account_id === accountId && x.closed_on === r.bill.closesOn,
+          );
+          return st ? { total: st.total, minimum: st.minimum } : null;
+        })(),
         /** The last bill's lines: carry-over, regular spending, each plan's slice, interest. */
         lines: {
           carry: r.bill.carry,
@@ -251,35 +271,56 @@ export function createRecurringService({
     /**
      * "Log interest" on a card bill: interest the bank charged, typed from the statement, as an expense on the
      * card in Fees & Interests dated on the last closing day (so it lands on the bill just printed), tagged by
-     * where it came from: the unpaid part of an older bill (`month`) or a plan of this card. Never on a card's
-     * first bill: nothing was unpaid before it.
+     * where it came from: only what the statement offers (`interestSources`: the bill before's unpaid part, a
+     * plan with a slice unpaid; nothing on a card's first bill). From the phone's outbox: `id` is the entry id it
+     * made (already taken = an earlier try landed, so nothing more is written) and `closedOn` the bill it was typed
+     * for; once that bill is no longer the last one printed it is refused (BILL_CLOSED), never moved to another.
      */
     async logInterest(
       accountId: string,
-      i: { amount: number; from: { month: string } | { planId: string } },
+      i: {
+        id?: string;
+        closedOn?: string;
+        amount: number;
+        from: { month: string } | { planId: string };
+      },
     ) {
+      if (i.id && (await repos.entries.taken(ws, [i.id])).has(i.id)) return i.id;
       const c = await catalog.load();
       const a = c.account(accountId).row;
-      if (!isCard(a.kind) || !a.statement_day)
+      if (!hasBills(a))
         throw new DomainError('CARD_SETUP', `Set ${a.name}'s limit and bill days first`);
-      const fees = c.categoryByName('Fees & Interests');
-      if (!fees)
+      const fees = c.fees();
+      const card = (await loadCardBills(repos, ws, c.accounts, today())).bills.get(accountId);
+      if (!card) throw new DomainError('CARD_SETUP', `${a.name} is hidden`);
+      if (i.closedOn && i.closedOn !== card.bill.closesOn)
         throw new DomainError(
-          'NO_FEES_CATEGORY',
-          'Create a "Fees & Interests" expense category first',
+          'BILL_CLOSED',
+          'That bill closed since. Log the interest from the new statement',
         );
-      const { cutOff } = statementOf(a.statement_day, a.due_day, today());
+      // One hand-typed line per source per bill: typing the statement's interest again must not add it twice.
+      const from = i.from;
+      const twice = card.bill.interest.some(l =>
+        'month' in from ? l.from === from.month : l.planId === from.planId && l.no === null,
+      );
+      if (twice)
+        throw new DomainError(
+          'INTEREST_LOGGED',
+          'That interest is already on this bill. Tap its line to change it',
+        );
       let label: string;
       if ('month' in i.from) {
-        if (!/^\d{4}-\d{2}$/.test(i.from.month) || i.from.month >= cutOff.slice(0, 7))
-          throw new DomainError('INTEREST_SOURCE', 'Pick a bill before the last one');
+        if (i.from.month !== card.interestFrom.month)
+          throw new DomainError(
+            'INTEREST_SOURCE',
+            'Only the unpaid part of the bill before the last one',
+          );
         label = `on unpaid ${monthName(i.from.month)}`;
       } else {
         const planId = i.from.planId;
-        const plan = (await repos.installments.listPlans(ws, accountId)).plans.find(
-          p => p.id === planId,
-        );
-        if (!plan) throw new DomainError('INTEREST_SOURCE', 'That plan is not on this card');
+        const plan = card.interestFrom.plans.find(p => p.id === planId);
+        if (!plan)
+          throw new DomainError('INTEREST_SOURCE', 'That plan is not on this card or is paid off');
         label = plan.name;
       }
       const entries = await ledger.prepare([
@@ -288,19 +329,58 @@ export function createRecurringService({
           accountId,
           categoryId: fees.id,
           amount: i.amount,
-          date: cutOff,
+          date: card.bill.closesOn,
           note: `Interest · ${label}`,
         },
       ]);
+      if (i.id) entries[0].id = i.id;
       const { ids, stmts } = repos.entries.insertStatements(ws, entries);
       await repos.batch([...stmts, repos.installments.handInterestInsert(ws, ids[0], i.from)]);
       return ids[0];
+    },
+
+    /**
+     * "Enter statement": the total (and minimum, when printed) on the bank's statement for the bill closed on
+     * `closedOn`. Sent from the phone's outbox; once that bill is no longer the last one printed it is refused
+     * (BILL_CLOSED), never saved for another. Typing it again replaces it.
+     */
+    async setStatement(
+      accountId: string,
+      i: { closedOn: string; total: number; minimum?: number | null },
+    ) {
+      const c = await catalog.load();
+      const a = c.account(accountId).row;
+      if (!hasBills(a))
+        throw new DomainError('CARD_SETUP', `Set ${a.name}'s limit and bill days first`);
+      const card = (await loadCardBills(repos, ws, c.accounts, today())).bills.get(accountId);
+      if (!card) throw new DomainError('CARD_SETUP', `${a.name} is hidden`);
+      if (i.closedOn !== card.bill.closesOn)
+        throw new DomainError(
+          'BILL_CLOSED',
+          'That bill closed since. Enter the new statement instead',
+        );
+      const minimum = i.minimum ?? null;
+      if (minimum !== null && minimum > i.total)
+        throw new DomainError('MINIMUM_OVER_TOTAL', 'The minimum is more than the total');
+      await repos.recurring.setStatement(ws, {
+        accountId,
+        closedOn: i.closedOn,
+        total: i.total,
+        minimum,
+      });
     },
 
     async hide(merchant: string) {
       await repos.recurring.hide(ws, merchant.trim().toLowerCase());
     },
   };
+}
+
+/** Bills in a row, back from the last, that something carried over into (the last one counts as one). */
+function unpaidRun(bills: { carry: number }[]) {
+  let n = 1;
+  for (let i = bills.length - 1; i > 0 && bills[i].carry > 0; i--) n++;
+  return n;
 }
 
 /** "Dec 2026" for a bill month (YYYY-MM): the statement's own words. */

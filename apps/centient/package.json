@@ -27,7 +27,7 @@
     "@tanstack/react-query-persist-client": "5.104.5",
     "@tesseract.js-data/eng": "1.0.0",
     "@tesseract.js-data/ind": "1.0.0",
-    "hono": "^4.13.13",
+    "hono": "^4.13.16",
     "html-to-image": "1.11.13",
     "konsta": "5.5.0",
     "motion": "14.0.0",

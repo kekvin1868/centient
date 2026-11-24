@@ -2,6 +2,7 @@
 // looks like (if any): Add (a new entry), Same one (it is that entry; nothing new), Edit (open it in the entry
 // form first) or Dismiss. A photo that could not be read fully can only be edited. A balance check (a photo of
 // a "Saldo" screen) asks which account and sets that account's balance.
+import { useRef, useState } from 'react';
 import { dayLabel, formatMoney } from '../../lib/format';
 import { titleCase } from '../../lib/labels';
 import { active, catalog, everyday, me, nameOf } from '../../lib/state';
@@ -21,9 +22,17 @@ export function InboxCard({ item, onEdit }: { item: InboxItem; onEdit: (i: Inbox
   const complete = item.amount !== null && item.accountId !== null;
   // Adding moves balances, budgets and lists, so everything refreshes; the rest only touches the Inbox.
   const inboxOnly = [inboxQueries.all()];
-  const add = () => persist(() => inboxApi.add(item.id));
   const patch = (json: Parameters<typeof inboxApi.update>[1]) =>
     persist(() => inboxApi.update(item.id, json), inboxOnly);
+  // The category picked shows at once and goes with Edit; Add waits for it to be saved. Without this the select
+  // snapped back until the server answered, and Edit or Add right after a pick (a slow phone) lost it.
+  const [picked, setPicked] = useState<string | null>();
+  const categoryId = picked === undefined ? item.categoryId : picked;
+  const saving = useRef<Promise<unknown>>(Promise.resolve());
+  const add = async () => {
+    await saving.current;
+    return persist(() => inboxApi.add(item.id));
+  };
 
   return (
     <li className="panel rounded-2xl bg-white px-3.5 py-3 dark:bg-raised">
@@ -69,8 +78,12 @@ export function InboxCard({ item, onEdit }: { item: InboxItem; onEdit: (i: Inbox
             <select
               className={select}
               aria-label={`Category for ${name}`}
-              value={item.categoryId ?? ''}
-              onChange={e => patch({ categoryId: e.target.value || null })}
+              value={categoryId ?? ''}
+              onChange={e => {
+                const id = e.target.value || null;
+                setPicked(id);
+                saving.current = patch({ categoryId: id });
+              }}
             >
               <option value="">{out ? 'Other' : 'Other income'}</option>
               {active(cat.categories)
@@ -110,7 +123,7 @@ export function InboxCard({ item, onEdit }: { item: InboxItem; onEdit: (i: Inbox
           </WinButton>
         )}
         {!balance && (
-          <WinButton label={`Edit ${name}`} onClick={() => onEdit(item)}>
+          <WinButton label={`Edit ${name}`} onClick={() => onEdit({ ...item, categoryId })}>
             Edit
           </WinButton>
         )}

@@ -14,6 +14,7 @@ import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
 import { accountApi } from '../../models/account';
 import { persist } from '../../models/query';
+import { BOOKKEEPING_CATEGORIES } from '../../../../src/domain/categories';
 
 export function UpdateBalanceSheet({
   account,
@@ -31,9 +32,7 @@ export function UpdateBalanceSheet({
   const sign = card ? -1 : 1;
   const diff = actual === null ? 0 : sign * actual - account.balance;
   const cats = active(catalog.value.categories).filter(
-    c =>
-      c.kind === (diff < 0 ? 'EXPENSE' : 'INCOME') &&
-      !['Balance adjustment', 'Opening balance'].includes(c.name),
+    c => c.kind === (diff < 0 ? 'EXPENSE' : 'INCOME') && !BOOKKEEPING_CATEGORIES.includes(c.name),
   );
 
   const save = async () => {

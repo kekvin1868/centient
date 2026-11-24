@@ -6,6 +6,21 @@ import { daysBetween } from './forecast';
 /** Credit card and pay later: a limit, a balance that is what is used of it (a debt), and a monthly bill. */
 export const isCard = (kind: string) => kind === 'CREDIT_CARD' || kind === 'PAYLATER';
 
+type CardFields = {
+  kind: string;
+  credit_limit: number | null;
+  statement_day: number | null;
+  due_day: number | null;
+};
+
+/** A card set up the way a new one must be: its limit, closing day and pay-by day (without them it has no bill). */
+export const cardSetUp = (a: CardFields) =>
+  isCard(a.kind) && Boolean(a.credit_limit && a.statement_day && a.due_day);
+
+/** A card whose bills can be worked out: it has a closing day (a card from before slice 1 may not). */
+export const hasBills = (a: Pick<CardFields, 'kind' | 'statement_day'>) =>
+  isCard(a.kind) && Boolean(a.statement_day);
+
 export type Schedule = {
   nextDue: string;
   dueDay: number;

@@ -147,6 +147,9 @@ describe('the list', () => {
       paidSince: 0,
       spentSince: 0,
       before: null,
+      interestFrom: { month: null, plans: [] },
+      statement: null,
+      unpaidBills: 1,
       lines: { carry: 0, spent: 0, slices: [], interest: [] },
     };
     const others = otherDues(

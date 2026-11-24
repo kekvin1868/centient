@@ -34,6 +34,9 @@ export const installmentsRoutes = new Hono<AppEnv>()
     async c => c.json(await c.var.services.installments.create(c.req.valid('json')), 201),
   )
 
+  .get('/installments/:id/next-bill', async c =>
+    c.json(await c.var.services.installments.nextBillPreview(c.req.param('id'))),
+  )
   .post('/installments/:id/next-bill', async c =>
     c.json(await c.var.services.installments.nextBill(c.req.param('id'))),
   )

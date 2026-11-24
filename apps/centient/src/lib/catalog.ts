@@ -1,6 +1,13 @@
 // The workspace's accounts, pockets and categories, loaded once per request, with lookups that throw
 // NOT_FOUND for ids from another workspace (the ownership check every service relies on).
-import { DomainError, type AccountRef, type EnvelopeRef } from '../domain/ledger';
+import {
+  ADJUSTMENT_CATEGORY,
+  DomainError,
+  FEES_CATEGORY,
+  OPENING_CATEGORY,
+  type AccountRef,
+  type EnvelopeRef,
+} from '../domain/ledger';
 import type { Repos } from '../middleware/init';
 import type { Account } from '../repos/accounts';
 import type { Category } from '../repos/categories';
@@ -36,6 +43,12 @@ export function snapshotOf(accounts: Account[], envelopes: Envelope[], categorie
     if (!row) throw new DomainError('NOT_FOUND', `${what} not found`);
     return row;
   };
+  /** A category the app finds by name; refused with `code` when the person deleted it. */
+  const builtIn = (name: string, kind: Category['kind'], code: string): Category => {
+    const c = categories.find(x => x.name === name && x.kind === kind);
+    if (!c) throw new DomainError(code, `Create a "${name}" ${kind.toLowerCase()} category first`);
+    return c;
+  };
   return {
     accounts,
     envelopes,
@@ -58,6 +71,12 @@ export function snapshotOf(accounts: Account[], envelopes: Envelope[], categorie
       return c;
     },
     categoryByName: (name: string) => categories.find(c => c.name === name),
+    /** Fees & Interests: transfer fees, plan interest and interest typed from a card's statement. */
+    fees: () => builtIn(FEES_CATEGORY, 'EXPENSE', 'NO_FEES_CATEGORY'),
+    /** Opening balance: an account's first balance. */
+    opening: () => builtIn(OPENING_CATEGORY, 'INCOME', 'NO_OPENING_CATEGORY'),
+    /** Balance adjustment: a correction with no category, which budgets ignore. */
+    adjustment: () => builtIn(ADJUSTMENT_CATEGORY, 'INCOME', 'NO_ADJUSTMENT_CATEGORY'),
     /** The account's Main pocket (its default), else its first pocket. Every account is created with one. */
     defaultEnvelope(account: Account): EnvelopeRef {
       const e =

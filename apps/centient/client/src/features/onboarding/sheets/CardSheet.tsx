@@ -8,6 +8,7 @@ import { Keypad, keypadKey, keypadValue, pressKey } from '../../../ui/night/Keyp
 import { NightSheet } from '../../../ui/night/NightSheet';
 import { typing } from '../../../ui/night/useLayers';
 import { dayWord, type AccountDraft, type CardDraft } from '../model/draft';
+import { cardMissing } from '../../../models/account';
 
 type Props = {
   account: AccountDraft;
@@ -40,6 +41,7 @@ export function CardSheet({ account, onSave, onClose }: Props) {
   const value = (f: Field) => (digits[f] ? keypadValue(digits[f]) : null);
   const limit = value('limit') || null;
   const used = (value('billed') ?? 0) + (value('since') ?? 0);
+  const gap = cardMissing({ limit, days: [closes, payBy], used });
 
   const press = (k: string) => {
     const next = pressKey(digits[on], k);
@@ -48,7 +50,7 @@ export function CardSheet({ account, onSave, onClose }: Props) {
   };
   const set = (close: () => void) => {
     const bad = TABS.find(t => digits[t.field] && value(t.field) === null);
-    if (!limit || !closes || !payBy || bad || used > limit) {
+    if (!limit || !closes || !payBy || bad || gap) {
       if (bad) setOn(bad.field);
       setRefused(r => r + 1);
       return;
@@ -60,7 +62,7 @@ export function CardSheet({ account, onSave, onClose }: Props) {
     ['CLOSES ON', closes, setCloses, 20],
     ['PAY BY', payBy, setPayBy, 5],
   ];
-  const missing = !limit ? 'LIMIT' : !closes || !payBy ? 'BILL DAYS' : null;
+  const missing = gap === 'limit' ? 'LIMIT' : gap === 'days' ? 'BILL DAYS' : null;
   const question = {
     limit: (
       <>
@@ -130,7 +132,7 @@ export function CardSheet({ account, onSave, onClose }: Props) {
                     </p>
                   )}
                   {days.map(([label, day, setDay, from]) => (
-                    <div key={label} className="k-day">
+                    <div key={label} className="k-day" role="group" aria-label={label}>
                       <span>{label}</span>
                       <button
                         type="button"

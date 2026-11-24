@@ -58,6 +58,9 @@ export function App() {
           loadInsights(),
           loadMenu(),
           waitingLib(),
+          // Home's tap-only sheets (ui/lazySheet): ready before the first tap.
+          import('../features/entries/LogSheet'),
+          import('../features/entries/EntrySheet'),
         ]).catch(() => {}),
     );
   }, [restoring, isLocked]);

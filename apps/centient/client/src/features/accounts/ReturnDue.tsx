@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatMoney } from '../../lib/format';
 import { me, moneyPick } from '../../lib/state';
 import { useBalances } from '../../models/useWaiting';
-import { dateText } from '../../ui/Fields';
+import { dateText } from '../../lib/format';
 import { KeyChip } from '../../ui/KeyChip';
 
 const DAY = 86_400_000;

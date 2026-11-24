@@ -79,3 +79,14 @@ export function shortMoney(minor: number, currency = 'IDR'): string {
   if (v >= 1e3) return fmt(v / 1e3, 'rb');
   return formatMoney(minor, currency);
 }
+
+/** "5 Dec 2026" for a day (YYYY-MM-DD); empty for none. */
+export const dateText = (d: string) =>
+  d
+    ? new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      })
+    : '';
