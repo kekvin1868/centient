@@ -483,7 +483,8 @@ test('swiping a row left unlocks edit and delete; deleting can be undone, then g
     .click();
   const edit = page.getByRole('dialog', { name: 'Edit' });
   await expect(edit.getByRole('button', { name: 'Save' })).toBeVisible();
-  await expect(edit.getByRole('button', { name: 'Delete' })).toHaveCount(0);
+  // The sheet deletes too (as the swipe does), below Save.
+  await expect(edit.getByRole('button', { name: 'Delete' })).toBeVisible();
 });
 
 test('pockets are a list; Move money goes to another account too; patterns differ', async () => {

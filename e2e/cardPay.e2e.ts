@@ -218,4 +218,18 @@ test('a statement that asks more than the app: the missing spend is logged from 
   await expect(extra).toContainText('+Rp50.000 paid extra');
   await expect(extra).toContainText(/counts toward your \w{3} bill/);
   await expect(row('Left to pay, Rp0')).toBeVisible();
+
+  // A wrong interest line is removed from the bill itself: its entry's sheet has Delete (confirmed, 5 s to undo).
+  // Already paid, so what it took off shows as paid extra.
+  await lines()
+    .getByRole('button', { name: /^Interest · on unpaid/ })
+    .tap();
+  const edit = page.getByRole('dialog', { name: 'Edit' });
+  await edit.getByRole('button', { name: 'Delete' }).tap();
+  const ask = page.getByRole('dialog', { name: /^Delete .*Rp45\.000\?$/ });
+  await ask.getByRole('button', { name: 'Delete' }).tap();
+  await expect(edit).toBeHidden();
+  await expect(page.getByText('Deleted')).toBeVisible();
+  await expect(row(/^Interest · on unpaid/)).toHaveCount(0, { timeout: 15_000 });
+  await expect(extra).toContainText('+Rp95.000 paid extra');
 });

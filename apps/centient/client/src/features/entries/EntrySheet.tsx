@@ -1,5 +1,6 @@
-// Open an entry: edit it (your own entries; the sheet only saves) or see a system entry's details. Loaded when an
-// entry is opened, not for the first paint (the row's swipe delete is ./deleteWithUndo).
+// Open an entry: edit it (your own entries) or see a system entry's details, and delete it (as the row's swipe
+// does: asked first, or what to do with Paid backs tied to it; then 5 s to undo, ./deleteWithUndo). Loaded when an
+// entry is opened, not for the first paint.
 // Saves go through the outbox (models/outbox), so they work with no signal. An entry the server refused opens
 // with its reason, Send again and Discard; one changed somewhere else opens ClashSheet.
 import { Block, Button } from 'konsta/react';
@@ -11,6 +12,8 @@ import { attempt } from '../../lib/run';
 import { catalog, hiddenEntries, nameOf } from '../../lib/state';
 import type { Entry } from './EntryList';
 import { ClashSheet } from './ClashSheet';
+import { deleteWithUndo } from './deleteWithUndo';
+import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { EntryForm } from './EntryForm';
 import { PaidBackSheet } from './PaidBackSheet';
 import { Banner } from '../../ui/Banner';
@@ -30,6 +33,8 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
   );
   // The edit leaves someone's Paid backs over their new share: ask what happened to that money.
   const [tied, setTied] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [delTied, setDelTied] = useState(false);
   if (!entry) return null;
   const mark = entry.waiting;
   if (mark?.state === 'clash') return <ClashSheet entry={entry} onClose={onClose} />;
@@ -62,8 +67,41 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
     if (!ok) setTied(false);
   };
 
+  // Delete, the same way the row's swipe does: Paid backs tied to it ask what happened to them, else confirm.
+  const askDelete = () =>
+    entry.people?.some(p => p.paybacks.length) ? setDelTied(true) : setDeleting(true);
+  const remove = (paybacks?: PaybackMode) => {
+    setDeleting(false);
+    setDelTied(false);
+    onClose();
+    deleteWithUndo(entry, paybacks);
+  };
+  const deleteParts = (
+    <>
+      <Block>
+        <Button large rounded tonal className="k-color-brand-red" onClick={askDelete}>
+          Delete
+        </Button>
+      </Block>
+      <ConfirmSheet
+        open={deleting}
+        message={`Delete ${row.title}, ${formatMoney(row.amount, row.currency)}?`}
+        confirmLabel="Delete"
+        onCancel={() => setDeleting(false)}
+        onConfirm={() => remove()}
+      />
+      <TiedSheet
+        open={delTied}
+        title={`Delete ${row.title}?`}
+        people={entry.people ?? []}
+        currency={row.currency}
+        onCancel={() => setDelTied(false)}
+        onPick={remove}
+      />
+    </>
+  );
+
   return (
-    // Deleting lives on the row (swipe left, or focus its actions), so editing only saves.
     <Sheet open onClose={onClose} title={form ? (refused ? 'Not sent' : 'Edit') : row.title}>
       {refused && (
         <Banner>
@@ -111,6 +149,7 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
               </Button>
             )}
           </Block>
+          {!refused && deleteParts}
           <TiedSheet
             open={tied}
             title={`Save ${row.title}? Someone paid back more than this leaves them.`}
@@ -125,11 +164,12 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
         </>
       ) : (
         <Group
-          foot={`${entry.kind === 'OPENING' ? 'To change it, use Update balance on the Money tab.' : 'Corrections come from Update balance on the Money tab.'} Swipe the row left to delete it.`}
+          foot={`${entry.kind === 'OPENING' ? 'To change it, use Update balance on the Money tab.' : 'Corrections come from Update balance on the Money tab.'}`}
         >
           <Row title={row.sub || row.title} trail={formatMoney(row.amount, row.currency)} />
         </Group>
       )}
+      {!form && !refused && deleteParts}
     </Sheet>
   );
 }
