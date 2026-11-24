@@ -5,12 +5,15 @@
 // bill before (never paid: it carries over), 5 days ago on the last bill, today on the next one. Skips the first
 // run through the API and resets at the end, so the next file starts fresh.
 import { expect, test, type Page } from '@playwright/test';
+import { cardsApp } from './cardsApp';
 
 test.describe.configure({ mode: 'serial' });
 
 let page: Page;
+let app: ReturnType<typeof cardsApp>;
 test.beforeAll(async ({ browser }) => {
   page = await browser.newPage();
+  app = cardsApp(page);
   await page.request.patch('/api/workspace', { data: { onboarded: true, cycle_start_day: 1 } });
   await page.goto('/');
 });
@@ -23,34 +26,16 @@ const DAY = 86_400_000;
 const jakarta = (ms: number) => new Date(ms + 7 * 3600e3).toISOString().slice(0, 10);
 const daysAgo = (n: number) => jakarta(Date.now() - n * DAY);
 
-const send = async (method: 'post' | 'delete', path: string, data?: unknown) => {
-  const r = await page.request[method](`/api${path}`, { data });
-  expect(r.ok(), `${method} ${path}: ${await r.text()}`).toBe(true);
-  return r.json();
-};
-const get = async (path: string) => (await page.request.get(`/api${path}`)).json();
-const category = async (name: string) =>
-  ((await get('/catalog')).categories as { id: string; name: string }[]).find(c => c.name === name)!
-    .id;
-type CardBill = {
-  accountId: string;
-  bill: number;
-  left: number;
-  spentSince: number;
-  before: string | null;
-  lines: { carry: number; interest: { from: string | null; amount: number }[] };
-};
-const cardBill = async (id: string) =>
-  ((await get('/recurring')).cards as CardBill[]).find(c => c.accountId === id)!;
+const send = (path: string, data: unknown) => app.api('post', path, data);
+const get = (path: string) => app.api('get', path);
 const billBox = () => page.getByRole('region', { name: 'Card bill' });
 const lines = () => billBox().getByRole('list', { name: 'Bill lines' });
-const tab = (name: string) => page.getByRole('button', { name, exact: true });
 
 let card: { id: string };
 
 test('the bill lists its lines; interest is logged from the statement with where it came from', async () => {
-  await send('post', '/accounts', { name: 'BCA', kind: 'BANK', openingBalance: 5_000_000 });
-  card = await send('post', '/accounts', {
+  await send('/accounts', { name: 'BCA', kind: 'BANK', openingBalance: 5_000_000 });
+  card = await send('/accounts', {
     name: 'Pay Card',
     kind: 'CREDIT_CARD',
     creditLimit: 10_000_000,
@@ -58,10 +43,10 @@ test('the bill lists its lines; interest is logged from the statement with where
     dueDay: 28,
   });
   const spend = async (amount: number, date: string) =>
-    send('post', '/transactions', {
+    send('/transactions', {
       type: 'EXPENSE',
       accountId: card.id,
-      categoryId: await category('Food & Drink'),
+      categoryId: await app.category('Food & Drink'),
       amount,
       date,
     });
@@ -69,7 +54,7 @@ test('the bill lists its lines; interest is logged from the statement with where
   await spend(300_000, daysAgo(5));
   await spend(150_000, daysAgo(0));
   // A plan bought today: its slices ride later bills, but it can be where interest came from.
-  await send('post', '/installments', {
+  await send('/installments', {
     accountId: card.id,
     name: 'Phone',
     amountPerInstallment: 100_000,
@@ -78,16 +63,12 @@ test('the bill lists its lines; interest is logged from the statement with where
     myShare: 100_000,
     others: [],
     alreadyInBalance: false,
-    categoryId: await category('Shopping'),
+    categoryId: await app.category('Shopping'),
   });
 
   await page.reload();
-  await tab('Money').tap();
-  const hand = page
-    .getByRole('group', { name: 'Accounts' })
-    .getByRole('button', { name: /^Pay Card/ });
-  await hand.focus();
-  await hand.press('Enter');
+  await app.tab('Money').tap();
+  await app.pick('Pay Card');
   await expect(lines()).toContainText(/Unpaid from \w{3}Rp500\.000/);
   await expect(lines()).toContainText('SpendingRp300.000');
   await expect(lines()).toContainText('BillRp800.000');
@@ -104,7 +85,7 @@ test('the bill lists its lines; interest is logged from the statement with where
   await expect(sheet).toBeHidden();
   await expect(lines()).toContainText(/Interest · on unpaid \w{3}Rp45\.000/);
   await expect(lines()).toContainText('BillRp845.000');
-  const bill = await cardBill(card.id);
+  const bill = await app.bill(card.id);
   expect(bill.lines.interest).toMatchObject([{ from: bill.before, amount: 45_000 }]);
 });
 
@@ -118,7 +99,7 @@ test('paying part of the bill shows it paid and leaves the rest; Home shows mone
   await expect(pay).toBeHidden();
   await expect(lines()).toContainText('Paid since−Rp345.000');
   await expect(billBox()).toContainText('Rp500.000');
-  const bill = await cardBill(card.id);
+  const bill = await app.bill(card.id);
   expect(bill).toMatchObject({ left: 500_000, spentSince: 150_000 });
 
   // Your money less the 500rb left to pay and the 150rb spent since (the Phone's slices are left out).
@@ -130,7 +111,7 @@ test('paying part of the bill shows it paid and leaves the rest; Home shows mone
     .filter(a => !['CREDIT_CARD', 'PAYLATER'].includes(a.kind))
     .reduce((s, a) => s + a.balance, 0);
   const rp = (n: number) => `Rp${String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
-  await tab('Home').tap();
+  await app.tab('Home').tap();
   const chip = page.getByRole('button', { name: /^Showing .*\. Change account$/ });
   if (!(await chip.getAttribute('aria-label'))!.startsWith('Showing all accounts')) {
     await chip.tap();
