@@ -4,7 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { formatMoney } from '../../lib/format';
 import { catalog, nameOf } from '../../lib/state';
 import { comingUp, dueWords, recurringQueries, type Upcoming } from '../../models/recurring';
-import { BillScroll } from './BillScroll';
+import { lazy, Suspense } from 'react';
+
+// The scroll (and its motion) is downloaded right after Home's first paint; a blank slot of its height holds the
+// place for that moment, so it then unrolls into it.
+const BillScroll = lazy(() => import('./BillScroll').then(m => ({ default: m.BillScroll })));
 
 const SHOWN = 3;
 
@@ -35,15 +39,20 @@ export function ComingUp({ onOpen }: { onOpen: () => void }) {
         const { title, from, amount } = line(u);
         if (u.kind === 'card')
           return (
-            <BillScroll
+            <Suspense
               key={u.key}
-              age={u.card.unpaidBills}
-              late={late}
-              title={title}
-              due={dueWords(u.due, data.today)}
-              amount={amount}
-              onOpen={onOpen}
-            />
+              fallback={<span className="bill-scroll-slot" aria-hidden="true" />}
+            >
+              <BillScroll
+                id={u.card.accountId}
+                age={u.card.unpaidBills}
+                late={late}
+                title={title}
+                due={dueWords(u.due, data.today)}
+                amount={amount}
+                onOpen={onOpen}
+              />
+            </Suspense>
           );
         return (
           <button

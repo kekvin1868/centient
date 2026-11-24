@@ -78,7 +78,7 @@ function Callout({
   children: ReactNode;
 }) {
   return (
-    <div className="panel mt-3 bg-white px-4 py-3 dark:bg-raised" role="status" aria-label={label}>
+    <div className="panel bg-white px-4 py-3 dark:bg-raised" role="status" aria-label={label}>
       <p className="flex flex-wrap items-center gap-2 text-[16px] font-bold">
         {tag}
         <span>{title}</span>
@@ -287,83 +287,86 @@ export function CardStatement({ account }: { account: Account }) {
               </p>
             )}
 
-            {extra > 0 && (
-              <Callout
-                tag={<Tag tone="ok">credit</Tag>}
-                title={`+${money(extra)} paid extra`}
-                label="Paid extra"
-              >
-                You paid more than this bill, so it counts toward your {nextBillName(card)} bill.
-                This happens when a line is removed after you paid it, like an interest the bank
-                waived. Nothing to do.
-              </Callout>
-            )}
-            {min?.kind === 'minimum' && (
-              <Callout
-                tag={<Tag tone="warn">min paid ✓</Tag>}
-                title={`${money(min.carries)} carries to the ${nextBillName(card)} bill`}
-                label="Minimum paid"
-              >
-                Minimum paid ✓ · the bank will likely charge interest on what carries over.
-              </Callout>
-            )}
-            {min?.kind === 'below' && (
-              <Callout
-                tag={<Tag tone="pink">below min</Tag>}
-                title={`${money(min.short)} short of the ${money(statement!.minimum!)} minimum`}
-                label="Below minimum"
-              >
-                Below minimum ⚠ · a late fee is likely. Pay at least the rest of the minimum.
-              </Callout>
-            )}
-            {gap !== null && gap > 0 && (
-              <Callout
-                tag={<Tag tone="pink">check</Tag>}
-                title={`${money(gap)} on the statement is not in the app`}
-                label="Statement gap"
-              >
-                Something is not logged yet: a spend, the interest, or a fee.
-                <span className="mt-3 flex flex-wrap gap-2">
-                  <Button rounded tonal small className="!w-auto" onClick={logMissing}>
-                    Log missing spending
-                  </Button>
-                  {sources.length > 0 && (
-                    <Button
-                      rounded
-                      tonal
-                      small
-                      className="!w-auto"
-                      onClick={() => setLogging(true)}
-                    >
-                      Log interest
+            {/* Everything under the receipt, evenly apart and clear of its torn edge. */}
+            <div className="mt-6 flex flex-col gap-4">
+              {extra > 0 && (
+                <Callout
+                  tag={<Tag tone="ok">credit</Tag>}
+                  title={`+${money(extra)} paid extra`}
+                  label="Paid extra"
+                >
+                  You paid more than this bill, so it counts toward your {nextBillName(card)} bill.
+                  This happens when a line is removed after you paid it, like an interest the bank
+                  waived. Nothing to do.
+                </Callout>
+              )}
+              {min?.kind === 'minimum' && (
+                <Callout
+                  tag={<Tag tone="warn">min paid ✓</Tag>}
+                  title={`${money(min.carries)} carries to the ${nextBillName(card)} bill`}
+                  label="Minimum paid"
+                >
+                  Minimum paid ✓ · the bank will likely charge interest on what carries over.
+                </Callout>
+              )}
+              {min?.kind === 'below' && (
+                <Callout
+                  tag={<Tag tone="pink">below min</Tag>}
+                  title={`${money(min.short)} short of the ${money(statement!.minimum!)} minimum`}
+                  label="Below minimum"
+                >
+                  Below minimum ⚠ · a late fee is likely. Pay at least the rest of the minimum.
+                </Callout>
+              )}
+              {gap !== null && gap > 0 && (
+                <Callout
+                  tag={<Tag tone="pink">check</Tag>}
+                  title={`${money(gap)} on the statement is not in the app`}
+                  label="Statement gap"
+                >
+                  Something is not logged yet: a spend, the interest, or a fee.
+                  <span className="mt-3 flex flex-wrap gap-2">
+                    <Button rounded tonal small className="!w-auto" onClick={logMissing}>
+                      Log missing spending
                     </Button>
-                  )}
-                </span>
-              </Callout>
-            )}
-            {gap !== null && gap < 0 && (
-              <Callout
-                tag={<Tag tone="pink">check</Tag>}
-                title={`The app has ${money(-gap)} more than the statement`}
-                label="Statement gap"
-              >
-                Check the lines on the bill: a wrong amount, a refund not logged yet, or a spend the
-                bank puts on the next bill.
-              </Callout>
-            )}
-            {card.spentSince > 0 && (
-              <p className="mt-3 text-[15px] text-muted">
-                {money(card.spentSince)} spent since then goes on the next bill.
-              </p>
-            )}
-            {card.left > 0 && (
-              <Button large rounded className="mt-3" onClick={() => setPaying(true)}>
-                I paid it
+                    {sources.length > 0 && (
+                      <Button
+                        rounded
+                        tonal
+                        small
+                        className="!w-auto"
+                        onClick={() => setLogging(true)}
+                      >
+                        Log interest
+                      </Button>
+                    )}
+                  </span>
+                </Callout>
+              )}
+              {gap !== null && gap < 0 && (
+                <Callout
+                  tag={<Tag tone="pink">check</Tag>}
+                  title={`The app has ${money(-gap)} more than the statement`}
+                  label="Statement gap"
+                >
+                  Check the lines on the bill: a wrong amount, a refund not logged yet, or a spend
+                  the bank puts on the next bill.
+                </Callout>
+              )}
+              {card.spentSince > 0 && (
+                <p className="text-[15px] text-muted">
+                  {money(card.spentSince)} spent since then goes on the next bill.
+                </p>
+              )}
+              {card.left > 0 && (
+                <Button large rounded onClick={() => setPaying(true)}>
+                  I paid it
+                </Button>
+              )}
+              <Button large rounded tonal onClick={() => setLogging(true)}>
+                {statement ? 'Edit statement' : 'Enter statement'}
               </Button>
-            )}
-            <Button large rounded tonal className="mt-2" onClick={() => setLogging(true)}>
-              {statement ? 'Edit statement' : 'Enter statement'}
-            </Button>
+            </div>
             {paying && (
               <PayCardSheet
                 card={account}
