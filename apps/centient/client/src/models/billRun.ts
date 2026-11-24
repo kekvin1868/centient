@@ -139,7 +139,6 @@ export type OtherDue = {
   accountId: string;
   /** What is still to pay. */
   amount: number;
-  next: boolean;
 };
 
 /** Card bills with money left, soonest first. */
@@ -155,7 +154,6 @@ export function otherDues(cards: CardStatement[], today: string): OtherDue[] {
               late: c.dueOn < today,
               accountId: c.accountId,
               amount: c.left,
-              next: true,
             },
           ]
         : [],
@@ -216,8 +214,7 @@ export function billGroups(
     else if (next) groups.Later.push(next);
   }
   // Card bills sit among the bills, by date.
-  for (const o of others)
-    if (o.next) groups[o.late ? 'Late' : o.due <= soon ? 'Next 7 days' : 'Later'].push(o);
+  for (const o of others) groups[o.late ? 'Late' : o.due <= soon ? 'Next 7 days' : 'Later'].push(o);
   return (Object.keys(groups) as BillGroup['label'][])
     .map(label => ({ label, rows: groups[label].sort((a, b) => a.due.localeCompare(b.due)) }))
     .filter(g => g.rows.length);

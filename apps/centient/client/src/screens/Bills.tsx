@@ -61,7 +61,7 @@ export function Bills() {
       groups: billGroups(data.items, data.today, others),
     };
   }, [data]);
-  const pay = usePayBill(view?.others.filter(o => o.next).map(otherName));
+  const pay = usePayBill(view?.others.map(otherName));
   if (!data || !view) return <Page title="Bills" />;
   const { today } = data;
   const lines = (rows: BillGroup['rows']) =>

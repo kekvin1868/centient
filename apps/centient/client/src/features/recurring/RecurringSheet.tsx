@@ -23,7 +23,7 @@ import { DateRow, InputRow, PickerRow, ToggleRow } from '../../ui/Fields';
 import { Group } from '../../ui/List';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
-import { dayWords } from './BillLine';
+import { dayWords } from '../../models/dates';
 import { serviceNamed, SERVICES } from './services';
 
 export function RecurringSheet({
