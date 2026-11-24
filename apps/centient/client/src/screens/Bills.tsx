@@ -1,7 +1,7 @@
 // Bills: what this month still asks for, a calendar of due dates, every bill grouped by how soon it is due, and
 // monthly payments found in the entries. A bill's PAID? key pays it in one tap; the bill itself opens its own
-// page (BillDetail), whose EDIT opens the form. Card bills sit among them, tagged, with a key that opens the
-// card's pay dialog (a plan's slices ride inside its card's bill).
+// page (BillDetail), whose EDIT opens the form. Card bills sit among them, tagged: the row opens the card's bill
+// (the same section as on Money), its PAY… key the pay dialog (a plan's slices ride inside its card's bill).
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { BillDetail } from '../features/recurring/BillDetail';
@@ -10,7 +10,9 @@ import { DueCalendar } from '../features/recurring/DueCalendar';
 import { FoundList } from '../features/recurring/FoundList';
 import { MonthHero } from '../features/recurring/MonthHero';
 import { OtherLine, otherName } from '../features/recurring/OtherLine';
+import { CardStatement } from '../features/recurring/CardStatement';
 import { PayCardSheet } from '../features/recurring/PayCardSheet';
+import { Sheet } from '../ui/Sheet';
 import { RecurringSheet } from '../features/recurring/RecurringSheet';
 import { usePayBill } from '../features/recurring/usePayBill';
 import { Page } from '../layouts/Page';
@@ -43,6 +45,8 @@ export function Bills() {
   const [editing, setEditing] = useState<Editing | null>(null);
   /** The card bill whose pay dialog is open. */
   const [paying, setPaying] = useState<OtherDue | null>(null);
+  /** The card whose bill is open (its lines and I paid it, as on Money). */
+  const [viewing, setViewing] = useState<string | null>(null);
   /** The bill whose page is open. */
   const [opened, open, back] = useSubPage<string>();
   const item = data?.items.find(i => i.id === opened);
@@ -67,7 +71,13 @@ export function Bills() {
   const lines = (rows: BillGroup['rows']) =>
     rows.map(row =>
       'kind' in row ? (
-        <OtherLine key={row.key} due={row} today={today} onPay={() => setPaying(row)} />
+        <OtherLine
+          key={row.key}
+          due={row}
+          today={today}
+          onOpen={() => setViewing(row.accountId)}
+          onPay={() => setPaying(row)}
+        />
       ) : (
         <BillLine
           key={row.key}
@@ -80,9 +90,21 @@ export function Bills() {
     );
   const card = paying && catalog.value.accounts.find(a => a.id === paying.accountId);
 
+  const viewed = viewing && catalog.value.accounts.find(a => a.id === viewing);
   const sheets = (
     <>
       {pay.layers}
+      <Sheet
+        open={Boolean(viewed)}
+        onClose={() => setViewing(null)}
+        title={viewed ? viewed.name : ''}
+      >
+        {viewed && (
+          <div className="mx-4 mb-6">
+            <CardStatement account={viewed} />
+          </div>
+        )}
+      </Sheet>
       {paying && card && (
         <PayCardSheet
           card={card}
