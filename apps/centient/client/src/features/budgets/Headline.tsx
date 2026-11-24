@@ -4,7 +4,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { ACCOUNT_KINDS, formatMoney } from '../../lib/format';
 import { selectedAccount } from '../../lib/state';
-import type { Balances } from '../../models/account';
 import { budgetsWithWaiting, useBalances, useOverlaySince } from '../../models/useWaiting';
 import { budgetQueries } from '../../models/budget';
 import { afterCardBills, recurringQueries } from '../../models/recurring';
@@ -12,7 +11,14 @@ import { usePrices, type Prices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 import { CardLimits } from '../accounts/CardLimits';
 import { isCard } from '../../../../src/domain/recurring';
-import { overBy, shownBalance, totalOf } from '../accounts/TotalBalance';
+import {
+  limitOf,
+  overBy,
+  owedOn,
+  shownBalance,
+  totalOf,
+  type Balances,
+} from '../../models/account';
 import { HomeBudgets } from './HomeBudgets';
 
 type Head = {
@@ -33,10 +39,9 @@ function headOf(sel: string | null, bal: Balances, prices: Prices): Head {
       label: `In ${a.name}`,
       minor: shownBalance(a),
       currency: a.currency_code,
-      note:
-        isCard(a.kind) && a.credit_limit
-          ? `${over ? `Over by ${formatMoney(over, a.currency_code)}` : 'Left to spend'} · owed ${formatMoney(Math.max(0, -a.balance), a.currency_code)}`
-          : (ACCOUNT_KINDS[a.kind] ?? ''),
+      note: limitOf(a)
+        ? `${over ? `Over by ${formatMoney(over, a.currency_code)}` : 'Left to spend'} · owed ${formatMoney(owedOn(a), a.currency_code)}`
+        : (ACCOUNT_KINDS[a.kind] ?? ''),
       hurt: over > 0,
       cta: 'Update balance',
     };

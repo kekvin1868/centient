@@ -4,7 +4,7 @@ import { everyday, selectedAccount } from '../../lib/state';
 import { useBalances } from '../../models/useWaiting';
 import { Sheet } from '../../ui/Sheet';
 import { AccountHand } from './AccountHand';
-import { overBy, shownBalance } from './TotalBalance';
+import { overBy, shownBalance } from '../../models/account';
 
 export function AccountPicker({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { data } = useBalances(open);

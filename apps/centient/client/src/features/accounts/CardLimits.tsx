@@ -1,48 +1,22 @@
 // The sub-card under the money hero (Home on All accounts, and Money): credit cards and pay later, one row per kind,
 // apart from your money. A card's balance is its debt (below zero = owed); with a limit set, left to spend =
 // limit + balance, drawn as an HP bar that drains as you spend. Without one, only what is owed shows.
+import type { Account } from '../../../../src/repos/accounts';
 import { formatMoney } from '../../lib/format';
 import { idrValue } from '../../lib/prices';
 import { usePrices } from '../../models/price';
 import { HpBar } from '../../ui/HpBar';
-import { ICON } from './AccountHand';
-import type { Held } from './TotalBalance';
-
-type Card = Held & { credit_limit: number | null };
-
-const KINDS = [
-  { kind: 'CREDIT_CARD', label: 'Credit card', many: 'credit cards' },
-  { kind: 'PAYLATER', label: 'Pay later', many: 'pay later accounts' },
-] as const;
-
-/** Per kind with an account (rupiah). Of the accounts with a limit: used (`owed`), limit, left (each card stops at 0)
- * and `over` (how far the ones past their limit are past it). The rest: how many (`unset`) and what they owe. */
-export function limitRows(accounts: Card[], idr: (minor: number, currency: string) => number) {
-  return KINDS.flatMap(k => {
-    const own = accounts.filter(a => a.kind === k.kind);
-    if (!own.length) return [];
-    const capped = own.filter(a => a.credit_limit);
-    const unset = own.filter(a => !a.credit_limit);
-    const sum = (xs: Card[], f: (a: Card) => number) =>
-      xs.reduce((s, a) => s + idr(f(a), a.currency_code), 0);
-    const debt = (a: Card) => Math.max(0, -a.balance);
-    return [
-      {
-        ...k,
-        count: own.length,
-        owed: sum(capped, debt),
-        limit: sum(capped, a => a.credit_limit!),
-        left: sum(capped, a => Math.max(0, a.credit_limit! + a.balance)),
-        over: sum(capped, a => Math.max(0, -(a.credit_limit! + a.balance))),
-        unset: unset.length,
-        unsetOwed: sum(unset, debt),
-      },
-    ];
-  });
-}
+import { ICON } from './kindIcons';
+import { limitRows, type Held } from '../../models/account';
 
 /** `onGo`: the hint becomes a link (Home goes to Money, where the account's settings are). */
-export function CardLimits({ accounts, onGo }: { accounts: Card[]; onGo?: () => void }) {
+export function CardLimits({
+  accounts,
+  onGo,
+}: {
+  accounts: (Held & Pick<Account, 'credit_limit'>)[];
+  onGo?: () => void;
+}) {
   const p = usePrices();
   const rows = limitRows(accounts, (v, c) => idrValue(v, c, p) ?? 0);
   if (!rows.length) return null;
