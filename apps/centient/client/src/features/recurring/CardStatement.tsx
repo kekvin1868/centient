@@ -9,7 +9,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { cardSetUp } from '../../../../src/domain/recurring';
 import { Button } from 'konsta/react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { EditAccountSheet } from '../accounts/EditAccountSheet';
 import type { Entry } from '../entries/EntryList';
 import { EntrySheet } from '../entries/EntrySheet';
@@ -25,7 +25,9 @@ import {
   interestSources,
   minimumState,
   nextBillName,
+  paidExtra,
   recurringQueries,
+  type BillLine,
   statementGap,
   statementOf,
 } from '../../models/recurring';
@@ -34,10 +36,57 @@ import { outboxItems } from '../../models/outbox';
 import { blankForm, toCommand, type LogItem } from '../entries/form';
 import { LogSheet } from '../entries/LogSheet';
 import { showToast } from '../../ui/Toast';
+import { Tag, type TagTone } from '../../ui/Tag';
 import type { Account } from '../../../../src/repos/accounts';
 import { dateText } from '../../ui/Fields';
 import { StatementSheet } from './StatementSheet';
 import { PayCardSheet } from './PayCardSheet';
+
+/** Each kind of bill line, as its tag on the receipt. */
+const LINE_TAG: Record<BillLine['kind'], { word: string; tone: TagTone }> = {
+  carry: { word: 'unpaid', tone: 'warn' },
+  credit: { word: 'credit', tone: 'ok' },
+  spent: { word: 'spent', tone: 'plain' },
+  slice: { word: 'installment', tone: 'miku' },
+  interest: { word: 'interest', tone: 'pink' },
+};
+
+/** The rubber stamp on the receipt: how the bill stands. */
+const STAMP = {
+  paid: { word: 'PAID', tone: 'ok' },
+  paidPlus: { word: 'PAID +', tone: 'ok' },
+  min: { word: 'MIN PAID', tone: 'warn' },
+  below: { word: 'BELOW MIN', tone: 'bad' },
+  late: { word: 'LATE', tone: 'bad' },
+  due: { word: 'DUE', tone: 'ink' },
+} as const;
+/** Stamp ink on the paper (the paper is light in both themes). */
+const STAMP_INK = { ok: '#1d7a44', warn: '#9a6400', bad: '#c2185b', ink: '#22262a' } as const;
+
+const short = (day: string) => dayWords(day, { day: 'numeric', month: 'short' });
+
+/** A note under the receipt: a tag, a line in bold, then what it means. */
+function Callout({
+  tag,
+  title,
+  label,
+  children,
+}: {
+  tag: ReactNode;
+  title: string;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="panel mt-3 bg-white px-4 py-3 dark:bg-raised" role="status" aria-label={label}>
+      <p className="flex flex-wrap items-center gap-2 text-[16px] font-bold">
+        {tag}
+        <span>{title}</span>
+      </p>
+      <p className="mt-1.5 text-[15px] leading-snug text-muted">{children}</p>
+    </div>
+  );
+}
 
 export function CardStatement({ account }: { account: Account }) {
   const { data } = useQuery(recurringQueries.list());
@@ -54,6 +103,20 @@ export function CardStatement({ account }: { account: Account }) {
   const statement = card ? statementOf(card, outboxItems.value) : null;
   const gap = card && statement ? statementGap(card, statement.total) : null;
   const min = card ? minimumState(card, statement) : null;
+  const extra = card ? paidExtra(card) : 0;
+  const stamp = !card
+    ? STAMP.due
+    : card.left === 0
+      ? extra > 0
+        ? STAMP.paidPlus
+        : STAMP.paid
+      : min?.kind === 'minimum'
+        ? STAMP.min
+        : min?.kind === 'below'
+          ? STAMP.below
+          : card.dueOn && card.dueOn < (data?.today ?? '')
+            ? STAMP.late
+            : STAMP.due;
   const [missing, setMissing] = useState<LogItem | null>(null);
   // "Log missing spending": a new expense on this card for the gap, dated on the bill's closing day (on this bill).
   const logMissing = () =>
@@ -108,126 +171,188 @@ export function CardStatement({ account }: { account: Account }) {
                 ? `Nothing left to pay of the bill closed on ${dateText(card.cutOff)}.`
                 : `Left to pay of the bill closed on ${dateText(card.cutOff)}.${card.dueOn ? ` ${dueWords(card.dueOn, data.today)}.` : ''}`}
             </p>
-            {min?.kind === 'minimum' && (
-              <p className="mt-1 text-[15px]" role="status">
-                Minimum paid ✓ · {money(min.carries)} carries to the {nextBillName(card)} bill · the
-                bank will likely charge interest on it
-              </p>
-            )}
-            {min?.kind === 'below' && (
-              <p className="mt-1 text-[15px] text-negative" role="status">
-                Below minimum ⚠ {money(min.short)} short of {money(statement!.minimum!)} · late fee
-                likely
-              </p>
-            )}
-            <ul className="panel mt-3 bg-white px-3.5 py-1 dark:bg-raised" aria-label="Bill lines">
-              {billLines(card).map(l => {
-                const body = (
-                  <>
-                    <span className="min-w-0 truncate">
-                      {l.label}
-                      {l.paid && (
-                        <span className="ml-1.5 text-[12px] font-bold text-primary">PAID</span>
-                      )}
-                    </span>
-                    <span className="num shrink-0 font-semibold">
-                      {money(l.amount)}
-                      {(l.planId || l.entryId) && (
-                        <span aria-hidden="true" className="ml-1 text-muted">
-                          ›
-                        </span>
-                      )}
-                    </span>
-                  </>
-                );
-                const row = 'flex items-baseline justify-between gap-3 py-2 text-[15px]';
-                const open = l.planId
-                  ? () => setPlanId(l.planId!)
-                  : l.entryId
-                    ? () => attempt(async () => setEntry(await entryApi.get(l.entryId!)))
-                    : null;
-                return (
-                  <li key={l.key} className="border-b border-edge last:border-b-0">
-                    {open ? (
-                      <button
-                        type="button"
-                        className={`${row} w-full text-left active:opacity-60`}
-                        onClick={open}
+
+            <div className="receipt-stage mt-4">
+              <div className="receipt bill-receipt">
+                <span
+                  className="receipt-stamp bill-receipt-stamp"
+                  style={{ color: STAMP_INK[stamp.tone] }}
+                  aria-hidden="true"
+                >
+                  {stamp.word}
+                </span>
+                <p className="bill-receipt-name">{account.name}</p>
+                <p className="bill-receipt-sub">
+                  Closed {short(card.cutOff)}
+                  {card.dueOn && ` · pay by ${short(card.dueOn)}`}
+                </p>
+                <ul className="mt-3" aria-label="Bill lines">
+                  {billLines(card).map(l => {
+                    const open = l.planId
+                      ? () => setPlanId(l.planId!)
+                      : l.entryId
+                        ? () => attempt(async () => setEntry(await entryApi.get(l.entryId!)))
+                        : null;
+                    const { word, tone } = LINE_TAG[l.kind];
+                    const body = (
+                      <>
+                        <Tag tone={tone}>{word}</Tag>
+                        <span className="min-w-0 flex-1 truncate">{l.detail}</span>
+                        {l.paid && <Tag tone="ok">✓ paid</Tag>}
+                        <span className="num shrink-0 font-bold">{money(l.amount)}</span>
+                        {open && (
+                          <span aria-hidden="true" className="-ml-1 text-[var(--paper-faint)]">
+                            ›
+                          </span>
+                        )}
+                      </>
+                    );
+                    return (
+                      <li
+                        key={l.key}
+                        className="bill-receipt-line"
+                        aria-label={`${l.label}, ${money(l.amount)}`}
                       >
-                        {body}
-                      </button>
-                    ) : (
-                      <div className={row}>{body}</div>
-                    )}
+                        {open ? (
+                          <button
+                            type="button"
+                            aria-label={`${l.label}, ${money(l.amount)}`}
+                            className="bill-receipt-row w-full text-left active:opacity-60"
+                            onClick={open}
+                          >
+                            {body}
+                          </button>
+                        ) : (
+                          <div className="bill-receipt-row">{body}</div>
+                        )}
+                      </li>
+                    );
+                  })}
+                  <li className="bill-receipt-sum" aria-label={`Bill, ${money(card.bill)}`}>
+                    <span>Bill</span>
+                    <span className="num">{money(card.bill)}</span>
                   </li>
-                );
-              })}
-              <li className="flex items-baseline justify-between gap-3 py-2 text-[15px] font-bold">
-                <span>Bill</span>
-                <span className="num">{money(card.bill)}</span>
-              </li>
-              {card.paidSince > 0 && (
-                <li className="flex items-baseline justify-between gap-3 border-t border-edge py-2 text-[15px] text-muted">
-                  <span>
-                    Paid since {dayWords(card.cutOff, { day: 'numeric', month: 'short' })}
-                  </span>
-                  <span className="num">−{money(card.paidSince)}</span>
-                </li>
-              )}
-              {card.paidSince > 0 && (
-                <li className="flex items-baseline justify-between gap-3 border-t border-edge py-2 text-[15px] font-bold">
-                  <span>Left to pay</span>
-                  <span className="num">{money(card.left)}</span>
-                </li>
-              )}
-              {statement && (
-                <li className="flex items-baseline justify-between gap-3 border-t border-edge py-2 text-[15px] text-muted">
-                  <span>
-                    Statement says
-                    {statement.minimum !== null && ` · minimum ${money(statement.minimum)}`}
-                  </span>
-                  <span className="num">{money(statement.total)}</span>
-                </li>
-              )}
-            </ul>
+                  {card.paidSince > 0 && (
+                    <li
+                      className="bill-receipt-paid"
+                      aria-label={`Paid since ${short(card.cutOff)}, −${money(card.paidSince)}`}
+                    >
+                      <span>Paid since {short(card.cutOff)}</span>
+                      <span className="num">−{money(card.paidSince)}</span>
+                    </li>
+                  )}
+                  {card.paidSince > 0 && (
+                    <li
+                      className="bill-receipt-sum"
+                      aria-label={`Left to pay, ${money(card.left)}`}
+                    >
+                      <span>Left to pay</span>
+                      <span className="num">{money(card.left)}</span>
+                    </li>
+                  )}
+                  {statement && (
+                    <>
+                      <li className="bill-receipt-rule" aria-hidden="true" />
+                      <li
+                        className="bill-receipt-row"
+                        aria-label={`Bank statement, ${money(statement.total)}, ${gap === 0 ? 'match ✓' : gap! > 0 ? `${money(gap!)} missing` : `${money(-gap!)} over`}`}
+                      >
+                        <span className="min-w-0 flex-1">Bank statement</span>
+                        <span className="num shrink-0 font-bold">{money(statement.total)}</span>
+                        <Tag tone={gap === 0 ? 'ok' : 'pink'}>
+                          {gap === 0
+                            ? 'match ✓'
+                            : gap! > 0
+                              ? `+${money(gap!)} missing`
+                              : `${money(-gap!)} over`}
+                        </Tag>
+                      </li>
+                      {statement.minimum !== null && (
+                        <li
+                          className="bill-receipt-row"
+                          aria-label={`Minimum payment, ${money(statement.minimum)}`}
+                        >
+                          <span className="min-w-0 flex-1">Minimum payment</span>
+                          <span className="num shrink-0 font-bold">{money(statement.minimum)}</span>
+                        </li>
+                      )}
+                    </>
+                  )}
+                </ul>
+              </div>
+            </div>
             {gap === 0 && (
-              <p className="mt-2 text-[15px] font-semibold text-primary" role="status">
+              <p className="sr-only" role="status">
                 Matches statement ✓
               </p>
             )}
+
+            {extra > 0 && (
+              <Callout
+                tag={<Tag tone="ok">credit</Tag>}
+                title={`+${money(extra)} paid extra`}
+                label="Paid extra"
+              >
+                You paid more than this bill, so it counts toward your {nextBillName(card)} bill.
+                This happens when a line is removed after you paid it, like an interest the bank
+                waived. Nothing to do.
+              </Callout>
+            )}
+            {min?.kind === 'minimum' && (
+              <Callout
+                tag={<Tag tone="warn">min paid ✓</Tag>}
+                title={`${money(min.carries)} carries to the ${nextBillName(card)} bill`}
+                label="Minimum paid"
+              >
+                Minimum paid ✓ · the bank will likely charge interest on what carries over.
+              </Callout>
+            )}
+            {min?.kind === 'below' && (
+              <Callout
+                tag={<Tag tone="pink">below min</Tag>}
+                title={`${money(min.short)} short of the ${money(statement!.minimum!)} minimum`}
+                label="Below minimum"
+              >
+                Below minimum ⚠ · a late fee is likely. Pay at least the rest of the minimum.
+              </Callout>
+            )}
             {gap !== null && gap > 0 && (
-              <div className="mt-2" role="status" aria-label="Statement gap">
-                <p className="text-[15px] font-semibold text-negative">
-                  ⚠ {money(gap)} on the statement is not in the app
-                </p>
-                <p className="text-[13px] text-muted">
-                  Something not logged yet: a spend, the interest, or a fee.
-                </p>
-                <div className="mt-2 flex gap-2">
-                  <Button rounded tonal small onClick={logMissing}>
+              <Callout
+                tag={<Tag tone="pink">check</Tag>}
+                title={`${money(gap)} on the statement is not in the app`}
+                label="Statement gap"
+              >
+                Something is not logged yet: a spend, the interest, or a fee.
+                <span className="mt-3 flex flex-wrap gap-2">
+                  <Button rounded tonal small className="!w-auto" onClick={logMissing}>
                     Log missing spending
                   </Button>
                   {sources.length > 0 && (
-                    <Button rounded tonal small onClick={() => setLogging(true)}>
+                    <Button
+                      rounded
+                      tonal
+                      small
+                      className="!w-auto"
+                      onClick={() => setLogging(true)}
+                    >
                       Log interest
                     </Button>
                   )}
-                </div>
-              </div>
+                </span>
+              </Callout>
             )}
             {gap !== null && gap < 0 && (
-              <div className="mt-2" role="status" aria-label="Statement gap">
-                <p className="text-[15px] font-semibold text-negative">
-                  ⚠ The app has {money(-gap)} more than the statement
-                </p>
-                <p className="text-[13px] text-muted">
-                  Check the lines above: a wrong amount, a refund not logged yet, or a spend the
-                  bank puts on the next bill.
-                </p>
-              </div>
+              <Callout
+                tag={<Tag tone="pink">check</Tag>}
+                title={`The app has ${money(-gap)} more than the statement`}
+                label="Statement gap"
+              >
+                Check the lines on the bill: a wrong amount, a refund not logged yet, or a spend the
+                bank puts on the next bill.
+              </Callout>
             )}
             {card.spentSince > 0 && (
-              <p className="mt-2 text-[15px] text-muted">
+              <p className="mt-3 text-[15px] text-muted">
                 {money(card.spentSince)} spent since then goes on the next bill.
               </p>
             )}

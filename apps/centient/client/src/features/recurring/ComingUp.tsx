@@ -1,9 +1,10 @@
 // Home's reminder: bills due within a week (or late) and card bills not paid off yet, one line each; tap to
-// go to the Bills tab.
+// go to the Bills tab. A card bill is an old scroll that ages with the bills left unpaid (BillScroll).
 import { useQuery } from '@tanstack/react-query';
 import { formatMoney } from '../../lib/format';
 import { catalog, nameOf } from '../../lib/state';
 import { comingUp, dueWords, recurringQueries, type Upcoming } from '../../models/recurring';
+import { BillScroll } from './BillScroll';
 
 const SHOWN = 3;
 
@@ -32,6 +33,18 @@ export function ComingUp({ onOpen }: { onOpen: () => void }) {
       {due.slice(0, SHOWN).map(u => {
         const late = u.due < data.today;
         const { title, from, amount } = line(u);
+        if (u.kind === 'card')
+          return (
+            <BillScroll
+              key={u.key}
+              age={u.card.unpaidBills}
+              late={late}
+              title={title}
+              due={dueWords(u.due, data.today)}
+              amount={amount}
+              onOpen={onOpen}
+            />
+          );
         return (
           <button
             key={u.key}

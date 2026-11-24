@@ -746,6 +746,249 @@ body::after {
   transform: rotate(8deg);
   opacity: 0.85;
 }
+/* A card bill as the bank prints it (features/recurring/CardStatement): the receipt paper with bigger type, a tag
+   on each line, ruled totals and a rubber stamp saying how the bill stands. */
+.bill-receipt {
+  margin-block: 14px;
+  padding: 18px 16px 22px;
+  font-size: 15px;
+  line-height: 1.4;
+}
+.bill-receipt-name {
+  padding-right: 120px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.bill-receipt-sub {
+  margin-top: 2px;
+  color: var(--paper-faint);
+  font-size: 14px;
+}
+.bill-receipt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding-block: 6px;
+}
+.bill-receipt-line + .bill-receipt-line {
+  border-top: 1px dashed color-mix(in oklab, var(--paper-ink) 22%, transparent);
+}
+.bill-receipt-sum,
+.bill-receipt-paid {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-block: 9px;
+}
+.bill-receipt-sum {
+  border-top: 2px solid var(--paper-ink);
+  font-size: 17px;
+  font-weight: 800;
+}
+.bill-receipt-paid {
+  color: var(--paper-faint);
+}
+.bill-receipt-rule {
+  margin-block: 6px;
+  border-top: 2px dashed color-mix(in oklab, var(--paper-ink) 30%, transparent);
+}
+.bill-receipt-stamp {
+  top: 14px;
+  right: 12px;
+  padding: 3px 10px;
+  border-width: 3px;
+  font-size: 15px;
+  transform: rotate(-7deg);
+  opacity: 0.9;
+}
+
+/* Home's card bill as an old parchment scroll (features/recurring/BillScroll): wooden rods above and below, the
+   paper ageing with each bill left unpaid. data-age 1 = fresh yellow, 2 = crumpled and darker, 3 = torn, stained
+   and worn. Paper stays paper in dark mode. */
+.bill-scroll {
+  --parch: #f6e6ad;
+  --parch-2: #ecd48a;
+  --scroll-ink: #3b2a12;
+  --rod: #7a4e22;
+  position: relative;
+  display: block;
+  width: 100%;
+  padding-block: 7px;
+  text-align: left;
+  color: var(--scroll-ink);
+  filter: drop-shadow(0 3px 0 var(--lip)) drop-shadow(0 8px 10px rgb(60 40 10 / 0.16));
+}
+.bill-scroll:active {
+  transform: translateY(1px);
+}
+.bill-scroll:focus-visible {
+  outline: 2px solid var(--miku);
+  outline-offset: 3px;
+}
+/* The rods: rounded wood, a little wider than the paper. */
+.bill-scroll::before,
+.bill-scroll::after {
+  content: '';
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  height: 10px;
+  border-radius: 6px;
+  background: linear-gradient(#a8743c, var(--rod) 55%, #4f3115);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);
+}
+.bill-scroll::before {
+  top: 2px;
+}
+.bill-scroll::after {
+  bottom: 2px;
+}
+.bill-scroll-paper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background:
+    radial-gradient(120% 80% at 50% 50%, transparent 55%, rgb(150 100 30 / 0.16)),
+    linear-gradient(180deg, var(--parch-2), var(--parch) 18%, var(--parch) 82%, var(--parch-2));
+}
+.bill-scroll-title {
+  display: block;
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bill-scroll-due,
+.bill-scroll-age {
+  display: block;
+  font-size: 14px;
+  opacity: 0.85;
+}
+.bill-scroll-age {
+  font-weight: 700;
+  color: #8a1c1c;
+  opacity: 1;
+}
+.bill-scroll[data-late] .bill-scroll-due {
+  font-weight: 700;
+  color: #a3122b;
+  opacity: 1;
+}
+.bill-scroll-amount {
+  flex-shrink: 0;
+  font-size: 17px;
+  font-weight: 800;
+}
+/* 2 bills: crumpled. Darker paper, crease lines both ways, a slight tilt and soft wavy edges. */
+.bill-scroll[data-age='2'] {
+  --parch: #e9d08e;
+  --parch-2: #d9b96a;
+  transform: rotate(-0.6deg);
+}
+.bill-scroll[data-age='2'] .bill-scroll-paper {
+  background:
+    repeating-linear-gradient(
+      62deg,
+      transparent 0 22px,
+      rgb(120 80 20 / 0.09) 22px 23px,
+      transparent 23px 47px
+    ),
+    repeating-linear-gradient(
+      -48deg,
+      transparent 0 30px,
+      rgb(255 250 230 / 0.22) 30px 31px,
+      transparent 31px 58px
+    ),
+    radial-gradient(110% 80% at 50% 50%, transparent 45%, rgb(130 85 25 / 0.24)),
+    linear-gradient(180deg, var(--parch-2), var(--parch) 20%, var(--parch) 80%, var(--parch-2));
+  clip-path: polygon(
+    0 3%,
+    6% 0,
+    20% 2%,
+    38% 0,
+    57% 2%,
+    76% 0,
+    92% 2%,
+    100% 0,
+    99% 50%,
+    100% 97%,
+    82% 100%,
+    61% 98%,
+    40% 100%,
+    21% 98%,
+    4% 100%,
+    1% 52%
+  );
+}
+/* 3+ bills: torn and worn. Darker still, stains, a bite torn out of one edge, frayed rods. */
+.bill-scroll[data-age='3'] {
+  --parch: #dcbd78;
+  --parch-2: #c09a55;
+  --rod: #5e3b19;
+  transform: rotate(0.8deg);
+}
+.bill-scroll[data-age='3']::after {
+  right: 18%;
+}
+.bill-scroll[data-age='3'] .bill-scroll-paper {
+  background:
+    radial-gradient(28px 20px at 84% 30%, rgb(110 60 15 / 0.32), transparent 70%),
+    radial-gradient(40px 26px at 18% 78%, rgb(100 55 10 / 0.22), transparent 70%),
+    repeating-linear-gradient(
+      70deg,
+      transparent 0 16px,
+      rgb(90 55 15 / 0.12) 16px 17px,
+      transparent 17px 33px
+    ),
+    repeating-linear-gradient(
+      -35deg,
+      transparent 0 24px,
+      rgb(90 55 15 / 0.1) 24px 25px,
+      transparent 25px 44px
+    ),
+    radial-gradient(100% 75% at 50% 50%, transparent 35%, rgb(100 60 15 / 0.34)),
+    linear-gradient(180deg, var(--parch-2), var(--parch) 22%, var(--parch) 78%, var(--parch-2));
+  padding: 14px 24px 20px 18px;
+  clip-path: polygon(
+    0 4%,
+    9% 0,
+    23% 3%,
+    31% 0,
+    47% 4%,
+    63% 0,
+    74% 3%,
+    88% 0,
+    100% 5%,
+    98% 35%,
+    100% 55%,
+    98% 76%,
+    100% 90%,
+    94% 100%,
+    88% 86%,
+    82% 100%,
+    66% 96%,
+    52% 100%,
+    38% 95%,
+    24% 100%,
+    11% 96%,
+    0 100%,
+    2% 70%,
+    0 42%,
+    3% 20%
+  );
+}
+@media (prefers-reduced-motion: reduce) {
+  .bill-scroll:active {
+    transform: none;
+  }
+}
+
 /* Typewriter: each new letter strikes the paper; a block cursor blinks after the last one. */
 @keyframes strike {
   0% {

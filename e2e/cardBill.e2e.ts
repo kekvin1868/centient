@@ -140,7 +140,7 @@ test('a plan added on Money: its slice is on the bill, its whole price only on t
   await expect(plan).toBeHidden();
   // The installment's line on the bill opens the same plan.
   await billBox()
-    .getByRole('button', { name: /^Phone 1\/6/ })
+    .getByRole('button', { name: /^Phone · installment 1 of 6/ })
     .tap();
   await expect(plan.locator('[data-installment]')).toHaveCount(6);
   await page.keyboard.press('Escape');
@@ -239,8 +239,10 @@ test('paying part of the bill leaves the rest to pay', async () => {
   await pay.getByRole('button', { name: 'Log the payment' }).tap();
   await expect(pay).toBeHidden();
   await expect(billBox()).toContainText('Rp600.000');
-  await expect(billBox().getByRole('list', { name: 'Bill lines' })).toContainText(
-    'BillRp1.000.000',
-  );
+  await expect(
+    billBox()
+      .getByRole('list', { name: 'Bill lines' })
+      .getByRole('listitem', { name: 'Bill, Rp1.000.000' }),
+  ).toBeVisible();
   expect((await cardBill(await accountId('Shopee Card'))).left).toBe(600_000);
 });

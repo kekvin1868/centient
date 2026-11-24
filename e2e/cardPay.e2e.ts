@@ -30,6 +30,8 @@ const send = (path: string, data: unknown) => app.api('post', path, data);
 const get = (path: string) => app.api('get', path);
 const billBox = () => page.getByRole('region', { name: 'Card bill' });
 const lines = () => billBox().getByRole('list', { name: 'Bill lines' });
+/** One line of the receipt, by its name ("Spending, Rp300.000"). */
+const row = (name: string | RegExp) => lines().getByRole('listitem', { name });
 
 let card: { id: string };
 
@@ -69,14 +71,21 @@ test('the bill lists its lines; interest is logged from the statement with where
   await page.reload();
   await app.tab('Money').tap();
   await app.pick('Pay Card');
-  await expect(lines()).toContainText(/Unpaid from \w{3}Rp500\.000/);
-  await expect(lines()).toContainText('SpendingRp300.000');
-  await expect(lines()).toContainText('BillRp800.000');
+  await expect(row(/^Unpaid from \w{3}, Rp500\.000$/)).toBeVisible();
+  await expect(row('Spending, Rp300.000')).toBeVisible();
+  await expect(row('Bill, Rp800.000')).toBeVisible();
   await expect(billBox()).toContainText('Rp150.000 spent since then goes on the next bill.');
 
   // The statement, typed in the paper's order: total, minimum, interest. The gap shows while typing.
   await billBox().getByRole('button', { name: 'Enter statement' }).tap();
   const sheet = page.getByRole('dialog', { name: 'Enter statement' });
+  // The Total starts at the app's bill and follows new interest, until it is typed.
+  await expect(sheet.getByLabel('Total')).toHaveValue('800.000');
+  await sheet.getByLabel('Interest (optional)').fill('10000');
+  await expect(sheet.getByLabel('Total')).toHaveValue('810.000');
+  await sheet.getByLabel('Interest (optional)').fill('');
+  await expect(sheet.getByLabel('Total')).toHaveValue('800.000');
+  // What the paper says: typed, it stays put.
   await sheet.getByLabel('Total').fill('845000');
   await expect(sheet.getByRole('status', { name: 'Statement check' })).toContainText(
     'The statement asks Rp45.000 more than the app has',
@@ -94,9 +103,10 @@ test('the bill lists its lines; interest is logged from the statement with where
   );
   await sheet.getByRole('button', { name: 'Save statement' }).tap();
   await expect(sheet).toBeHidden();
-  await expect(lines()).toContainText(/Interest · on unpaid \w{3}Rp45\.000/);
-  await expect(lines()).toContainText('BillRp845.000');
-  await expect(lines()).toContainText('Statement says · minimum Rp84.500Rp845.000');
+  await expect(row(/^Interest · on unpaid \w{3}, Rp45\.000$/)).toBeVisible();
+  await expect(row('Bill, Rp845.000')).toBeVisible();
+  await expect(row('Bank statement, Rp845.000, match ✓')).toBeVisible();
+  await expect(row('Minimum payment, Rp84.500')).toBeVisible();
   await expect(billBox()).toContainText('Matches statement ✓');
   await expect(billBox().getByRole('button', { name: 'Edit statement' })).toBeVisible();
   const bill = await app.bill(card.id);
@@ -123,12 +133,11 @@ test('paying part of the bill shows it paid and leaves the rest; Home shows mone
   await pay.getByLabel('Amount').fill('345000');
   await pay.getByRole('button', { name: 'Log the payment' }).tap();
   await expect(pay).toBeHidden();
-  await expect(lines()).toContainText(/Paid since \d{1,2} \w{3}−Rp345\.000/);
-  await expect(lines()).toContainText('Left to payRp500.000');
-  await expect(billBox()).toContainText('Rp500.000');
-  await expect(billBox()).toContainText(
-    /Minimum paid ✓ · Rp500\.000 carries to the \w{3} bill · the bank will likely charge interest on it/,
-  );
+  await expect(row(/^Paid since \d{1,2} \w{3}, −Rp345\.000$/)).toBeVisible();
+  await expect(row('Left to pay, Rp500.000')).toBeVisible();
+  const minimum = billBox().getByRole('status', { name: 'Minimum paid' });
+  await expect(minimum).toContainText(/Rp500\.000 carries to the \w{3} bill/);
+  await expect(minimum).toContainText('the bank will likely charge interest');
   const bill = await app.bill(card.id);
   expect(bill).toMatchObject({ left: 500_000, spentSince: 150_000 });
 
@@ -171,6 +180,11 @@ test('a statement that asks more than the app: the missing spend is logged from 
   await billBox().getByRole('button', { name: 'Edit statement' }).tap();
   const sheet = page.getByRole('dialog', { name: 'Enter statement' });
   await expect(sheet.getByLabel('Total')).toHaveValue('845.000'); // what was typed before
+  // The interest already on the bill is listed, and its source is not offered again.
+  await expect(sheet.getByRole('list', { name: 'Interest on this bill' })).toContainText(
+    /on unpaid \w{3}/,
+  );
+  await expect(sheet.getByRole('option', { name: /^On unpaid/ })).toHaveCount(0);
   await sheet.getByLabel('Total').fill('900000');
   await sheet.getByRole('button', { name: 'Save statement' }).tap();
   await expect(sheet).toBeHidden();
@@ -184,6 +198,24 @@ test('a statement that asks more than the app: the missing spend is logged from 
   await entry.getByRole('button', { name: 'Log it' }).tap();
   await expect(entry).toBeHidden();
   // On this bill (dated on its closing day), so the bill now matches.
-  await expect(lines()).toContainText('BillRp900.000');
+  await expect(row('Bill, Rp900.000')).toBeVisible();
   await expect(billBox()).toContainText('Matches statement ✓');
+
+  // Paid more than the bill (here on purpose; in life, a line removed after paying): a credit note says where
+  // the extra goes.
+  const left = (await app.bill(card.id)).left;
+  await send('/transactions', {
+    type: 'TRANSFER',
+    fromAccountId: (await app.account('BCA')).id,
+    toAccountId: card.id,
+    amount: left + 50_000,
+    date: daysAgo(0),
+  });
+  await page.reload();
+  await app.tab('Money').tap();
+  await app.pick('Pay Card');
+  const extra = billBox().getByRole('status', { name: 'Paid extra' });
+  await expect(extra).toContainText('+Rp50.000 paid extra');
+  await expect(extra).toContainText(/counts toward your \w{3} bill/);
+  await expect(row('Left to pay, Rp0')).toBeVisible();
 });
