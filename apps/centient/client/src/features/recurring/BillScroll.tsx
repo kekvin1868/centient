@@ -2,7 +2,7 @@
 // and right) that ages with every bill left unpaid in a row (`unpaidBills`): 1 = fresh yellow, 2 = crumpled,
 // 3 or more = torn and worn. Its moves, with motion's `animate` (the look is CSS, .bill-scroll in styles.css):
 // - it unrolls the first time it shows in a visit: the rods start together in the middle and spring apart;
-// - a tap rolls it back up, then opens the Bills tab;
+// - a tap blinks it twice (hard on / off, 8-bit), then opens the Bills tab;
 // - when it is older than the last time this phone showed it, it shows the old look, then crumples into the new
 //   one (the torn edges are polygons with the same points at every age, so the edge itself tears).
 // Nothing moves with "reduce motion" on. Loaded after Home's first paint (ComingUp), like the tap-only sheets.
@@ -12,7 +12,6 @@ import { reducedMotion } from '../../lib/motion';
 
 const AGE_WORDS = ['', 'This bill', '2 bills unpaid', '3+ bills unpaid'];
 const EASE_OUT = [0.2, 1.25, 0.4, 1] as const; // a little past open, then back: the rods' spring
-const EASE_IN = [0.5, 0, 0.8, 0.4] as const;
 
 /** Scrolls already unrolled in this visit: each unrolls once per app open. */
 const unrolled = new Set<string>();
@@ -124,7 +123,12 @@ export function BillScroll({
   const tap = async () => {
     if (busy.current) return;
     busy.current = true;
-    if (!reducedMotion()) await roll(1, 0, { duration: 0.3, ease: EASE_IN });
+    // An 8-bit blink, hard on / off with no fade, like a picked menu item.
+    if (!reducedMotion())
+      await root.current!.animate(
+        [1, 0, 1, 0, 1].map(opacity => ({ opacity, easing: 'steps(1, end)' })),
+        { duration: 260 },
+      ).finished;
     onOpen();
   };
 
