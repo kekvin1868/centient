@@ -87,7 +87,7 @@ export function billLines(card: CardStatement): BillLine[] {
       key: `interest:${i.entryId}`,
       label: i.from
         ? `Interest · on unpaid ${billMonth(i.from)}`
-        : `Interest${i.planName ? ` · ${i.planName}${i.no ? ` slice ${i.no}` : ''}` : ''}`,
+        : `Interest${i.planName ? ` · ${i.planName}${i.no ? ` installment ${i.no}` : ''}` : ''}`,
       amount: i.amount,
     })),
   ];

@@ -75,7 +75,7 @@ export function PlanSheet({
           </Block>
         )}
         <p className="mx-4 mb-3 text-[13px] text-muted">
-          Each slice rides {account.name}'s bill. It is paid when you pay that bill.
+          Each installment rides {account.name}'s bill. It is paid when you pay that bill.
         </p>
         <div className="mx-4 flex flex-col gap-3">
           {plan.schedule.map(s => {
@@ -88,7 +88,7 @@ export function PlanSheet({
               >
                 <div className="mb-2 flex items-baseline justify-between gap-2">
                   <span className="text-[15px] font-bold">
-                    Slice {s.no} · {billMonth(s.bill)} bill
+                    Installment {s.no} of {plan.installments} · {billMonth(s.bill)} bill
                   </span>
                   <span
                     className={`text-[13px] font-semibold ${overdue ? 'text-negative' : 'text-muted'}`}

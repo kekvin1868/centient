@@ -32,7 +32,7 @@ export function PlanCard({
           className={`block truncate text-[13px] ${p.next?.overdue ? 'font-semibold text-negative' : 'text-muted'}`}
         >
           {p.next
-            ? `${formatMoney(p.amountPerInstallment, currency)} a month · slice ${p.next.no} on the ${billMonth(p.next.bill)} bill${p.next.overdue ? ', unpaid' : ''}`
+            ? `${formatMoney(p.amountPerInstallment, currency)} a month · installment ${p.next.no} of ${p.installments} on the ${billMonth(p.next.bill)} bill${p.next.overdue ? ', unpaid' : ''}`
             : 'All paid'}
           {p.parties.length > 1 ? ` · ${p.parties.length} people` : ''}
         </span>

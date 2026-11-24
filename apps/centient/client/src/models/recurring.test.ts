@@ -126,7 +126,7 @@ describe('due dates on screen', () => {
       'Spending',
       'TV 2/6',
       'Interest · on unpaid Oct',
-      'Interest · TV slice 2',
+      'Interest · TV installment 2',
     ]);
     expect(interestSources(card).map(s => [s.label, s.from])).toEqual([
       ['On unpaid Oct', { month: '2026-10' }],

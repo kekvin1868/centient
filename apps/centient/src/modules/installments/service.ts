@@ -124,7 +124,10 @@ export function createInstallmentsService({
     const plan = billPlan(row);
     const lastClosed = statementOf(days.closes, days.payBy, today).cutOff.slice(0, 7);
     if (sliceBill(plan, plan.paidBefore + 1) < lastClosed)
-      throw new DomainError('PLAN_STARTED', 'Its slices are already on bills before the last one');
+      throw new DomainError(
+        'PLAN_STARTED',
+        'Its installments are already on bills before the last one',
+      );
     const moved = { ...plan, firstBill: sliceBill(plan, 2) };
     const undo = posted.filter(
       r => r.plan_id === planId && closingOf(sliceBill(moved, r.slice_no), days.closes) > today,
