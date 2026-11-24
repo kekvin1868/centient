@@ -11,8 +11,9 @@ import { billMonth } from '../../models/dates';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { Sheet } from '../../ui/Sheet';
 import { showToast } from '../../ui/Toast';
-import { installmentApi, type Plan } from '../../models/installment';
+import { installmentApi, moveWords, type Plan } from '../../models/installment';
 import { persist } from '../../models/query';
+import { attempt } from '../../lib/run';
 
 export function PlanSheet({
   plan,
@@ -24,11 +25,19 @@ export function PlanSheet({
   onClose: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
+  /** The move's confirm sheet: open once the server said what it would take back. */
+  const [moving, setMoving] = useState<string | null>(null);
   if (!plan) return null;
   const today = me.value?.today ?? '';
   const cur = account.currency_code;
   const shared = plan.parties.length > 1;
+  const askMove = () =>
+    attempt(async () => {
+      const { interest } = await installmentApi.nextBillPreview(plan.id);
+      setMoving(moveWords(plan, interest, n => formatMoney(n, cur)));
+    });
   const move = async () => {
+    setMoving(null);
     if (await persist(() => installmentApi.nextBill(plan.id))) showToast('Moved to the next bill');
   };
   const remove = async () => {
@@ -40,7 +49,7 @@ export function PlanSheet({
 
   return (
     <>
-      <Sheet open={!confirm} onClose={onClose} title={plan.name}>
+      <Sheet open={!confirm && !moving} onClose={onClose} title={plan.name}>
         <div className="mx-4 my-4">
           <div className="text-[15px] font-semibold text-muted">
             {plan.paidCount} of {plan.installments} paid ·{' '}
@@ -57,7 +66,7 @@ export function PlanSheet({
         </div>
         {plan.next && (
           <Block className="!my-3">
-            <Button large rounded tonal onClick={move}>
+            <Button large rounded tonal onClick={askMove}>
               Move to next bill
             </Button>
             <p className="mt-2 text-[13px] text-muted">
@@ -122,6 +131,13 @@ export function PlanSheet({
           </Button>
         </Block>
       </Sheet>
+      <ConfirmSheet
+        open={Boolean(moving)}
+        message={moving ?? ''}
+        confirmLabel="Move to next bill"
+        onCancel={() => setMoving(null)}
+        onConfirm={move}
+      />
       <ConfirmSheet
         open={confirm}
         message={`Remove ${plan.name}? Payments you marked stay in your activity.`}

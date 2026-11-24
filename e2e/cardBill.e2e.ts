@@ -193,6 +193,10 @@ test('Move to next bill takes the slice and its interest off this bill', async (
   const plan = page.getByRole('dialog', { name: 'TV' });
   await expect(plan).toContainText("If Late Start's bill didn't have it yet");
   await plan.getByRole('button', { name: 'Move to next bill' }).tap();
+  // Asked first: what moves, and the interest that comes off for now.
+  const ask = page.getByRole('dialog', { name: /^Every installment moves one bill later/ });
+  await expect(ask).toContainText('Rp25.000 on installment 1');
+  await ask.getByRole('button', { name: 'Move to next bill' }).tap();
   await expect(page.getByText('Moved to the next bill')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(billBox()).toContainText('Nothing left to pay');
