@@ -52,9 +52,6 @@ export const recurringApi = {
   /** Undoes a payment: deletes the expense that paid a bill, and the server moves the bill back to that date. */
   unpay: (entryId: string) =>
     call(client.api.entries[':id'].$delete({ param: { id: entryId }, query: {} })),
-  /** "Log interest" on a card bill: the bank's interest from the statement, tagged by where it came from. */
-  logInterest: (accountId: string, json: Interest) =>
-    call(client.api.recurring.cards[':accountId'].interest.$post({ param: { accountId }, json })),
   /** "Not a subscription": this merchant is no longer offered under "Found in your entries". */
   hide: (merchant: string) => call(client.api.recurring.found.hide.$post({ json: { merchant } })),
 };

@@ -254,12 +254,20 @@ export function createRecurringService({
      * "Log interest" on a card bill: interest the bank charged, typed from the statement, as an expense on the
      * card in Fees & Interests dated on the last closing day (so it lands on the bill just printed), tagged by
      * where it came from: only what the statement offers (`interestSources`: the bill before's unpaid part, a
-     * plan with a slice unpaid; nothing on a card's first bill).
+     * plan with a slice unpaid; nothing on a card's first bill). From the phone's outbox: `id` is the entry id it
+     * made (already taken = an earlier try landed, so nothing more is written) and `closedOn` the bill it was typed
+     * for; once that bill is no longer the last one printed it is refused (BILL_CLOSED), never moved to another.
      */
     async logInterest(
       accountId: string,
-      i: { amount: number; from: { month: string } | { planId: string } },
+      i: {
+        id?: string;
+        closedOn?: string;
+        amount: number;
+        from: { month: string } | { planId: string };
+      },
     ) {
+      if (i.id && (await repos.entries.taken(ws, [i.id])).has(i.id)) return i.id;
       const c = await catalog.load();
       const a = c.account(accountId).row;
       if (!hasBills(a))
@@ -267,6 +275,11 @@ export function createRecurringService({
       const fees = c.fees();
       const card = (await loadCardBills(repos, ws, c.accounts, today())).bills.get(accountId);
       if (!card) throw new DomainError('CARD_SETUP', `${a.name} is hidden`);
+      if (i.closedOn && i.closedOn !== card.bill.closesOn)
+        throw new DomainError(
+          'BILL_CLOSED',
+          'That bill closed since. Log the interest from the new statement',
+        );
       let label: string;
       if ('month' in i.from) {
         if (i.from.month !== card.interestFrom.month)
@@ -292,6 +305,7 @@ export function createRecurringService({
           note: `Interest · ${label}`,
         },
       ]);
+      if (i.id) entries[0].id = i.id;
       const { ids, stmts } = repos.entries.insertStatements(ws, entries);
       await repos.batch([...stmts, repos.installments.handInterestInsert(ws, ids[0], i.from)]);
       return ids[0];

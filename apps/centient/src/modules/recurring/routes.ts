@@ -42,11 +42,14 @@ export const recurringRoutes = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
 
-  // "Log interest" on a card bill, tagged by where it came from.
+  // "Log interest" on a card bill, tagged by where it came from. Sent from the phone's outbox: `id` is the entry id
+  // the phone made (a repeat is saved once), `closedOn` the bill it was typed for.
   .post(
     '/cards/:accountId/interest',
     json(
       z.object({
+        id: id.optional(),
+        closedOn: day.optional(),
         amount: money,
         from: z.union([
           z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }),

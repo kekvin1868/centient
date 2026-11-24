@@ -454,6 +454,38 @@ describe('card statement', () => {
     expect((await bill()).lines.interest.map(i => i.amount)).toEqual([10_000]);
   });
 
+  it('takes queued interest once, and only for the bill it was typed for', async () => {
+    const t = await workspace('2026-11-25');
+    const card = await t.svc().accounts.create({
+      name: 'BCA Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
+    await t.spend('2026-10-10', 500_000, 'tokopedia', card.id); // Oct bill, never paid
+    const send = (id: string, closedOn: string) =>
+      t.svc().recurring.logInterest(card.id, {
+        id,
+        closedOn,
+        amount: 45_000,
+        from: { month: '2026-10' },
+      });
+    const interest = async () => (await t.svc().recurring.list()).cards[0].lines.interest;
+
+    // The phone's id is kept; the same id again (an answer lost on the way back) writes nothing more.
+    expect(await send('phone-1', '2026-11-20')).toBe('phone-1');
+    expect(await send('phone-1', '2026-11-20')).toBe('phone-1');
+    expect(await interest()).toHaveLength(1);
+    // Still taken once deleted: a late repeat does not bring it back.
+    await t.svc().ledger.remove('phone-1');
+    expect(await send('phone-1', '2026-11-20')).toBe('phone-1');
+    expect(await interest()).toHaveLength(0);
+    // Typed for the Oct bill, arriving after Nov closed: refused, never put on Nov's.
+    await expect(send('phone-2', '2026-10-20')).rejects.toMatchObject({ code: 'BILL_CLOSED' });
+    expect(await interest()).toHaveLength(0);
+  });
+
   it("logs no interest on a card's first bill: nothing was unpaid before it", async () => {
     const t = await workspace('2026-11-25');
     const card = await t.svc().accounts.create({

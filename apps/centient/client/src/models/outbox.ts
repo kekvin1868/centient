@@ -28,6 +28,11 @@ export type OutboxItem = {
   op: 'create' | 'edit' | 'remove';
   command?: Command;
   learn?: Learn;
+  /**
+   * "Log interest" on a card bill: a new Fees & Interests expense that goes to the interest route instead, tagged
+   * by where it came from, for the bill closed on `closedOn` (the server refuses it once that bill is not the last).
+   */
+  interest?: { accountId: string; closedOn: string; from: { month: string } | { planId: string } };
   /** A bill with Paid backs tied: the owner's answer, asked before queuing. */
   paybacks?: PaybackMode;
   /** The version an edit was made against (none for an entry this phone made a moment ago). */
@@ -264,9 +269,9 @@ export function createOutbox(d: OutboxDeps) {
     idle: () => running ?? Promise.resolve(),
 
     /** Queues a new entry; returns the id it will have. */
-    create(command: Command, learn?: Learn): string {
+    create(command: Command, learn?: Learn, interest?: OutboxItem['interest']): string {
       const entryId = d.uuid();
-      set([...items, { ...fresh(), entryId, op: 'create', command, learn, at: d.now() }]);
+      set([...items, { ...fresh(), entryId, op: 'create', command, learn, interest, at: d.now() }]);
       void flush();
       return entryId;
     },
@@ -332,6 +337,21 @@ function uuid() {
 const headers = (i: OutboxItem) => ({ headers: { 'Idempotency-Key': i.key } });
 async function send(i: OutboxItem): Promise<{ version?: number }> {
   const param = { id: i.entryId };
+  if (i.op === 'create' && i.interest) {
+    // ponytail: only the amount of a waiting interest can change (its sheet sends nothing else); an edit of
+    // another field before it is sent is not carried. Send it as a plain expense if that ever matters.
+    const { accountId, closedOn, from } = i.interest;
+    await call(
+      client.api.recurring.cards[':accountId'].interest.$post(
+        {
+          param: { accountId },
+          json: { id: i.entryId, closedOn, from, amount: i.command!.amount },
+        },
+        headers(i),
+      ),
+    );
+    return {};
+  }
   if (i.op === 'create') {
     await call(
       client.api.quickadd.save.$post(

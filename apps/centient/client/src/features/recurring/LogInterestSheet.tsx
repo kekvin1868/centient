@@ -1,10 +1,11 @@
 // "Log interest" on a card bill: the interest the bank printed on the statement, and where it came from (the
 // unpaid part of the bill before, or a plan). Saved as an expense on the card in Fees & Interests, on the bill
-// that just closed.
+// that just closed. Queued like any entry (models/outbox): it shows at once and is sent when there is signal.
 import { Block, Button } from 'konsta/react';
 import { useState } from 'react';
-import { recurringApi, type InterestSource } from '../../models/recurring';
-import { persist } from '../../models/query';
+import { attempt } from '../../lib/run';
+import { entryApi } from '../../models/entry';
+import type { InterestSource } from '../../models/recurring';
 import type { Account } from '../../models/workspace';
 import { AmountField } from '../../ui/AmountField';
 import { dateText, PickerRow } from '../../ui/Fields';
@@ -30,8 +31,7 @@ export function LogInterestSheet({
   const error = !amount ? 'Enter the interest' : !picked ? 'Pick where it came from' : null;
   const save = async () => {
     if (!amount || !picked) return;
-    if (!(await persist(() => recurringApi.logInterest(card.id, { amount, from: picked.from }))))
-      return;
+    if (!(await attempt(() => entryApi.logInterest(card.id, closedOn, amount, picked)))) return;
     onClose();
     showToast('Interest logged');
   };
