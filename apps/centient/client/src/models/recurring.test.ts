@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   afterCardBills,
+  cardsOwed,
   billLines,
   comingUp,
   dueByDay,
@@ -80,6 +81,18 @@ describe('due dates on screen', () => {
         idr,
       ),
     ).toBe(8_700_000);
+    // Its breakdown: the cards that owe, a refund counted as nothing (not as money back).
+    expect(
+      cardsOwed(
+        [
+          card,
+          { ...card, accountId: 'paid', left: 0, spentSince: 0 },
+          { ...card, accountId: 'refund', left: 0, spentSince: -50_000 },
+          { ...card, accountId: 'usd' },
+        ],
+        idr,
+      ),
+    ).toEqual([{ accountId: card.accountId, left: card.left, spentSince: card.spentSince }]);
     // No card owes anything: no line.
     expect(afterCardBills(10_000_000, [{ ...card, left: 0, spentSince: 0 }], idr)).toBeNull();
   });

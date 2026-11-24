@@ -133,4 +133,13 @@ test('paying part of the bill shows it paid and leaves the rest; Home shows mone
   await expect(page.getByRole('region', { name: 'Your money' })).toContainText(
     `After card bills · ${rp(money - 650_000)}`,
   );
+  // Tapping it shows how it was worked out.
+  await page.getByRole('button', { name: /^After card bills/ }).tap();
+  const why = page.getByRole('dialog', { name: 'After card bills' });
+  await expect(why).toContainText(`Your money${rp(money)}`);
+  await expect(why).toContainText('− Pay Card bill leftRp500.000');
+  await expect(why).toContainText('− Pay Card spent since closingRp150.000');
+  await expect(why).toContainText(`= After card bills${rp(money - 650_000)}`);
+  await page.keyboard.press('Escape');
+  await expect(why).toBeHidden();
 });

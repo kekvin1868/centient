@@ -6,7 +6,9 @@ import { ACCOUNT_KINDS, formatMoney } from '../../lib/format';
 import { selectedAccount } from '../../lib/state';
 import { budgetsWithWaiting, useBalances, useOverlaySince } from '../../models/useWaiting';
 import { budgetQueries } from '../../models/budget';
-import { afterCardBills, recurringQueries } from '../../models/recurring';
+import { afterCardBills, cardsOwed, recurringQueries } from '../../models/recurring';
+import { lazySheet } from '../../ui/lazySheet';
+import { useState } from 'react';
 import { usePrices, type Prices } from '../../models/price';
 import { BigMoney } from '../../ui/BigMoney';
 import { CardLimits } from '../accounts/CardLimits';
@@ -20,6 +22,9 @@ import {
   type Balances,
 } from '../../models/account';
 import { HomeBudgets } from './HomeBudgets';
+
+// The breakdown behind "After card bills": downloaded when tapped.
+const AfterBillsSheet = lazySheet(() => import('./AfterBillsSheet').then(m => m.AfterBillsSheet));
 
 type Head = {
   label: string;
@@ -66,12 +71,11 @@ export function Headline({ onGoMoney }: { onGoMoney: () => void }) {
   const prices = usePrices();
   const { data: bills } = useQuery(recurringQueries.list());
   const head = bal ? headOf(sel, bal, prices) : null;
+  const [explain, setExplain] = useState(false);
+  const inCurrency = (id: string) =>
+    Boolean(head && bal?.accounts.some(a => a.id === id && a.currency_code === head.currency));
   const after =
-    !sel && head && bal && bills
-      ? afterCardBills(head.minor, bills.cards, id =>
-          bal.accounts.some(a => a.id === id && a.currency_code === head.currency),
-        )
-      : null;
+    !sel && head && bal && bills ? afterCardBills(head.minor, bills.cards, inCurrency) : null;
   const account = (sel && bal?.accounts.find(a => a.id === sel)) || null;
 
   const card = `panel halftone relative mx-4 mt-4 mb-3 rounded-[24px] px-5 pt-4 pb-5 transition-colors duration-500 ${head?.hurt ? 'bg-pink text-white' : 'bg-miku text-[#0b0f0f]'}`;
@@ -90,9 +94,13 @@ export function Headline({ onGoMoney }: { onGoMoney: () => void }) {
           className="relative mt-4"
         />
         {after !== null && (
-          <p className="num relative mt-1 text-[15px] font-semibold opacity-80">
-            After card bills · {formatMoney(after, head.currency)}
-          </p>
+          <button
+            type="button"
+            className="num relative mt-1 text-left text-[15px] font-semibold opacity-80 active:opacity-60"
+            onClick={() => setExplain(true)}
+          >
+            After card bills · {formatMoney(after, head.currency)} <span aria-hidden="true">ⓘ</span>
+          </button>
         )}
         <div className="relative mt-4 flex items-end justify-between gap-3">
           <p className={`text-[15px] font-medium leading-snug ${head.hurt ? '' : 'opacity-80'}`}>
@@ -108,6 +116,16 @@ export function Headline({ onGoMoney }: { onGoMoney: () => void }) {
         </div>
       </section>
       {!sel && bal && <CardLimits accounts={bal.accounts} onGo={onGoMoney} />}
+      {after !== null && bills && (
+        <AfterBillsSheet
+          open={explain}
+          money={head.minor}
+          owed={cardsOwed(bills.cards, inCurrency)}
+          after={after}
+          currency={head.currency}
+          onClose={() => setExplain(false)}
+        />
+      )}
       {budgets && (
         <HomeBudgets
           budgets={budgetsWithWaiting(budgets.budgets, budgets.cycle, overlay)}

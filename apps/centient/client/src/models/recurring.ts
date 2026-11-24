@@ -126,10 +126,16 @@ export function afterCardBills(
   cards: CardStatement[],
   inCurrency: (accountId: string) => boolean,
 ) {
-  const owed = cards
-    .filter(c => inCurrency(c.accountId))
-    .reduce((s, c) => s + c.left + Math.max(0, c.spentSince), 0);
+  const owed = cardsOwed(cards, inCurrency).reduce((s, c) => s + c.left + c.spentSince, 0);
   return owed ? money - owed : null;
+}
+
+/** What "After card bills" takes off, card by card (its breakdown sheet): only cards that owe something. */
+export function cardsOwed(cards: CardStatement[], inCurrency: (accountId: string) => boolean) {
+  return cards
+    .filter(c => inCurrency(c.accountId))
+    .map(c => ({ accountId: c.accountId, left: c.left, spentSince: Math.max(0, c.spentSince) }))
+    .filter(c => c.left + c.spentSince > 0);
 }
 
 /** One line of Home's "Coming up": a bill, or a card's statement with money left to pay. */
