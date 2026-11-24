@@ -1,18 +1,28 @@
 // Our own confirm prompt (never the browser's), for destructive actions: a small retro dialog that glitches in.
-import { useRef } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { NightSheet } from './night/NightSheet';
 import { usePresence } from './night/tv';
 
 type Props = {
   open: boolean;
+  /** The question in words: shown, and the box's name for screen readers. */
   message: string;
+  /** A picture to show instead of the words (the words stay its name). */
+  children?: ReactNode;
   confirmLabel: string;
   onConfirm: () => void;
   onCancel: () => void;
 };
 
-export function ConfirmSheet({ open, message, confirmLabel, onConfirm, onCancel }: Props) {
+export function ConfirmSheet({
+  open,
+  message,
+  children,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: Props) {
   const { mounted, gen, unmount } = usePresence(open);
   const asked = useRef(open);
   asked.current = open;
@@ -33,7 +43,7 @@ export function ConfirmSheet({ open, message, confirmLabel, onConfirm, onCancel 
     >
       {close => (
         <>
-          <p className="c-msg">{message}</p>
+          {children ?? <p className="c-msg">{message}</p>}
           <div className="k-acts">
             <button type="button" className="n-btn" onClick={close}>
               CANCEL

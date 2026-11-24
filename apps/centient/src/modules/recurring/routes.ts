@@ -42,11 +42,14 @@ export const recurringRoutes = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
 
-  // "Log interest" on a card bill, tagged by where it came from.
+  // "Log interest" on a card bill, tagged by where it came from. Sent from the phone's outbox: `id` is the entry id
+  // the phone made (a repeat is saved once), `closedOn` the bill it was typed for.
   .post(
     '/cards/:accountId/interest',
     json(
       z.object({
+        id: id.optional(),
+        closedOn: day.optional(),
         amount: money,
         from: z.union([
           z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }),
@@ -64,6 +67,22 @@ export const recurringRoutes = new Hono<AppEnv>()
         },
         201,
       ),
+  )
+
+  // "Enter statement" on a card bill: the bank's total and minimum, for the bill closed on `closedOn`.
+  .put(
+    '/cards/:accountId/statement',
+    json(
+      z.object({
+        closedOn: day,
+        total: z.number().int().min(0),
+        minimum: z.number().int().min(0).nullish(),
+      }),
+    ),
+    async c => {
+      await c.var.services.recurring.setStatement(c.req.param('accountId'), c.req.valid('json'));
+      return c.json({ ok: true });
+    },
   )
 
   .post('/:id/paid', json(z.object({ date: day.optional(), amount: money.optional() })), async c =>

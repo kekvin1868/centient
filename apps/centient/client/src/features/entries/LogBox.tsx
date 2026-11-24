@@ -10,10 +10,25 @@ import { active, catalog, me, qctx, selectedAccount, selectedPocket } from '../.
 import { showToast } from '../../ui/Toast';
 import { blankForm, chipView, fromDraft, toCommand, type LogItem } from './form';
 import { LogChip } from './LogChip';
-import { LogGuideSheet } from './LogGuideSheet';
-import { LogSheet } from './LogSheet';
 import { PocketStamps } from './PocketStamps';
 import { entryApi } from '../../models/entry';
+import { lazySheet } from '../../ui/lazySheet';
+
+// The review sheet (with the whole entry form) and the guide are downloaded when opened, not for Home's first paint.
+const LogGuideSheet = lazySheet(() => import('./LogGuideSheet').then(m => m.LogGuideSheet));
+const LogSheet = lazySheet(() =>
+  import('./LogSheet').then(
+    m =>
+      function OpenLog(p: {
+        open: boolean;
+        item: LogItem | null;
+        onClose: () => void;
+        onSave: (i: LogItem) => unknown;
+      }) {
+        return <m.LogSheet item={p.item} onClose={p.onClose} onSave={p.onSave} />;
+      },
+  ),
+);
 
 export function LogBox() {
   const [text, setText] = useState('');
@@ -277,6 +292,7 @@ export function LogBox() {
       <LogGuideSheet open={guide} onClose={() => setGuide(false)} />
       <LogSheet
         key={sheet?.key ?? 'none'}
+        open={Boolean(sheet)}
         item={sheet}
         onClose={() => setSheet(null)}
         onSave={logOne}

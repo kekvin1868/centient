@@ -5,12 +5,16 @@ import { queryOptions } from '@tanstack/react-query';
 import { call, client, type Req, type Res } from './api';
 import { paidTicket } from '../../../src/domain/tickets';
 import { billMonth, daysBetween } from './dates';
+import { sliceBill } from '../../../src/domain/cardBill';
+import type { OutboxItem } from './outbox';
 
 type List = Res<typeof client.api.recurring.$get>;
 /** One bill with its due dates for the next 12 months (`dues`, none while paused). */
 export type Recurring = List['items'][number];
 /** A credit card's or pay later's last statement: what was billed, what is left to pay, what was spent since. */
-export type CardStatement = List['cards'][number];
+export type CardStatement = List['cards'][number] & {
+  lines: { waiting?: number };
+};
 /** A merchant paid about monthly that is not a bill yet ("Found in your entries"). */
 export type FoundPayment = Res<typeof client.api.recurring.found.$get>['found'][number];
 /** The body of a new bill (an edit takes any part of it). */
@@ -52,9 +56,6 @@ export const recurringApi = {
   /** Undoes a payment: deletes the expense that paid a bill, and the server moves the bill back to that date. */
   unpay: (entryId: string) =>
     call(client.api.entries[':id'].$delete({ param: { id: entryId }, query: {} })),
-  /** "Log interest" on a card bill: the bank's interest from the statement, tagged by where it came from. */
-  logInterest: (accountId: string, json: Interest) =>
-    call(client.api.recurring.cards[':accountId'].interest.$post({ param: { accountId }, json })),
   /** "Not a subscription": this merchant is no longer offered under "Found in your entries". */
   hide: (merchant: string) => call(client.api.recurring.found.hide.$post({ json: { merchant } })),
 };
@@ -70,45 +71,136 @@ export function dueWords(due: string, today: string): string {
 }
 
 /** One line of a card bill, in the bank's order. */
-export type BillLine = { key: string; label: string; amount: number; paid?: boolean };
+export type BillLine = {
+  key: string;
+  /** What kind of line: the tag on the receipt. */
+  kind: 'carry' | 'credit' | 'spent' | 'slice' | 'interest' | 'waiting';
+  /** The whole line in words (its accessible name), and the part after the tag. */
+  label: string;
+  detail: string;
+  amount: number;
+  paid?: boolean;
+  /** Tapping it opens this plan (an installment) or this entry (interest). */
+  planId?: string;
+  entryId?: string;
+};
+
+/**
+ * The card's bill with changes still waiting on the phone counted in (useRecurring): on or before the closing day
+ * they are on this bill (a payment then lowers it, as on the server); after it a payment is paid since and a spend
+ * is spent since. ponytail: a waiting installment purchase counts as plain spending until it is sent.
+ */
+export function cardWithWaiting(
+  card: CardStatement,
+  moves: { accountId: string; day: string; amount: number }[],
+): CardStatement {
+  let onBill = 0;
+  let paid = 0;
+  let spent = 0;
+  for (const m of moves) {
+    if (m.accountId !== card.accountId || !m.amount) continue;
+    if (m.day <= card.cutOff) onBill -= m.amount;
+    else if (m.amount > 0) paid += m.amount;
+    else spent -= m.amount;
+  }
+  if (!onBill && !paid && !spent) return card;
+  const bill = card.bill + onBill;
+  const paidSince = card.paidSince + paid;
+  return {
+    ...card,
+    bill,
+    paidSince,
+    left: Math.max(0, bill - paidSince),
+    spentSince: card.spentSince + spent,
+    lines: { ...card.lines, waiting: (card.lines.waiting ?? 0) + onBill },
+  };
+}
 
 /** A card bill's lines: unpaid (or paid extra) from the bill before, spending, each plan's slice, interest. */
 export function billLines(card: CardStatement): BillLine[] {
   const { carry, spent, slices, interest } = card.lines;
-  const before = card.before ? billMonth(card.before) : 'last bill';
-  return [
-    ...(carry > 0 ? [{ key: 'carry', label: `Unpaid from ${before}`, amount: carry }] : []),
-    ...(carry < 0 ? [{ key: 'carry', label: `Paid extra on ${before}`, amount: carry }] : []),
-    ...(spent ? [{ key: 'spent', label: 'Spending', amount: spent }] : []),
-    ...slices.map(s => ({
+  const before = card.before ? billMonth(card.before) : 'last';
+  const lines: BillLine[] = [];
+  if (carry > 0)
+    lines.push({
+      key: 'carry',
+      kind: 'carry',
+      label: `Unpaid from ${before}`,
+      detail: `from the ${before} bill`,
+      amount: carry,
+    });
+  if (carry < 0)
+    lines.push({
+      key: 'carry',
+      kind: 'credit',
+      label: `Paid extra on ${before}`,
+      detail: `paid extra on the ${before} bill`,
+      amount: carry,
+    });
+  if (spent)
+    lines.push({
+      key: 'spent',
+      kind: 'spent',
+      label: 'Spending',
+      detail: 'on the card',
+      amount: spent,
+    });
+  for (const s of slices)
+    lines.push({
       key: `slice:${s.planId}:${s.no}`,
-      label: `${s.name} ${s.no}/${s.of}`,
+      kind: 'slice',
+      label: `${s.name} · installment ${s.no} of ${s.of}`,
+      detail: `${s.name} · ${s.no} of ${s.of}`,
       amount: s.amount,
       paid: s.paid,
-    })),
-    ...interest.map(i => ({
+      planId: s.planId,
+    });
+  for (const i of interest) {
+    const detail = i.from
+      ? `on unpaid ${billMonth(i.from)}`
+      : `${i.planName ?? 'plan'}${i.no ? ` installment ${i.no}` : ''}`;
+    lines.push({
       key: `interest:${i.entryId}`,
-      label: i.from
-        ? `Interest · on unpaid ${billMonth(i.from)}`
-        : `Interest${i.planName ? ` · ${i.planName}${i.no ? ` slice ${i.no}` : ''}` : ''}`,
+      kind: 'interest',
+      label: `Interest · ${detail}`,
+      detail,
       amount: i.amount,
-    })),
-  ];
+      entryId: i.entryId,
+    });
+  }
+  if (card.lines.waiting)
+    lines.push({
+      key: 'waiting',
+      kind: 'waiting',
+      label: 'Waiting to send',
+      detail: 'not sent yet',
+      amount: card.lines.waiting,
+    });
+  return lines;
 }
 
 /** A choice for "Charged on" in Log interest. */
 export type InterestSource = { key: string; label: string; from: Interest['from'] };
 
-/** Where the server lets this bill's interest come from (`interestFrom`), as choices. */
+/**
+ * Where the server lets this bill's interest come from (`interestFrom`), as choices: only the ones with no
+ * hand-typed line on this bill yet (one per source per bill; the server refuses a second, INTEREST_LOGGED).
+ */
 export function interestSources(card: CardStatement): InterestSource[] {
   const { month, plans } = card.interestFrom;
+  const typed = card.lines.interest;
   return [
-    ...(month
+    ...(month && !typed.some(l => l.from === month)
       ? [{ key: `m:${month}`, label: `On unpaid ${billMonth(month)}`, from: { month } }]
       : []),
-    ...plans.map(p => ({ key: `p:${p.id}`, label: p.name, from: { planId: p.id } })),
+    ...plans
+      .filter(p => !typed.some(l => l.planId === p.id && l.no === null))
+      .map(p => ({ key: `p:${p.id}`, label: p.name, from: { planId: p.id } })),
   ];
 }
+
+/** Paid more than the bill (a line removed after paying it): that much counts toward the next bill. */
+export const paidExtra = (card: CardStatement) => Math.max(0, card.paidSince - card.bill);
 
 /**
  * Home's "After card bills": your money less what is left to pay of each printed card bill and what was spent on
@@ -119,10 +211,16 @@ export function afterCardBills(
   cards: CardStatement[],
   inCurrency: (accountId: string) => boolean,
 ) {
-  const owed = cards
-    .filter(c => inCurrency(c.accountId))
-    .reduce((s, c) => s + c.left + Math.max(0, c.spentSince), 0);
+  const owed = cardsOwed(cards, inCurrency).reduce((s, c) => s + c.left + c.spentSince, 0);
   return owed ? money - owed : null;
+}
+
+/** What "After card bills" takes off, card by card (its breakdown sheet): only cards that owe something. */
+export function cardsOwed(cards: CardStatement[], inCurrency: (accountId: string) => boolean) {
+  return cards
+    .filter(c => inCurrency(c.accountId))
+    .map(c => ({ accountId: c.accountId, left: c.left, spentSince: Math.max(0, c.spentSince) }))
+    .filter(c => c.left + c.spentSince > 0);
 }
 
 /** One line of Home's "Coming up": a bill, or a card's statement with money left to pay. */
@@ -150,4 +248,44 @@ export function dueByDay(items: Recurring[]): Map<string, Recurring[]> {
   for (const item of items)
     for (const day of item.dues) out.set(day, [...(out.get(day) ?? []), item]);
   return out;
+}
+
+// ---- The bank's statement ("Enter statement") ----
+
+export type Statement = { total: number; minimum: number | null };
+
+/**
+ * What the statement says for this bill: one still waiting in the outbox (typed, not sent yet) over the server's.
+ * A refused one is not shown here (it is under Not sent).
+ */
+export function statementOf(card: CardStatement, items: OutboxItem[]): Statement | null {
+  const mine = items.findLast(
+    i =>
+      i.op === 'statement' &&
+      i.entryId === `statement:${card.accountId}:${card.cutOff}` &&
+      (i.state === 'waiting' || i.state === 'sending'),
+  );
+  return mine ? { total: mine.statement!.total, minimum: mine.statement!.minimum } : card.statement;
+}
+
+/**
+ * The statement's total against the app's bill (plus interest typed but not logged yet): `gap` > 0 = the bank asks
+ * more (something is not in the app), < 0 = the app has more, 0 = they match.
+ */
+export const statementGap = (card: CardStatement, total: number, typedInterest = 0) =>
+  total - (card.bill + typedInterest);
+
+/** The month after the bill's: where what is left of it carries to. */
+export const nextBillName = (card: CardStatement) =>
+  billMonth(sliceBill({ firstBill: card.cutOff.slice(0, 7) }, 2));
+
+/**
+ * How the payments so far stand against the statement's minimum (none without one, or once paid in full):
+ * paid at least the minimum, or something paid but under it.
+ */
+export function minimumState(card: CardStatement, st: Statement | null) {
+  if (!st?.minimum || card.left === 0 || card.paidSince === 0) return null;
+  return card.paidSince >= st.minimum
+    ? ({ kind: 'minimum', carries: card.left } as const)
+    : ({ kind: 'below', short: st.minimum - card.paidSince } as const);
 }

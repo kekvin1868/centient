@@ -387,6 +387,11 @@ describe('plans on the card bill', () => {
     const t = await card('2026-10-17');
     t.go('2026-10-21');
     await t.s().installments.postInterest();
+    // Its confirm sheet hears what will be taken back first; asking changes nothing.
+    expect(await t.s().installments.nextBillPreview(t.tv.id)).toEqual({
+      interest: [{ no: 1, amount: 25_000 }],
+    });
+    expect((await t.bill()).lines.interest).toHaveLength(1);
     const moved = await t.s().installments.nextBill(t.tv.id);
     expect(moved.firstBill).toBe('2026-11');
     expect(moved.schedule[0].due).toBe('2026-12-05');

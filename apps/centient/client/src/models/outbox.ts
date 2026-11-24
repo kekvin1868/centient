@@ -25,9 +25,19 @@ export type OutboxItem = {
   key: string;
   /** The entry it is about. For a new entry the phone makes it. */
   entryId: string;
-  op: 'create' | 'edit' | 'remove';
+  op: 'create' | 'edit' | 'remove' | 'statement';
   command?: Command;
   learn?: Learn;
+  /**
+   * "Log interest" on a card bill: a new Fees & Interests expense that goes to the interest route instead, tagged
+   * by where it came from, for the bill closed on `closedOn` (the server refuses it once that bill is not the last).
+   */
+  interest?: { accountId: string; closedOn: string; from: { month: string } | { planId: string } };
+  /**
+   * "Enter statement" (op 'statement'): what the bank's statement says for the card bill closed on `closedOn`.
+   * Not an entry: `entryId` is `statement:<account>:<closedOn>`, so typing it again replaces the waiting one.
+   */
+  statement?: { accountId: string; closedOn: string; total: number; minimum: number | null };
   /** A bill with Paid backs tied: the owner's answer, asked before queuing. */
   paybacks?: PaybackMode;
   /** The version an edit was made against (none for an entry this phone made a moment ago). */
@@ -264,11 +274,20 @@ export function createOutbox(d: OutboxDeps) {
     idle: () => running ?? Promise.resolve(),
 
     /** Queues a new entry; returns the id it will have. */
-    create(command: Command, learn?: Learn): string {
+    create(command: Command, learn?: Learn, interest?: OutboxItem['interest']): string {
       const entryId = d.uuid();
-      set([...items, { ...fresh(), entryId, op: 'create', command, learn, at: d.now() }]);
+      set([...items, { ...fresh(), entryId, op: 'create', command, learn, interest, at: d.now() }]);
       void flush();
       return entryId;
+    },
+
+    /** Queues what a card bill's statement says; replaces one for the same bill still waiting or refused. */
+    statement(s: NonNullable<OutboxItem['statement']>) {
+      const entryId = `statement:${s.accountId}:${s.closedOn}`;
+      const prev = last(entryId);
+      if (prev) patch(prev.key, { ...fresh(), statement: s });
+      else set([...items, { ...fresh(), entryId, op: 'statement', statement: s, at: d.now() }]);
+      void flush();
     },
 
     /** Queues an edit. `entry` is the entry as the screen shows it (the server's, or a waiting one). */
@@ -332,6 +351,31 @@ function uuid() {
 const headers = (i: OutboxItem) => ({ headers: { 'Idempotency-Key': i.key } });
 async function send(i: OutboxItem): Promise<{ version?: number }> {
   const param = { id: i.entryId };
+  if (i.op === 'statement') {
+    const { accountId, closedOn, total, minimum } = i.statement!;
+    await call(
+      client.api.recurring.cards[':accountId'].statement.$put(
+        { param: { accountId }, json: { closedOn, total, minimum } },
+        headers(i),
+      ),
+    );
+    return {};
+  }
+  if (i.op === 'create' && i.interest) {
+    // ponytail: only the amount of a waiting interest can change (its sheet sends nothing else); an edit of
+    // another field before it is sent is not carried. Send it as a plain expense if that ever matters.
+    const { accountId, closedOn, from } = i.interest;
+    await call(
+      client.api.recurring.cards[':accountId'].interest.$post(
+        {
+          param: { accountId },
+          json: { id: i.entryId, closedOn, from, amount: i.command!.amount },
+        },
+        headers(i),
+      ),
+    );
+    return {};
+  }
   if (i.op === 'create') {
     await call(
       client.api.quickadd.save.$post(

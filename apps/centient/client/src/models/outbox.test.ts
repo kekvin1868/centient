@@ -365,3 +365,39 @@ describe('closing the app', () => {
     expect(world.stored).toEqual([]);
   });
 });
+
+describe('card statements', () => {
+  const st = (total: number, minimum: number | null = null) => ({
+    accountId: 'bca',
+    closedOn: '2026-11-20',
+    total,
+    minimum,
+  });
+
+  it('typed again while waiting: one item with the latest numbers and a new ticket', () => {
+    const { box, state } = setup({ online: false });
+    box.statement(st(1_250_000, 125_000));
+    const [first] = box.items();
+    box.statement(st(1_200_000));
+    expect(state()).toEqual(['statement:statement:bca:2026-11-20:waiting']);
+    expect(box.items()[0].statement).toEqual(st(1_200_000));
+    expect(box.items()[0].key).not.toBe(first.key);
+  });
+
+  it('a refused one waits for the owner, counted and listed apart from entries', async () => {
+    const { box, world } = setup();
+    world.answers.push(refusal('BILL_CLOSED', 'That bill closed since'));
+    box.statement(st(1_250_000));
+    await box.idle();
+    const { overlay } = await import('./waiting');
+    const o = overlay(box.items(), {
+      accounts: [{ id: 'bca' }],
+      envelopes: [],
+      categories: [],
+    } as never);
+    expect(o).toMatchObject({ problems: 1, count: 0, entries: [] });
+    expect(o.statements.map(i => i.reason)).toEqual(['That bill closed since']);
+    box.discard('statement:bca:2026-11-20');
+    expect(box.items()).toEqual([]);
+  });
+});

@@ -109,6 +109,32 @@ export function createInstallmentsService({
     return plan;
   }
 
+  /** "Move to next bill" worked out (nothing written): the plan moved, and the posted interest it takes back. */
+  async function moveOf(planId: string) {
+    const [{ plans }, posted, c] = await Promise.all([
+      repos.installments.listPlans(ws),
+      repos.installments.interest(ws),
+      catalog.load(),
+    ]);
+    const row = plans.find(p => p.id === planId);
+    if (!row) throw new DomainError('NOT_FOUND', 'Installment plan not found');
+    const days = cardDays(c.accounts.find(a => a.id === row.account_id));
+    if (!days) throw new DomainError('CARD_SETUP', "Set the card's limit and bill days first");
+    const today = jakartaToday(now());
+    const plan = billPlan(row);
+    const lastClosed = statementOf(days.closes, days.payBy, today).cutOff.slice(0, 7);
+    if (sliceBill(plan, plan.paidBefore + 1) < lastClosed)
+      throw new DomainError(
+        'PLAN_STARTED',
+        'Its installments are already on bills before the last one',
+      );
+    const moved = { ...plan, firstBill: sliceBill(plan, 2) };
+    const undo = posted.filter(
+      r => r.plan_id === planId && closingOf(sliceBill(moved, r.slice_no), days.closes) > today,
+    );
+    return { moved, undo };
+  }
+
   return {
     list,
 
@@ -354,28 +380,19 @@ export function createInstallmentsService({
      * first slice is on the last closed bill or a later one; interest posted for a slice whose bill has not closed
      * any more is taken back (the daily job posts it again when it does).
      */
+    /** What "Move to next bill" would take back, for its confirm sheet: the interest it takes off a bill. */
+    async nextBillPreview(planId: string) {
+      const { undo } = await moveOf(planId);
+      // A line deleted by hand (the bank waived it) has no amount: nothing on a bill to take back.
+      return {
+        interest: undo.flatMap(r =>
+          r.amount === null ? [] : [{ no: r.slice_no, amount: r.amount }],
+        ),
+      };
+    },
+
     async nextBill(planId: string) {
-      const [{ plans }, posted, c] = await Promise.all([
-        repos.installments.listPlans(ws),
-        repos.installments.interest(ws),
-        catalog.load(),
-      ]);
-      const row = plans.find(p => p.id === planId);
-      if (!row) throw new DomainError('NOT_FOUND', 'Installment plan not found');
-      const days = cardDays(c.accounts.find(a => a.id === row.account_id));
-      if (!days) throw new DomainError('CARD_SETUP', "Set the card's limit and bill days first");
-      const today = jakartaToday(now());
-      const plan = billPlan(row);
-      const lastClosed = statementOf(days.closes, days.payBy, today).cutOff.slice(0, 7);
-      if (sliceBill(plan, plan.paidBefore + 1) < lastClosed)
-        throw new DomainError(
-          'PLAN_STARTED',
-          'Its slices are already on bills before the last one',
-        );
-      const moved = { ...plan, firstBill: sliceBill(plan, 2) };
-      const undo = posted.filter(
-        r => r.plan_id === planId && closingOf(sliceBill(moved, r.slice_no), days.closes) > today,
-      );
+      const { moved, undo } = await moveOf(planId);
       if (undo.length)
         await repos.batch(
           undo.flatMap(r => [

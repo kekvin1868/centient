@@ -2,6 +2,7 @@
 // own DatePicker, opened inline under the row.
 import { ListItem, Stepper, Toggle } from 'konsta/react';
 import { useRef, useState } from 'react';
+import { dateText } from '../lib/format';
 import { DatePicker } from './DatePicker';
 
 /** An option; ones with a `group` are listed under that heading, after the plain ones. */
@@ -110,15 +111,8 @@ export function InputRow({
 }
 
 /** "6 Nov 2026", or "" for no date. */
-export const dateText = (d: string) =>
-  d
-    ? new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        timeZone: 'UTC',
-      })
-    : '';
+// In lib/format (no form code needed to show a date); kept here for the many sheets that import it from Fields.
+export { dateText };
 
 /** A date row: tap it to open the calendar under it. `optional` dates can be cleared. */
 export function DateRow({

@@ -140,6 +140,30 @@ export function recurringRepo(db: D1Database) {
     },
 
     /** Each credit card's and pay later's money per day: what went out (spent) and came in (paid, credited). */
+    /** Every card statement typed in ("Enter statement"): the bank's total and minimum for a bill. */
+    statements(ws: string) {
+      return all<{ account_id: string; closed_on: string; total: number; minimum: number | null }>(
+        db,
+        'SELECT account_id, closed_on, total, minimum FROM card_statements WHERE workspace_id = ?',
+        ws,
+      );
+    },
+
+    /** Saves what a bill's statement says; typing it again replaces it. */
+    async setStatement(
+      ws: string,
+      s: { accountId: string; closedOn: string; total: number; minimum: number | null },
+    ) {
+      await db
+        .prepare(
+          `INSERT INTO card_statements (workspace_id, account_id, closed_on, total, minimum) VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT (workspace_id, account_id, closed_on) DO UPDATE SET total = excluded.total,
+            minimum = excluded.minimum, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`,
+        )
+        .bind(ws, s.accountId, s.closedOn, s.total, s.minimum)
+        .run();
+    },
+
     cardDays(ws: string) {
       return all<{ account_id: string; day: string; out: number; in: number }>(
         db,

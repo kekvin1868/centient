@@ -74,6 +74,8 @@ async function filled(w: ReturnType<typeof world>, email: string) {
     { type: 'EXPENSE', accountId: card.id, categoryId: food, amount: 10_000, date: '2026-09-10' },
   ]);
   await svc().recurring.logInterest(card.id, { amount: 5_000, from: { planId: plan.id } });
+  const closedOn = (await svc().recurring.list()).cards.find(c => c.accountId === card.id)!.cutOff;
+  await svc().recurring.setStatement(card.id, { closedOn, total: 15_000, minimum: 5_000 });
   // An interest line the daily job posted (it posts at a closing; here written straight in).
   await w.repos.batch([w.repos.installments.interestInsert(ws, plan.id, 1, bill)]);
   await svc().installments.attachProof(plan.id, 1, 1, {

@@ -384,6 +384,8 @@ describe('card statement', () => {
       spentSince: 150_000,
       before: null,
       interestFrom: { month: null, plans: [] },
+      statement: null,
+      unpaidBills: 1,
       lines: { carry: 0, spent: 1_000_000, slices: [], interest: [] },
     });
     await t.svc().ledger.record([
@@ -452,6 +454,119 @@ describe('card statement', () => {
     // The bank waived it: deleting the entry drops the line.
     await t.svc().ledger.remove(unpaid);
     expect((await bill()).lines.interest.map(i => i.amount)).toEqual([10_000]);
+  });
+
+  it('takes queued interest once, and only for the bill it was typed for', async () => {
+    const t = await workspace('2026-11-25');
+    const card = await t.svc().accounts.create({
+      name: 'BCA Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
+    await t.spend('2026-10-10', 500_000, 'tokopedia', card.id); // Oct bill, never paid
+    const send = (id: string, closedOn: string) =>
+      t.svc().recurring.logInterest(card.id, {
+        id,
+        closedOn,
+        amount: 45_000,
+        from: { month: '2026-10' },
+      });
+    const interest = async () => (await t.svc().recurring.list()).cards[0].lines.interest;
+
+    // The phone's id is kept; the same id again (an answer lost on the way back) writes nothing more.
+    expect(await send('phone-1', '2026-11-20')).toBe('phone-1');
+    expect(await send('phone-1', '2026-11-20')).toBe('phone-1');
+    expect(await interest()).toHaveLength(1);
+    // Still taken once deleted: a late repeat does not bring it back.
+    await t.svc().ledger.remove('phone-1');
+    expect(await send('phone-1', '2026-11-20')).toBe('phone-1');
+    expect(await interest()).toHaveLength(0);
+    // Typed for the Oct bill, arriving after Nov closed: refused, never put on Nov's.
+    await expect(send('phone-2', '2026-10-20')).rejects.toMatchObject({ code: 'BILL_CLOSED' });
+    expect(await interest()).toHaveLength(0);
+  });
+
+  it('keeps what the statement says for the last bill, until the next one closes', async () => {
+    const t = await workspace('2026-11-25');
+    const card = await t.svc().accounts.create({
+      name: 'BCA Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
+    await t.spend('2026-11-10', 1_200_000, 'tokopedia', card.id);
+    const bill = async () => (await t.svc().recurring.list()).cards[0];
+    const set = (closedOn: string, total: number, minimum?: number | null) =>
+      t.svc().recurring.setStatement(card.id, { closedOn, total, minimum });
+
+    expect(await bill()).toMatchObject({ cutOff: '2026-11-20', bill: 1_200_000, statement: null });
+    await set('2026-11-20', 1_250_000, 125_000);
+    expect((await bill()).statement).toEqual({ total: 1_250_000, minimum: 125_000 });
+    // Typed again: replaced, the minimum left out this time.
+    await set('2026-11-20', 1_200_000);
+    expect((await bill()).statement).toEqual({ total: 1_200_000, minimum: null });
+
+    await expect(set('2026-11-20', 100, 200)).rejects.toMatchObject({
+      code: 'MINIMUM_OVER_TOTAL',
+    });
+    // Typed for October's bill: that one is closed, nothing is saved for November's.
+    await expect(set('2026-10-20', 1)).rejects.toMatchObject({ code: 'BILL_CLOSED' });
+    // The next closing prints a new bill, with no statement yet.
+    t.clock.now = at('2026-12-21');
+    expect(await bill()).toMatchObject({ cutOff: '2026-12-20', statement: null });
+  });
+
+  it('takes one hand-typed interest per source per bill', async () => {
+    const t = await workspace('2026-11-25');
+    const card = await t.svc().accounts.create({
+      name: 'BCA Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
+    await t.spend('2026-10-10', 500_000, 'tokopedia', card.id); // Oct bill, never paid
+    const log = () =>
+      t.svc().recurring.logInterest(card.id, { amount: 50_000, from: { month: '2026-10' } });
+    const first = await log();
+    // Typed again from the statement sheet: refused, the bill keeps one line.
+    await expect(log()).rejects.toMatchObject({ code: 'INTEREST_LOGGED' });
+    expect((await t.svc().recurring.list()).cards[0].lines.interest).toHaveLength(1);
+    // Deleted (the bank waived it): it can be typed again.
+    await t.svc().ledger.remove(first);
+    await log();
+    expect((await t.svc().recurring.list()).cards[0].lines.interest).toHaveLength(1);
+  });
+
+  it('counts the bills in a row left unpaid, for the scroll on Home', async () => {
+    const t = await workspace('2026-10-25');
+    const card = await t.svc().accounts.create({
+      name: 'BCA Card',
+      kind: 'CREDIT_CARD',
+      creditLimit: 20_000_000,
+      statementDay: 20,
+      dueDay: 5,
+    });
+    await t.spend('2026-10-10', 500_000, 'tokopedia', card.id);
+    const unpaid = async () => (await t.svc().recurring.list()).cards[0].unpaidBills;
+    expect(await unpaid()).toBe(1); // Oct's bill, just printed
+    t.clock.now = at('2026-11-25');
+    expect(await unpaid()).toBe(2); // Oct carried into Nov
+    t.clock.now = at('2026-12-25');
+    expect(await unpaid()).toBe(3);
+    await t.svc().ledger.record([
+      {
+        type: 'TRANSFER',
+        fromAccountId: t.bca,
+        toAccountId: card.id,
+        amount: 500_000,
+        date: '2026-12-25',
+      },
+    ]);
+    expect(await unpaid()).toBe(0); // paid off
   });
 
   it("logs no interest on a card's first bill: nothing was unpaid before it", async () => {

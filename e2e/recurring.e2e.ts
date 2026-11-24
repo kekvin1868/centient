@@ -226,6 +226,21 @@ test("a card's bill sits on the Bills page, tagged, its plan inside it; the card
   await expect(bills.getByRole('listitem').filter({ hasText: 'Phone' })).toHaveCount(0);
   await expect(bills.getByText('card bill', { exact: true })).toBeVisible();
 
+  // The row opens the card's bill, lines and all, as on Money.
+  await cardRow.getByRole('button', { name: /^BCA Card bill, Rp700\.000/ }).tap();
+  const cardBill = sheet('BCA Card');
+  await expect(
+    cardBill
+      .getByRole('list', { name: 'Bill lines' })
+      .getByRole('listitem', { name: 'Spending, Rp700.000' }),
+  ).toBeVisible();
+  await cardBill.getByRole('button', { name: 'I paid it' }).tap();
+  await expect(sheet('Pay BCA Card').getByLabel('Amount')).toHaveValue('700.000');
+  await page.keyboard.press('Escape');
+  await expect(sheet('Pay BCA Card')).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(cardBill).toBeHidden();
+
   await cardRow.getByRole('button', { name: 'Pay BCA Card bill' }).tap();
   const pay = sheet('Pay BCA Card');
   await pay.getByLabel('Paid from').selectOption({ label: 'Main Account' });
@@ -242,7 +257,11 @@ test("a card's bill sits on the Bills page, tagged, its plan inside it; the card
   await hand.press('Enter');
   const bill = page.getByRole('region', { name: 'Card bill' });
   await expect(bill).toContainText('Nothing left to pay of the bill closed on');
-  await expect(bill.getByRole('list', { name: 'Bill lines' })).toContainText('SpendingRp700.000');
+  await expect(
+    bill
+      .getByRole('list', { name: 'Bill lines' })
+      .getByRole('listitem', { name: 'Spending, Rp700.000' }),
+  ).toBeVisible();
   await expect(bill).toContainText('Rp150.000 spent since then goes on the next bill.');
 });
 

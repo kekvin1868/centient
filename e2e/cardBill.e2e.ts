@@ -135,7 +135,14 @@ test('a plan added on Money: its slice is on the bill, its whole price only on t
   // Each installment is due on its bill's pay-by day, a month apart.
   await page.getByRole('button', { name: 'Phone, 0 of 6 paid' }).tap();
   const plan = page.getByRole('dialog', { name: 'Phone' });
-  await expect(plan.locator('[data-installment]')).toHaveCount(6);
+  await expect(plan).toContainText('0 of 6 paid');
+  await page.keyboard.press('Escape');
+  await expect(plan).toBeHidden();
+  // The installment's line on the bill opens the same plan.
+  await billBox()
+    .getByRole('button', { name: /^Phone · installment 1 of 6/ })
+    .tap();
+  await expect(plan).toContainText('0 of 6 paid');
   await page.keyboard.press('Escape');
   await expect(plan).toBeHidden();
 });
@@ -191,8 +198,15 @@ test('Move to next bill takes the slice and its interest off this bill', async (
   await openMoney('Late Start');
   await page.getByRole('button', { name: 'TV, 0 of 6 paid' }).tap();
   const plan = page.getByRole('dialog', { name: 'TV' });
-  await expect(plan).toContainText("If Late Start's bill didn't have it yet");
+  await expect(plan.getByRole('region', { name: 'Next installment' })).toContainText(
+    'Not on this bill?',
+  );
   await plan.getByRole('button', { name: 'Move to next bill' }).tap();
+  // Asked first: what moves, and the interest that comes off for now.
+  const ask = page.getByRole('dialog', { name: /^\w{3} to \w{3}: all 6 left move one bill on$/ });
+  await expect(ask).toContainText(/\w{3} → \w{3}/);
+  await expect(ask).toContainText(/\+Rp25\.000 interest back in \w{3}/);
+  await ask.getByRole('button', { name: 'MOVE' }).tap();
   await expect(page.getByText('Moved to the next bill')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(billBox()).toContainText('Nothing left to pay');
@@ -228,8 +242,10 @@ test('paying part of the bill leaves the rest to pay', async () => {
   await pay.getByRole('button', { name: 'Log the payment' }).tap();
   await expect(pay).toBeHidden();
   await expect(billBox()).toContainText('Rp600.000');
-  await expect(billBox().getByRole('list', { name: 'Bill lines' })).toContainText(
-    'BillRp1.000.000',
-  );
+  await expect(
+    billBox()
+      .getByRole('list', { name: 'Bill lines' })
+      .getByRole('listitem', { name: 'Bill, Rp1.000.000' }),
+  ).toBeVisible();
   expect((await cardBill(await accountId('Shopee Card'))).left).toBe(600_000);
 });

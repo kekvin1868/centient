@@ -42,7 +42,13 @@ export type Overlay = {
   count: number;
   /** Refused or clashed: they wait for the owner. */
   problems: number;
+  /** Card statements the server refused ("Enter statement"): listed under Not sent, with their reason. */
+  statements: OutboxItem[];
+  /** Each account's waiting money moves by day (YYYY-MM-DD): a card's bill counts them (models/recurring). */
+  moves: Move[];
 };
+/** What a waiting change adds to an account on a day: positive = money in (a payment into a card). */
+export type Move = { accountId: string; day: string; amount: number };
 
 export const STAND_IN = 'waiting:';
 type Row = Catalog['accounts'][number];
@@ -213,17 +219,30 @@ export function overlay(items: OutboxItem[], cat: Catalog): Overlay {
     spending: [],
     count: 0,
     problems: 0,
+    statements: [],
+    moves: [],
   };
   if (!cat.accounts.length) return out;
   const isTab = tabTest(cat);
 
   const byEntry = new Map<string, OutboxItem[]>();
-  for (const i of items) byEntry.set(i.entryId, [...(byEntry.get(i.entryId) ?? []), i]);
+  for (const i of items) {
+    // A card statement is not an entry: it moves no money, it only waits (or was refused).
+    if (i.op === 'statement') {
+      if (i.state === 'refused' || i.state === 'clash') {
+        out.problems++;
+        out.statements.push(i);
+      } else if (i.state !== 'sent') out.count++;
+      continue;
+    }
+    byEntry.set(i.entryId, [...(byEntry.get(i.entryId) ?? []), i]);
+  }
 
   for (const [entryId, own] of byEntry) {
     const saved = own[0].saved;
     const before = saved ? linesOf(saved.transactions) : none();
     let counted = before; // what the numbers show: only changes expected to land
+    let countedTxs = saved?.transactions ?? [];
     let shown: WaitingEntry | null = null;
     let gone = false;
     for (const item of own) {
@@ -240,7 +259,10 @@ export function overlay(items: OutboxItem[], cat: Catalog): Overlay {
         // A refused delete leaves the entry where it was, marked.
         if (stuck && saved) shown = { ...saved, waiting: mark };
         else gone = true;
-        if (!stuck) counted = none();
+        if (!stuck) {
+          counted = none();
+          countedTxs = [];
+        }
         continue;
       }
       let txs: NewTransaction[];
@@ -269,10 +291,22 @@ export function overlay(items: OutboxItem[], cat: Catalog): Overlay {
         waiting: mark,
       };
       gone = false;
-      if (!stuck) counted = linesOf(view);
+      if (!stuck) {
+        counted = linesOf(view);
+        countedTxs = view;
+      }
     }
     if (gone) out.removed.add(entryId);
     else if (shown) out.entries.push(shown);
+    const movesOf = (txs: typeof countedTxs, sign: number) =>
+      txs.flatMap(t =>
+        t.entries.map(e => ({
+          accountId: e.account_id,
+          day: t.occurred_at.slice(0, 10),
+          amount: sign * e.amount,
+        })),
+      );
+    out.moves.push(...movesOf(countedTxs, 1), ...movesOf(saved?.transactions ?? [], -1));
     for (const [id, amount] of Object.entries(counted.accounts)) add(out.accounts, id, amount);
     for (const [id, amount] of Object.entries(before.accounts)) add(out.accounts, id, -amount);
     for (const [id, amount] of Object.entries(counted.envelopes)) add(out.envelopes, id, amount);
