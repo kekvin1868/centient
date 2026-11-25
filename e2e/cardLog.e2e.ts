@@ -59,12 +59,15 @@ const plan = async (name: string) =>
 const DAY = 86_400_000;
 const daysAgo = (n: number) =>
   new Date(Date.now() + 7 * 3600e3 - n * DAY).toISOString().slice(0, 10);
-/** How many closing days (`closes`, a day of the month) fall after `from` up to today (WIB). */
+/**
+ * Installments a purchase on `from` already passed: one per closing day (`closes`) from `from` to today (WIB),
+ * less the last one, whose bill is still the one to pay (its installment stays on it).
+ */
 const closingsSince = (from: string, closes: number) => {
   let n = 0;
-  for (let d = Date.parse(from) + DAY; d <= Date.parse(daysAgo(0)); d += DAY)
+  for (let d = Date.parse(from); d <= Date.parse(daysAgo(0)); d += DAY)
     if (new Date(d).getUTCDate() === closes) n++;
-  return n;
+  return Math.max(0, n - 1);
 };
 const tab = (name: string) => page.getByRole('button', { name, exact: true });
 const box = () => page.getByRole('textbox', { name: 'What did you spend or receive?' });
@@ -140,7 +143,7 @@ test('changing the count on the entry: the plan follows', async () => {
   await tab('Home').tap();
   await page
     .locator('.entry-row', { hasText: 'iPhone' })
-    .getByRole('button', { name: /^iPhone/ })
+    .getByRole('button', { name: /^iPhone/i })
     .click();
   const edit = page.getByRole('dialog', { name: 'Edit' });
   const pay = edit.getByRole('group', { name: 'Pay in' });
@@ -162,7 +165,7 @@ test('changing the count on the entry: the plan follows', async () => {
 test('back to Full on the entry: the plan goes, the expense stays', async () => {
   await page
     .locator('.entry-row', { hasText: 'iPhone' })
-    .getByRole('button', { name: /^iPhone/ })
+    .getByRole('button', { name: /^iPhone/i })
     .click();
   const edit = page.getByRole('dialog', { name: 'Edit' });
   await edit.getByRole('group', { name: 'Pay in' }).getByRole('button', { name: 'Full' }).tap();
@@ -211,9 +214,20 @@ test('editing the amount or the card: the plan follows, a bank ends it', async (
   });
   await page.reload();
   const open = async () => {
+    // Home shows the account Money last picked: back to all accounts, so the moved entry is listed.
+    await tab('Home').tap();
+    const chip = page.getByRole('button', { name: /^Showing .*\. Change account$/ });
+    if (!(await chip.getAttribute('aria-label'))!.startsWith('Showing all accounts')) {
+      await chip.tap();
+      const all = page
+        .getByRole('dialog', { name: 'Pick an account' })
+        .getByRole('button', { name: /^All accounts/ });
+      await all.focus();
+      await all.press('Enter');
+    }
     await page
       .locator('.entry-row', { hasText: 'Laptop' })
-      .getByRole('button', { name: /^Laptop/ })
+      .getByRole('button', { name: /^Laptop/i })
       .click();
     return page.getByRole('dialog', { name: 'Edit' });
   };
@@ -231,7 +245,7 @@ test('editing the amount or the card: the plan follows, a bank ends it', async (
   await edit.getByRole('button', { name: 'Save' }).tap();
   await expect(edit).toBeHidden();
   expect((await plan('Laptop'))!.accountId).toBe((await account('Mega')).id);
-  expect(await plans()).toHaveLength(2); // iPhone (6×) and Laptop: moved, not copied
+  expect(await plans()).toHaveLength(1); // moved, not copied (iPhone's plan ended going back to Full)
 
   // A bank: no Pay in, and saving ends the plan; the spend stays, now from the bank.
   edit = await open();
@@ -250,8 +264,8 @@ test('editing the amount or the card: the plan follows, a bank ends it', async (
 });
 
 test('logged late: the bills that already closed ask "already paid?"', async () => {
-  // Bought ~75 days ago on 6×, logged today. BCA closes on the 20th: every 20th since then is a bill that
-  // already closed, filled in as paid (UI grill Q6, 2026-11-25), and editable.
+  // Bought ~75 days ago on 6×, logged today. BCA closes on the 20th: the bills closed since then, but the last
+  // (still to pay), are filled in as paid (UI grill Q6, 2026-11-25), and editable.
   const bought = daysAgo(75);
   const closed = closingsSince(bought, 20);
   await newReceipt('Kamera', 3_000_000, 'BCA');
@@ -369,6 +383,7 @@ test('a plan is checked against its full price, not one month', async () => {
   await receipt().getByRole('button', { name: 'Log it' }).tap();
   await expect(overLimit()).toContainText(/Short by\s*Rp700\.000/);
   await overLimit().getByRole('button', { name: 'Go back' }).tap();
+  await expect(overLimit()).toBeHidden();
   await page.keyboard.press('Escape');
   expect(await plan('Helm')).toBeUndefined();
 });
@@ -382,6 +397,7 @@ test('offline, the limit is checked against the balances on the phone', async ()
     await receipt().getByRole('button', { name: 'Log it' }).tap();
     await expect(overLimit()).toBeVisible();
     await overLimit().getByRole('button', { name: 'Go back' }).tap();
+    await expect(overLimit()).toBeHidden();
     await page.keyboard.press('Escape');
   } finally {
     await page.context().setOffline(false);
@@ -391,12 +407,19 @@ test('offline, the limit is checked against the balances on the phone', async ()
 // ---- H: quick add understands "12x" ----
 
 test('quick add: "hp 12jt bca 12x" logs a 12× plan at 0% interest', async () => {
+  // The plans above used most of BCA's 20jt: room for this one.
+  const r = await page.request.patch(`/api/accounts/${(await account('BCA')).id}`, {
+    data: { credit_limit: 50_000_000 },
+  });
+  expect(r.ok()).toBe(true);
+  await page.reload();
   await tab('Home').tap();
   await box().fill('hp 12jt bca 12x');
   await expect(page.getByText('12× · Rp1.000.000/mo')).toBeVisible();
   // A pip per installment, the plan sheet's pips (UI grill U5); the big number stays the full price.
   await expect(page.getByRole('img', { name: '12 installments' })).toBeVisible();
-  await expect(page.getByText('Rp12.000.000')).toBeVisible();
+  const chip = page.getByRole('button', { name: 'Edit details' }).filter({ hasText: '12×' });
+  await expect(chip).toContainText('Rp12.000.000');
   await box().press('Enter');
   await expect(box()).toHaveValue('');
   await expect.poll(async () => (await plan('Hp'))?.installments).toBe(12);

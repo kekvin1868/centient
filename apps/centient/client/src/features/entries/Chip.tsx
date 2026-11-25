@@ -12,6 +12,8 @@ type Props = {
   amount?: ReactNode;
   question?: string;
   hint?: ReactNode;
+  /** Under the sub line: a plan's "12× · Rp1.000.000/mo" and its pips. */
+  plan?: ReactNode;
   children?: ReactNode;
   onOpen: () => void;
 };
@@ -35,6 +37,7 @@ export function Chip({
   amount,
   question,
   hint,
+  plan,
   children,
   onOpen,
 }: Props) {
@@ -61,6 +64,7 @@ export function Chip({
             {title}
           </span>
           {sub && <span className="block truncate text-sm text-muted">{sub}</span>}
+          {plan}
         </span>
         <span className="flex flex-col items-end gap-1">
           {amount !== undefined && (
