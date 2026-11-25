@@ -1,6 +1,7 @@
 // Five seats in a game-menu tab bar (the last is the Menu, where pages without a seat live): icon over a display-font label, the current screen on a slanted
 // Miku plate (Borderlands menu tabs). Every tab has the same box, so nothing shifts between screens.
-import { CalendarDots, ChartBar, House, List, Wallet, type Icon } from '@phosphor-icons/react';
+import { type Icon } from '@phosphor-icons/react';
+import { CalendarDots, ChartBar, House, List, Wallet } from '../ui/icons';
 import { buzz } from '../lib/motion';
 
 export type Screen = 'home' | 'money' | 'bills' | 'insights' | 'menu';

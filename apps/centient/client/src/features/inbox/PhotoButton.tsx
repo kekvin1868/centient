@@ -1,6 +1,6 @@
 // "From a photo" under the log box: pick or take a picture of a receipt or a payment screen. Its text is read
 // on this phone (lib/ocr, loaded on first use), sent to the server's rules, and the draft waits in the Inbox.
-import { Camera } from '@phosphor-icons/react';
+import { Camera } from '../../ui/icons';
 import { useRef, useState } from 'react';
 import { errorText } from '../../lib/run';
 import { selectedAccount } from '../../lib/state';
