@@ -36,6 +36,18 @@ export const command = z.discriminatedUnion('type', [
     note: text(500).optional(),
     /** Budgets count it over this many cycles from its date (an installment purchase); 1 when left out. */
     spreadCycles: z.number().int().min(1).max(36).optional(),
+    /**
+     * Paid in installments on a card or pay later (the receipt's Pay in): the entry is the whole price and makes a
+     * plan of `count` installments of `each` (above price ÷ count = interest), `paid` of them already gone (logged
+     * late). Editing the entry rewrites the plan; deleting it ends the plan.
+     */
+    installments: z
+      .object({
+        count: z.number().int().min(2).max(36),
+        each: money,
+        paid: z.number().int().min(0).default(0),
+      })
+      .optional(),
     split: z
       .object({
         people: z.number().int().min(2).max(50),

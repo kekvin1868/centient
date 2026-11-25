@@ -76,6 +76,11 @@ export type Draft = {
   split: number | null;
   fee: number | null;
   note: string;
+  /**
+   * "12x" / "12×": paid in installments (2 to 36). An amount right after the count is each month's payment
+   * ("6x 1.05jt"), which the app asks to confirm; null = the price ÷ count (a 0% plan).
+   */
+  installments: { count: number; each: number | null } | null;
 };
 
 export const SUFFIXES = new Set(['rb', 'ribu', 'k', 'jt', 'juta', 'm', 'usd', 'usdt', 'btc']);
@@ -109,6 +114,7 @@ function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boo
   let amount: Amount | null = null;
   let split: number | null = null;
   let fee: number | null = null;
+  let installments: Draft['installments'] = null;
   let date = ctx.today;
   let income = false,
     transfer = false,
@@ -148,6 +154,14 @@ function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boo
     }
     if (w in DAY_NAMES) {
       date = lastWeekday(ctx.today, DAY_NAMES[w]);
+      continue;
+    }
+    const times = w.match(/^(\d{1,2})[x×]$/);
+    if (times && Number(times[1]) >= 2 && Number(times[1]) <= 36) {
+      const a = readAmount(words, i + 1);
+      const each = a?.amount.kind === 'exact' ? a.amount.value : null;
+      installments = { count: Number(times[1]), each };
+      if (each !== null) i += a!.used;
       continue;
     }
     if (w === 'biaya' && next === 'admin') continue;
@@ -289,6 +303,7 @@ function parsePart(part: string, ctx: QAContext): { draft: Draft; hasAmount: boo
       split: type === 'EXPENSE' && split && split > 1 ? split : null,
       fee,
       note: '',
+      installments: type === 'EXPENSE' ? installments : null,
     },
   };
 }

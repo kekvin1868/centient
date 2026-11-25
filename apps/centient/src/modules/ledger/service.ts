@@ -1,5 +1,6 @@
 // Ledger use cases: log, edit, delete and list what the user spent, earned and moved.
 // Every referenced account, pocket and category is checked against this workspace's catalog.
+import { editedPlanStatements, newPlanStatements } from '../installments/purchase';
 import type { ServiceDeps } from '../../context';
 import type { Snapshot } from '../../lib/catalog';
 import type { Command } from '../../lib/schemas';
@@ -207,7 +208,11 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
       : [];
     return {
       ids,
-      stmts: [...stmts, ...paid.flatMap(p => advance(repos, ws, p.bill, ids[p.index], at))],
+      stmts: [
+        ...stmts,
+        ...paid.flatMap(p => advance(repos, ws, p.bill, ids[p.index], at)),
+        ...newPlanStatements(repos, ws, await catalog.load(), cmds, ids),
+      ],
     };
   }
 
@@ -290,7 +295,8 @@ export function createLedgerService({ ws, now, repos, catalog }: ServiceDeps) {
       await checkBills(c, ready, id);
       const tied =
         ready.type === 'EXPENSE' ? await settle(c, id, tabsOnBill(txs, isTabOf(c)), mode) : [];
-      await repos.batch([...repos.entries.replaceStatements(ws, id, ready, txs), ...tied]);
+      const plan = await editedPlanStatements(repos, ws, c, ready, id);
+      await repos.batch([...repos.entries.replaceStatements(ws, id, ready, txs), ...tied, ...plan]);
       return entry.version + 1;
     },
 

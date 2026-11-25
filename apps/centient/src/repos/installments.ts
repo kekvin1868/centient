@@ -280,6 +280,69 @@ export function installmentsRepo(db: D1Database) {
       return r.map(x => x.workspace_id);
     },
 
+    /** The live plan a logged purchase made (an expense paid in installments on the receipt), if any. */
+    async ofPurchase(ws: string, entryId: string) {
+      return db
+        .prepare(
+          'SELECT id FROM installment_plans WHERE workspace_id = ? AND purchase_entry_id = ? AND deleted_at IS NULL',
+        )
+        .bind(ws, entryId)
+        .first<{ id: string }>();
+    },
+
+    /**
+     * The statements that rewrite a purchase's plan in place after its entry was edited (same id, so interest
+     * already posted stays tied to it): its numbers, your share, and the installments counted as paid before.
+     */
+    purchaseUpdates(
+      ws: string,
+      p: Omit<PlanRow, 'created_at' | 'anchor_no' | 'purchase_entry_id'> & { anchor_no: number },
+      prepaid: Omit<PaymentRow, 'proof'>[],
+    ): D1PreparedStatement[] {
+      return [
+        db
+          .prepare(
+            'UPDATE installment_plans SET account_id = ?, name = ?, amount_per_installment = ?, installments = ?, first_due = ?, anchor_no = ?, price = ?, bought_on = ?, first_bill = ?, paid_before = ? WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL',
+          )
+          .bind(
+            p.account_id,
+            p.name,
+            p.amount_per_installment,
+            p.installments,
+            p.first_due,
+            p.anchor_no,
+            p.price,
+            p.bought_on,
+            p.first_bill,
+            p.paid_before,
+            p.id,
+            ws,
+          ),
+        db
+          .prepare('UPDATE installment_parties SET share = ? WHERE plan_id = ? AND seq = 0')
+          .bind(p.amount_per_installment, p.id),
+        db
+          .prepare('DELETE FROM installment_payments WHERE plan_id = ? AND entry_id IS NULL')
+          .bind(p.id),
+        ...prepaid.map(x =>
+          db
+            .prepare(
+              'INSERT INTO installment_payments (plan_id, installment_no, party_seq, paid_at, entry_id) VALUES (?, ?, ?, ?, ?)',
+            )
+            .bind(p.id, x.installment_no, x.party_seq, x.paid_at, x.entry_id),
+        ),
+      ];
+    },
+
+    /** The statement that deletes a plan (soft), for a caller that batches it. */
+    planDelete(ws: string, id: string) {
+      return db
+        .prepare(
+          "UPDATE installment_plans SET deleted_at = datetime('now') WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL",
+        )
+        .bind(id, ws);
+    },
+
     async deletePlan(ws: string, id: string) {
       const r = await db
         .prepare(
