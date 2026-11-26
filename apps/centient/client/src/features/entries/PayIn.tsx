@@ -1,13 +1,17 @@
-// "Pay in" on the receipt, under PAID WITH when it is a card or pay later: FULL / 3× / 6× / 12× / 24× stamps and
-// OTHER (a − 18× + stepper for any count). A count adds EACH MONTH (price ÷ count until typed; more than that is
-// interest, said per month and in all), and ALREADY PAID when the receipt's date is old enough that some of the
-// plan's bills have closed (logged late). Same stamps and dotted lines as the rest of the receipt.
+// "Pay in" on the receipt, under PAID WITH when it is a card or pay later (UI grill 2026-11-26, option B): one joined
+// bar of months, Full · 3 · 6 · 12 · 24 · ··· (any count 2–36 on a − + stepper). A count adds receipt lines with
+// their dotted leaders: EACH MONTH (price ÷ count until typed), INTEREST / MONTH and TOTAL INTEREST (or INTEREST
+// 0% · none), a ruled YOU PAY IN ALL, and ALREADY PAID when the date is old enough that some of the plan's bills
+// have closed (logged late).
 import { Minus, Plus } from '@phosphor-icons/react';
 import { amountInput, showAmount } from '../../lib/amount';
 import { formatMoney } from '../../lib/format';
 import { ReceiptLine } from '../../ui/Receipt';
 import { COUNTS, OTHER_START, eachOf, interestOf, type PlanForm } from './planForm';
 import { billsGone } from './planDates';
+import { billOf } from '../../../../src/domain/cardBill';
+import { billMonth } from '../../models/dates';
+import type { ReactNode } from 'react';
 
 const shortDay = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-GB', {
@@ -43,22 +47,38 @@ export function PayIn({
   const interest = plan && amount ? interestOf(amount, plan) : null;
   const gone = plan && closes ? billsGone(date, closes, today) : 0;
 
+  const first = closes ? billMonth(billOf(date, closes)).toUpperCase() : null;
+  const line = (label: string, value: ReactNode, tone?: string) => (
+    <ReceiptLine
+      label={label}
+      value={<span style={tone ? { color: tone } : undefined}>{value}</span>}
+    />
+  );
+
   return (
     <>
-      <div className="pt-1.5">
-        <span className="block text-[12px] uppercase tracking-[0.1em] text-[var(--paper-faint)]">
-          Pay in
-        </span>
-        <div className="mt-2 flex flex-wrap items-center gap-1" role="group" aria-label="Pay in">
-          <Stamp on={!plan} onClick={() => onChange(null)}>
+      <div className="pt-2" role="group" aria-label="Pay in">
+        <div className="flex items-baseline justify-between gap-3 text-[12px] tracking-[0.1em] text-[var(--paper-faint)]">
+          <span className="uppercase">Pay in · months</span>
+          <span>{plan ? (first ? `first on ${first} bill` : '') : 'paid at once'}</span>
+        </div>
+        {/* One joined bar of equal slots (no wrapping); MONTHS is said once, so the slots are bare numbers. */}
+        <div className="mt-2 grid grid-cols-6 overflow-hidden rounded-[8px] border-2 border-[var(--paper-ink)]">
+          <Slot on={!plan} label="Full" onClick={() => onChange(null)}>
             Full
-          </Stamp>
+          </Slot>
           {COUNTS.map(n => (
-            <Stamp key={n} on={plan?.count === n} onClick={() => pick(n)}>
-              {n}×
-            </Stamp>
+            <Slot key={n} on={plan?.count === n} label={`${n}×`} onClick={() => pick(n)}>
+              {n}
+            </Slot>
           ))}
-          {other ? (
+          <Slot on={other} label="Other" last onClick={() => !other && pick(OTHER_START)}>
+            {other ? plan.count : '···'}
+          </Slot>
+        </div>
+        {other && (
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <span className="text-[13px] text-[var(--paper-faint)]">Any count, 2 to 36</span>
             <Stepper
               label="Installments"
               fewer="Fewer installments"
@@ -67,18 +87,14 @@ export function PayIn({
               suffix="×"
               onChange={setCount}
             />
-          ) : (
-            <Stamp on={false} onClick={() => pick(OTHER_START)}>
-              Other
-            </Stamp>
-          )}
-        </div>
+          </div>
+        )}
       </div>
       {plan && (
-        <>
+        <div className="pt-1">
           <ReceiptLine
             label="Each month"
-            value={each ? showAmount(each, currency) : '—'}
+            value={each ? money(each) : '—'}
             control={
               <input
                 aria-label="Each month"
@@ -94,16 +110,19 @@ export function PayIn({
               />
             }
           />
-          {interest && interest.all > 0 && each && (
-            <p className="grid pb-1 text-[13px] leading-snug text-[var(--paper-faint)]">
-              <span>incl. {money(interest.month)} interest a month</span>
-              <span className="num">
-                {plan.count} × {money(each)} = {money(each * plan.count)}
-              </span>
-              <span className="font-bold text-[var(--paper-ink)]">
-                {money(interest.all)} interest in all
-              </span>
-            </p>
+          {interest && interest.all > 0 ? (
+            <>
+              {line('Interest / month', `+${money(interest.month)}`, PINK)}
+              {line('Total interest', `+${money(interest.all)}`, PINK)}
+            </>
+          ) : (
+            line('Interest', '0% · none', GREEN)
+          )}
+          {each && (
+            <div className="mt-1 border-t-2 border-[var(--paper-ink)] pt-1">
+              {/* The price plus real interest: rounding price ÷ count up is not something you pay. */}
+              <ReceiptLine label="You pay in all" value={money(amount! + (interest?.all ?? 0))} />
+            </div>
           )}
           {(gone > 0 || plan.paid > 0) && (
             <div className="flex items-center gap-1.5 py-[7px]">
@@ -131,28 +150,37 @@ export function PayIn({
               {gone} bill{gone === 1 ? '' : 's'} passed since {shortDay(date)}
             </p>
           )}
-        </>
+        </div>
       )}
     </>
   );
 }
 
-function Stamp({
+/** Interest in the stamps' pink, a 0% plan in their green (the paper is light in both themes). */
+const PINK = '#c2185b';
+const GREEN = '#1d7a44';
+
+/** One slot of the month bar: inked solid when picked. `label` = its name ("3×") where the slot shows "3". */
+function Slot({
   on,
+  label,
+  last,
   onClick,
   children,
 }: {
   on: boolean;
+  label: string;
+  last?: boolean;
   onClick: () => void;
-  children: string | string[] | (string | number)[];
+  children: ReactNode;
 }) {
   return (
     <button
       type="button"
       aria-pressed={on}
+      aria-label={label}
       onClick={onClick}
-      // Picked = inked in solid, so the count reads at a glance; six fit one row on a phone.
-      className={`receipt-stamp-btn !px-1.5 uppercase active:opacity-70 ${on ? '!bg-[var(--paper-ink)] !text-[var(--paper)] !border-[var(--paper-ink)]' : ''}`}
+      className={`num min-h-11 text-[15px] font-extrabold active:opacity-70 ${last ? '' : 'border-r-2 border-[var(--paper-ink)]'} ${on ? 'bg-[var(--paper-ink)] text-[var(--paper)]' : 'text-[var(--paper-ink)]'}`}
     >
       {children}
     </button>

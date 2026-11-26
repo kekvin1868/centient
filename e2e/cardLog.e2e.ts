@@ -106,12 +106,13 @@ test('12× on the receipt: Each month is the price ÷ 12; typing more shows the 
   await payIn().getByRole('button', { name: '12×' }).tap();
   const each = receipt().getByRole('textbox', { name: 'Each month' });
   await expect(each).toHaveValue('1.000.000');
-  await expect(receipt().getByText(/interest/)).toHaveCount(0); // 0%: nothing to say
+  await expect(receipt()).toContainText('0% · none'); // a 0% plan says so in one line
   await each.fill('1050000');
-  await expect(receipt()).toContainText('incl. Rp50.000 interest'); // per month (owner 2026-11-22)
-  // And what the plan costs in all (UI grill U3, 2026-11-25).
-  await expect(receipt()).toContainText('12 × Rp1.050.000 = Rp12.600.000');
-  await expect(receipt()).toContainText('Rp600.000 interest in all');
+  // Per month (owner 2026-11-22) and in all (UI grill U3), each its own receipt line (option B, 2026-11-26).
+  await expect(receipt()).toContainText(/Interest \/ month\s*\+Rp50\.000/);
+  await expect(receipt()).toContainText(/Total interest\s*\+Rp600\.000/);
+  await expect(receipt()).toContainText(/You pay in all\s*Rp12\.600\.000/);
+  await expect(receipt()).not.toContainText('0% · none');
   await receipt().getByRole('button', { name: 'Log it' }).tap();
   await expect(receipt()).toBeHidden();
 
