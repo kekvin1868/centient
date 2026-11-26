@@ -190,8 +190,8 @@ test('deleting an entry on installments takes its plan', async () => {
   expect((await account('BCA')).balance).toBe(-12_000_000);
 });
 
-test('OTHER: any count, e.g. 18×, on a − + stepper', async () => {
-  // Real plans come in 18× (Tokopedia, Mandiri) or 9× / 36×: OTHER turns into a stepper (UI grill U2).
+test('OTHER: any count, e.g. 18×, on a bare ‹ › MONTHS line', async () => {
+  // Real plans come in 18× (Tokopedia, Mandiri) or 9× / 36×: OTHER adds a MONTHS ‹ n › line (UI grill U2, S2).
   await newReceipt('Laptop', 1_800_000, 'BCA');
   await payIn().getByRole('button', { name: 'Other' }).tap();
   const count = payIn().getByRole('spinbutton', { name: 'Installments' });

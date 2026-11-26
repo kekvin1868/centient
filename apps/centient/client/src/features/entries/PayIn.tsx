@@ -1,9 +1,8 @@
 // "Pay in" on the receipt, under PAID WITH when it is a card or pay later (UI grill 2026-11-26, option B): one joined
-// bar of months, Full · 3 · 6 · 12 · 24 · ··· (any count 2–36 on a − + stepper). A count adds receipt lines with
+// bar of months, Full · 3 · 6 · 12 · 24 · ··· (any count 2–36 on a bare ‹ n › MONTHS line). A count adds receipt lines with
 // their dotted leaders: EACH MONTH (price ÷ count until typed), INTEREST / MONTH and TOTAL INTEREST (or INTEREST
 // 0% · none), a ruled YOU PAY IN ALL, and ALREADY PAID when the date is old enough that some of the plan's bills
 // have closed (logged late).
-import { Minus, Plus } from '@phosphor-icons/react';
 import { amountInput, showAmount } from '../../lib/amount';
 import { formatMoney } from '../../lib/format';
 import { ReceiptLine } from '../../ui/Receipt';
@@ -58,9 +57,11 @@ export function PayIn({
   return (
     <>
       <div className="pt-2" role="group" aria-label="Pay in">
-        <div className="flex items-baseline justify-between gap-3 text-[12px] tracking-[0.1em] text-[var(--paper-faint)]">
+        <div className="flex items-baseline justify-between gap-3 whitespace-nowrap text-[12px] tracking-[0.1em] text-[var(--paper-faint)]">
           <span className="uppercase">Pay in · months</span>
-          <span>{plan ? (first ? `first on ${first} bill` : '') : 'paid at once'}</span>
+          <span className="tracking-[0.04em]">
+            {plan ? (first ? `first on ${first} bill` : '') : 'paid at once'}
+          </span>
         </div>
         {/* One joined bar of equal slots (no wrapping); MONTHS is said once, so the slots are bare numbers. */}
         <div className="mt-2 grid grid-cols-6 overflow-hidden rounded-[8px] border-2 border-[var(--paper-ink)]">
@@ -77,14 +78,14 @@ export function PayIn({
           </Slot>
         </div>
         {other && (
-          <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="text-[13px] text-[var(--paper-faint)]">Any count, 2 to 36</span>
-            <Stepper
+          <div className="mt-1">
+            <CountLine
+              title="Months"
               label="Installments"
               fewer="Fewer installments"
               more="More installments"
               value={plan.count}
-              suffix="×"
+              big
               onChange={setCount}
             />
           </div>
@@ -125,25 +126,17 @@ export function PayIn({
             </div>
           )}
           {(gone > 0 || plan.paid > 0) && (
-            <div className="flex items-center gap-1.5 py-[7px]">
-              <span className="shrink-0 text-[12px] uppercase tracking-[0.1em] text-[var(--paper-faint)]">
-                Already paid
-              </span>
-              <span
-                className="min-w-4 flex-1 -translate-y-1 border-b-2 border-dotted border-[color-mix(in_oklab,var(--paper-ink)_25%,transparent)]"
-                aria-hidden="true"
-              />
-              <Stepper
-                label="Already paid"
-                fewer="Fewer already paid"
-                more="More already paid"
-                value={plan.paid}
-                suffix={` of ${plan.count}`}
-                min={0}
-                max={plan.count - 1}
-                onChange={paid => onChange({ ...plan, paid, paidTyped: true })}
-              />
-            </div>
+            <CountLine
+              title="Already paid"
+              label="Already paid"
+              fewer="Fewer already paid"
+              more="More already paid"
+              value={plan.paid}
+              suffix={`of ${plan.count}`}
+              min={0}
+              max={plan.count - 1}
+              onChange={paid => onChange({ ...plan, paid, paidTyped: true })}
+            />
           )}
           {gone > 0 && (
             <p className="pb-1 text-[13px] text-[var(--paper-faint)]">
@@ -187,59 +180,80 @@ function Slot({
   );
 }
 
-/** − n + on the receipt: a number typed or stepped, kept between `min` and `max`. */
-function Stepper({
+/**
+ * A count as one more receipt line: TITLE ····· ‹ n ›. No boxes (UI grill 2026-11-26, S2), so the month bar stays
+ * the only boxed control; the bare ‹ › each get a full 44px tap area, and n can still be typed.
+ */
+function CountLine({
+  title,
   label,
   fewer,
   more,
   value,
-  suffix,
+  suffix = '',
+  big,
   min = 2,
   max = 36,
   onChange,
 }: {
+  title: string;
   label: string;
   fewer: string;
   more: string;
   value: number;
-  suffix: string;
+  suffix?: string;
+  big?: boolean;
   min?: number;
   max?: number;
   onChange: (n: number) => void;
 }) {
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
-  const key =
-    'grid size-7 place-items-center rounded-[6px] border-2 border-current active:opacity-60';
+  const arrow =
+    'grid size-11 shrink-0 place-items-center text-[24px] font-extrabold leading-none active:opacity-40 disabled:opacity-25';
   return (
-    <span className="receipt-stamp-btn flex items-center gap-1.5 !px-1.5 text-[var(--paper-ink)]">
+    <div className="flex items-center gap-1.5 text-[var(--paper-ink)]">
+      <span className="shrink-0 text-[12px] uppercase tracking-[0.1em] text-[var(--paper-faint)]">
+        {title}
+      </span>
+      <span
+        className="min-w-4 flex-1 -translate-y-1 border-b-2 border-dotted border-[color-mix(in_oklab,var(--paper-ink)_25%,transparent)]"
+        aria-hidden="true"
+      />
       <button
         type="button"
         aria-label={fewer}
-        className={key}
+        className={`${arrow} -mr-1`}
+        disabled={value <= min}
         onClick={() => onChange(clamp(value - 1))}
       >
-        <Minus size={14} weight="bold" aria-hidden="true" />
+        ‹
       </button>
-      <input
-        type="number"
-        aria-label={label}
-        value={value}
-        min={min}
-        max={max}
-        onChange={e => e.target.value && onChange(clamp(Number(e.target.value)))}
-        className="num w-8 bg-transparent text-center font-bold [appearance:textfield] [font-size:16px] [&::-webkit-inner-spin-button]:appearance-none"
-      />
-      <span aria-hidden="true" className="-ml-1 whitespace-nowrap font-bold">
-        {suffix}
+      <span className="flex items-baseline font-bold">
+        <input
+          type="number"
+          aria-label={label}
+          value={value}
+          min={min}
+          max={max}
+          onChange={e => e.target.value && onChange(clamp(Number(e.target.value)))}
+          style={{ width: `${String(value).length + 0.6}ch` }}
+          className={`num bg-transparent text-center font-bold [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none ${big ? '[font-size:20px]' : '[font-size:16px]'}`}
+        />
+        {suffix && (
+          <span aria-hidden="true" className="num whitespace-nowrap pl-[0.6ch] text-[16px]">
+            {suffix}
+          </span>
+        )}
       </span>
       <button
         type="button"
         aria-label={more}
-        className={key}
+        className={`${arrow} -ml-1 -mr-3`}
+        disabled={value >= max}
         onClick={() => onChange(clamp(value + 1))}
       >
-        <Plus size={14} weight="bold" aria-hidden="true" />
+        ›
       </button>
-    </span>
+    </div>
   );
 }
