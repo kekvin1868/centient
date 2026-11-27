@@ -4,6 +4,9 @@ import type { Draft } from '@centient/quickadd';
 import type { Command } from '../../../../src/lib/schemas';
 import { formatMoney } from '../../lib/format';
 import { blankParty, shareMath, splitView, withPeople, type Party } from './shares';
+import { eachOf, type PlanForm } from './planForm';
+import { isCard } from '../../../../src/domain/recurring';
+import { catalog } from '../../lib/state';
 
 export type EntryType = Command['type'];
 /** Joining a pot someone else runs: `amount` on the form is my share of `total`. `typed` = I typed my share over the equal one. */
@@ -32,6 +35,8 @@ export type Form = {
   fee: number | null;
   originalAmount: number | null;
   originalCurrency: string | null;
+  /** Paid in installments on a card or pay later ("Pay in"); null = in full. */
+  plan: PlanForm | null;
 };
 
 /** One line part from the log box, with the questions it still needs answered. */
@@ -42,6 +47,8 @@ export type LogItem = {
   candidates: number[];
   askAmount: boolean;
   askCharged: boolean;
+  /** Quick add read each month after the count ("6x 1.05jt"): asked once, so a typo is not 6 bills. */
+  askEach?: boolean;
   rawMerchant: string;
   suggestedMerchant: string;
 };
@@ -66,6 +73,7 @@ export const blankForm = (date: string, type: EntryType = 'EXPENSE'): Form => ({
   fee: null,
   originalAmount: null,
   originalCurrency: null,
+  plan: null,
 });
 
 export function fromDraft(d: Draft, key: string, iouAccountId: string | null): LogItem {
@@ -77,6 +85,7 @@ export function fromDraft(d: Draft, key: string, iouAccountId: string | null): L
     suggestedMerchant: d.merchant,
     askAmount: d.needsConfirm,
     askCharged: d.needs === 'CHARGED_AMOUNT',
+    askEach: d.installments?.each != null,
     form: {
       ...blankForm(d.date, d.type),
       amount: d.amount,
@@ -90,6 +99,9 @@ export function fromDraft(d: Draft, key: string, iouAccountId: string | null): L
       fee: d.fee,
       originalAmount: d.originalAmount,
       originalCurrency: d.originalCurrency,
+      plan: d.installments
+        ? { count: d.installments.count, each: d.installments.each, paid: 0 }
+        : null,
     },
   };
 }
@@ -146,6 +158,17 @@ export function fromCommand(c: Command, tabName: (id: string) => string = () => 
             }
           : null,
         iouAccountId: c.split?.iouAccountId ?? null,
+        plan: c.installments
+          ? {
+              count: c.installments.count,
+              each:
+                c.installments.each === Math.ceil(c.amount / c.installments.count)
+                  ? null
+                  : c.installments.each,
+              paid: c.installments.paid,
+              paidTyped: true,
+            }
+          : null,
         originalAmount: c.originalAmount ?? null,
         originalCurrency: c.originalCurrency ?? null,
       };
@@ -246,6 +269,8 @@ export function toCommand(f: Form): { command: Command; extra?: Command[] } | { 
       }
       const split = splitCommand(f);
       if ('error' in split) return split;
+      const plan = f.plan && planOf(f, f.plan);
+      if (plan && 'error' in plan) return plan;
       const extra: Command[] = [...split.covers].map(([accountId, names]) => ({
         type: 'EXPENSE' as const,
         accountId,
@@ -264,6 +289,7 @@ export function toCommand(f: Form): { command: Command; extra?: Command[] } | { 
           ...common,
           amount: f.amount - split.cut,
           split: split.split,
+          ...plan,
           originalAmount: f.originalAmount ?? undefined,
           originalCurrency: f.originalCurrency ?? undefined,
         },
@@ -297,9 +323,26 @@ export function toCommand(f: Form): { command: Command; extra?: Command[] } | { 
   }
 }
 
+/** The command's `installments` (and its budget spread) from the form's plan. */
+function planOf(
+  f: Form,
+  p: PlanForm,
+):
+  | { error: string }
+  | { installments: { count: number; each: number; paid: number }; spreadCycles: number } {
+  const each = eachOf(f.amount!, p);
+  const { paid } = p;
+  if (each * p.count < f.amount!) return { error: 'Each month × the count is less than the price' };
+  if (paid >= p.count) return { error: 'At least one installment must still be unpaid' };
+  return {
+    installments: { count: p.count, each, paid },
+    spreadCycles: p.count - paid,
+  };
+}
+
 type ChipView =
   | { state: 'ready' }
-  | { state: 'ask'; ask: 'charged' | 'amount' | 'account'; question: string }
+  | { state: 'ask'; ask: 'charged' | 'amount' | 'account' | 'card' | 'each'; question: string }
   | { state: 'incomplete'; missing: string };
 
 /** What the chip shows. Questions come one at a time, most important first. */
@@ -315,6 +358,11 @@ export function chipView(i: LogItem): ChipView {
   if (i.askAmount) return { state: 'ask', ask: 'amount', question: 'Which amount did you mean?' };
   if (f.type !== 'ALLOCATE' && !f.accountId)
     return { state: 'ask', ask: 'account', question: 'Which account?' };
+  // "12x" on an account that has no bills: which card or pay later was it?
+  const account = catalog.value.accounts.find(a => a.id === f.accountId);
+  if (f.plan && account && !isCard(account.kind))
+    return { state: 'ask', ask: 'card', question: 'Pay later or card?' };
+  if (f.plan && i.askEach) return { state: 'ask', ask: 'each', question: 'Each month?' };
   const r = toCommand(f);
   return 'error' in r ? { state: 'incomplete', missing: r.error } : { state: 'ready' };
 }

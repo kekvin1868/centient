@@ -1,8 +1,9 @@
 // The log box: what you type turns into cards (chips). No Add button: Enter / Done logs every ready card,
 // flick one card up to log just it; cards with a question wait for an answer. Entries go through the outbox
 // (models/outbox), so logging works with no signal: the row shows at once and is sent when it can be.
+import { useLimitGate } from './limitGate';
 import { parseQuickAdd, resolveSums } from '@centient/quickadd';
-import { ArrowCounterClockwise, KeyReturn, PencilSimple, Question } from '@phosphor-icons/react';
+import { ArrowCounterClockwise, KeyReturn, PencilSimple, Question } from '../../ui/icons';
 import { useDeferredValue, useMemo, useRef, useState } from 'react';
 import { buzz } from '../../lib/motion';
 import { attempt } from '../../lib/run';
@@ -36,6 +37,7 @@ export function LogBox() {
   const [pending, setPending] = useState<LogItem[]>([]);
   const [sheet, setSheet] = useState<LogItem | null>(null);
   const [saving, setSaving] = useState(false);
+  const { gate, sheet: overLimit } = useLimitGate();
   const [guide, setGuide] = useState(false);
   // The last sum "=" worked out: `to` is the line it left, `from` the line as typed. Good until the line changes.
   const [sum, setSum] = useState<{ from: string; to: string } | null>(null);
@@ -127,6 +129,17 @@ export function LogBox() {
       if (items.length) showToast('Answer the question on the card first');
       return;
     }
+    // Over a card's limit: OVER THE LIMIT first; Go back leaves the box as it is.
+    void gate(
+      ready.map(i => i.form),
+      forms =>
+        void logReady(
+          items,
+          ready.map((i, n) => ({ ...i, form: forms[n] })),
+        ),
+    );
+  };
+  const logReady = async (items: LogItem[], ready: LogItem[]) => {
     setSaving(true);
     const ok = await attempt(() => entryApi.logAll(ready.flatMap(saves)));
     setSaving(false);
@@ -145,7 +158,14 @@ export function LogBox() {
   };
 
   /** Logs one card (flicked up, or saved from its sheet). */
-  const logOne = async (item: LogItem) => {
+  /** A flicked card: logs it, or springs back while OVER THE LIMIT asks (it logs from there). */
+  const logOne = (item: LogItem) =>
+    new Promise<boolean>(done => {
+      void gate([item.form], ([form]) => void logChecked({ ...item, form }).then(done)).then(
+        asked => asked && done(false),
+      );
+    });
+  const logChecked = async (item: LogItem) => {
     if (!(await attempt(() => entryApi.logAll(saves(item))))) return false;
     remember(item);
     buzz(20);
@@ -206,6 +226,7 @@ export function LogBox() {
 
   return (
     <section>
+      {overLimit}
       <form
         className="panel mx-4 flex items-center gap-2 rounded-[18px] bg-white py-1.5 pl-4 pr-1.5 dark:bg-raised"
         onSubmit={e => {
@@ -295,7 +316,7 @@ export function LogBox() {
         open={Boolean(sheet)}
         item={sheet}
         onClose={() => setSheet(null)}
-        onSave={logOne}
+        onSave={logChecked}
       />
     </section>
   );

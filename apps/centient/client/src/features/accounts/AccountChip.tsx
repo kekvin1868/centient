@@ -1,5 +1,5 @@
 // Which account Home shows. Opens the hand of account cards.
-import { CaretDown, Cards } from '@phosphor-icons/react';
+import { CaretDown, Cards } from '../../ui/icons';
 import { everyday, selectedAccount } from '../../lib/state';
 
 export function AccountChip({ onOpen }: { onOpen: () => void }) {

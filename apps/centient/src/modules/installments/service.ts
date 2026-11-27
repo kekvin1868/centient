@@ -462,7 +462,11 @@ export function addMonths(date: string, k: number): string {
 }
 
 /** The day slice `no` is due: its bill's pay-by day (null when the card has no pay-by day). */
-function dueOf(firstBill: string, no: number, days: { closes: number; payBy: number | null }) {
+export function dueOf(
+  firstBill: string,
+  no: number,
+  days: { closes: number; payBy: number | null },
+) {
   const closing = closingOf(sliceBill({ firstBill }, no), days.closes);
   return statementOf(days.closes, days.payBy, closing).dueOn;
 }

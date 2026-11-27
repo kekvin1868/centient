@@ -15,6 +15,7 @@ import { ClashSheet } from './ClashSheet';
 import { deleteWithUndo } from './deleteWithUndo';
 import { ConfirmSheet } from '../../ui/ConfirmSheet';
 import { EntryForm } from './EntryForm';
+import { useLimitGate } from './limitGate';
 import { PaidBackSheet } from './PaidBackSheet';
 import { Banner } from '../../ui/Banner';
 import { Group, Row } from '../../ui/List';
@@ -35,6 +36,10 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
   const [tied, setTied] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [delTied, setDelTied] = useState(false);
+  const was = entry?.command;
+  const { gate, sheet } = useLimitGate(
+    was?.type === 'EXPENSE' ? { accountId: was.accountId, amount: was.amount } : undefined,
+  );
   if (!entry) return null;
   const mark = entry.waiting;
   if (mark?.state === 'clash') return <ClashSheet entry={entry} onClose={onClose} />;
@@ -54,7 +59,8 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
     showToast(mark?.op === 'create' ? 'Discarded' : 'Change dropped');
   };
 
-  const save = async (paybacks?: PaybackMode) => {
+  const save = async (paybacks?: PaybackMode, f: Form | null = form) => {
+    const result = f ? toCommand(f) : null;
     if (!result || 'error' in result) return;
     const { command } = result;
     const ok = await attempt(async () => {
@@ -126,7 +132,14 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
         </Block>
       ) : form ? (
         <>
-          <EntryForm form={form} onChange={setForm} lockType />
+          <EntryForm
+            form={form}
+            onChange={setForm}
+            lockType
+            before={
+              was?.type === 'EXPENSE' ? { accountId: was.accountId, amount: was.amount } : undefined
+            }
+          />
           {entry.people?.length ? (
             <Group label="Paid back so far">
               <li className="pt-3">
@@ -140,7 +153,17 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
             </Group>
           ) : null}
           <Block className="space-y-3">
-            <Button large rounded disabled={'error' in (result ?? {})} onClick={() => save()}>
+            <Button
+              large
+              rounded
+              disabled={'error' in (result ?? {})}
+              onClick={() =>
+                void gate([form], ([f]) => {
+                  setForm(f);
+                  void save(undefined, f);
+                })
+              }
+            >
               {result && 'error' in result ? result.error : refused ? 'Send again' : 'Save'}
             </Button>
             {refused && (
@@ -150,6 +173,7 @@ export function EntrySheet({ entry, onClose }: { entry: Entry | null; onClose: (
             )}
           </Block>
           {!refused && deleteParts}
+          {sheet}
           <TiedSheet
             open={tied}
             title={`Save ${row.title}? Someone paid back more than this leaves them.`}

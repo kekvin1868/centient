@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Sheet } from '../../ui/Sheet';
 import { EntryForm } from './EntryForm';
 import { toCommand, type Form, type LogItem } from './form';
+import { useLimitGate } from './limitGate';
 
 export function LogSheet({
   item,
@@ -15,6 +16,7 @@ export function LogSheet({
   onSave: (i: LogItem) => unknown;
 }) {
   const [form, setForm] = useState<Form | null>(item?.form ?? null);
+  const { gate, sheet } = useLimitGate();
   if (!item || !form) return null;
   const r = toCommand(form);
   return (
@@ -25,11 +27,17 @@ export function LogSheet({
           large
           rounded
           disabled={'error' in r}
-          onClick={() => onSave({ ...item, askAmount: false, askCharged: false, form })}
+          onClick={() =>
+            void gate([form], ([f]) => {
+              setForm(f);
+              onSave({ ...item, askAmount: false, askCharged: false, askEach: false, form: f });
+            })
+          }
         >
           {'error' in r ? r.error : 'Log it'}
         </Button>
       </Block>
+      {sheet}
     </Sheet>
   );
 }

@@ -5,7 +5,12 @@ import { Minus, Plus, X } from '@phosphor-icons/react';
 import { Fragment, useRef, useState, type ReactNode } from 'react';
 import { amountInput, showAmount } from '../../lib/amount';
 import { formatMoney } from '../../lib/format';
-import { active, catalog, everyday } from '../../lib/state';
+import { active, catalog, everyday, me } from '../../lib/state';
+import { isCard } from '../../../../src/domain/recurring';
+import { PayIn } from './PayIn';
+import { OverLimitLine, shortOf, type Before } from './OverLimit';
+import { useBalances } from '../../models/useWaiting';
+import { withPaid } from './planDates';
 import { DatePicker } from '../../ui/DatePicker';
 import { LineSelect, Receipt, ReceiptLine, Rule } from '../../ui/Receipt';
 import { useSumInput } from '../../ui/useSumInput';
@@ -50,12 +55,32 @@ export function EntryForm({
   form,
   onChange,
   lockType,
+  before,
 }: {
   form: Form;
   onChange: (f: Form) => void;
   lockType?: boolean;
+  /** Editing: the entry as saved, already in its account's balance (the limit line counts it back). */
+  before?: Before;
 }) {
-  const set = (patch: Partial<Form>) => onChange({ ...form, ...patch });
+  const { data: balances } = useBalances();
+  const today = me.value?.today ?? form.date;
+  // A plan (Pay in) follows the receipt: gone off a card, Each month back to price ÷ count on a new amount,
+  // Already paid worked out again for the date and card unless typed.
+  const set = (patch: Partial<Form>) => {
+    const next = { ...form, ...patch };
+    if (next.plan) {
+      const acc = catalog.value.accounts.find(a => a.id === next.accountId);
+      if (next.type !== 'EXPENSE' || !acc || !isCard(acc.kind) || next.pot || (next.split ?? 1) > 1)
+        next.plan = null;
+      else {
+        if (patch.amount !== undefined && patch.amount !== form.amount)
+          next.plan = { ...next.plan, each: null };
+        next.plan = withPaid(next.plan, next.date, acc.statement_day, today);
+      }
+    }
+    onChange(next);
+  };
   const [dateOpen, setDateOpen] = useState(false);
   const dateLine = useRef<HTMLButtonElement>(null);
   const closeDate = () => {
@@ -194,6 +219,21 @@ export function EntryForm({
                 />
               }
             />
+            {form.type === 'EXPENSE' && account && isCard(account.kind) && !form.pot && !split && (
+              <PayIn
+                amount={form.amount}
+                date={form.date}
+                closes={account.statement_day}
+                today={today}
+                currency={currency}
+                plan={form.plan}
+                onChange={plan => set({ plan })}
+              />
+            )}
+            {(() => {
+              const short = shortOf(form, balances?.accounts, before);
+              return short && <OverLimitLine short={short} />;
+            })()}
           </>
         )}
         {form.type === 'TRANSFER' && (

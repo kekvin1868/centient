@@ -1,10 +1,11 @@
 // One card under the log box: what was understood, a question when something is missing (amount, account,
 // what was charged), and a flick up to log it.
-import { ArrowFatUp } from '@phosphor-icons/react';
+import { eachOf } from './planForm';
+import { ArrowFatUp } from '../../ui/icons';
 import { Button, List } from 'konsta/react';
 import { animate, useMotionValue, useTransform } from 'motion/react';
 import * as m from 'motion/react-m';
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { formatMoney } from '../../lib/format';
 import { categoryEmoji, titleCase } from '../../lib/labels';
 import { reducedMotion, useDragGuard } from '../../lib/motion';
@@ -12,6 +13,11 @@ import { catalog, everyday, nameOf } from '../../lib/state';
 import { AmountField } from '../../ui/AmountField';
 import { Chip } from './Chip';
 import { chipView, type Form, type LogItem } from './form';
+
+const plan = () => import('./ChipPlan');
+const Pips = lazy(() => plan().then(m => ({ default: m.Pips })));
+const PickCard = lazy(() => plan().then(m => ({ default: m.PickCard })));
+const AskEach = lazy(() => plan().then(m => ({ default: m.AskEach })));
 
 export function LogChip({
   item,
@@ -86,6 +92,18 @@ export function LogChip({
         onOpen={() => {
           if (!dragged.current) onOpen();
         }}
+        plan={
+          f.plan && f.amount ? (
+            <span className="mt-1 block">
+              <span className="num block text-[13px] font-bold text-primary">
+                {`${f.plan.count}× · ${formatMoney(eachOf(f.amount, f.plan), currency)}/mo`}
+              </span>
+              <Suspense fallback={null}>
+                <Pips count={f.plan.count} />
+              </Suspense>
+            </span>
+          ) : undefined
+        }
         hint={
           ready ? (
             <span className="flex items-center gap-1 [animation:nudge_1.4s_ease-in-out_infinite]">
@@ -125,6 +143,19 @@ export function LogChip({
                 {a.name}
               </Button>
             ))}
+        {v.state === 'ask' && v.ask === 'card' && (
+          <Suspense fallback={null}>
+            <PickCard onPick={accountId => set({}, { accountId, envelopeId: null })} />
+          </Suspense>
+        )}
+        {v.state === 'ask' && v.ask === 'each' && f.plan && (
+          <Suspense fallback={null}>
+            <AskEach
+              plan={f.plan}
+              onOk={each => set({ askEach: false }, { plan: { ...f.plan!, each } })}
+            />
+          </Suspense>
+        )}
         {v.state === 'ask' && v.ask === 'charged' && (
           <div className="flex w-full items-end gap-2">
             <List strong inset className="!m-0 flex-1">

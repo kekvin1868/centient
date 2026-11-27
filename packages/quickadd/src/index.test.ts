@@ -221,3 +221,24 @@ describe('parseQuickAdd', () => {
     });
   });
 });
+
+describe('installments: "12x"', () => {
+  const ctx = { today: '2026-11-25', accounts: [], categories: [] } as unknown as Parameters<
+    typeof parseQuickAdd
+  >[1];
+  it('reads the count; no amount after it = price ÷ count', () => {
+    const [d] = parseQuickAdd('hp 12jt 12x', ctx);
+    expect(d.amount).toBe(12_000_000);
+    expect(d.installments).toEqual({ count: 12, each: null });
+    expect(d.merchant.toLowerCase()).toBe('hp');
+  });
+  it('an amount right after the count is each month', () => {
+    const [d] = parseQuickAdd('tv 6jt 6x 1.05jt', ctx);
+    expect(d.amount).toBe(6_000_000);
+    expect(d.installments).toEqual({ count: 6, each: 1_050_000 });
+  });
+  it('1x, 99x and "x" alone are not plans', () => {
+    for (const t of ['kopi 25rb 1x', 'kopi 25rb 99x', 'kopi 25rb x'])
+      expect(parseQuickAdd(t, ctx)[0].installments).toBeNull();
+  });
+});
